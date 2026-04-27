@@ -1,0 +1,21 @@
+# Binaries
+bin/
+dist/
+*.test
+*.out
+
+# Coverage
+coverage.out
+coverage.html
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Go build/test cache only when explicitly placed locally
+/.cache/
+
+# Pre-commit
+.prek-cache/

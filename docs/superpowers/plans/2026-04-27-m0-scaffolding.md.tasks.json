@@ -1,0 +1,61 @@
+{
+  "planPath": "docs/superpowers/plans/2026-04-27-m0-scaffolding.md",
+  "tasks": [
+    {
+      "id": 1,
+      "subject": "Task 0: Initialize git repo and base hygiene files",
+      "status": "pending",
+      "description": "**Goal:** Git repo on `main` with `.gitignore`, `.editorconfig`, `README.md`, and design/plan docs in initial commit.\n\n```json:metadata\n{\"files\":[\".gitignore\",\".editorconfig\",\"README.md\"],\"verifyCommand\":\"git status\",\"acceptanceCriteria\":[\"repo on main\",\"initial commit clean\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 1: Go module + package skeletons",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** `go.mod` for module github.com/cafecito-games/gogdproto at Go 1.26, plus `internal/*` doc.go skeletons.\n\n```json:metadata\n{\"files\":[\"go.mod\",\"cmd/gogdproto/main.go\",\"internal/lexer/doc.go\",\"internal/parser/doc.go\",\"internal/ast/doc.go\",\"internal/validator/doc.go\",\"internal/importer/doc.go\",\"internal/gdast/doc.go\",\"internal/generator/doc.go\",\"internal/prototypes/doc.go\",\"internal/cli/doc.go\",\"internal/applog/doc.go\"],\"verifyCommand\":\"go build ./... && go vet ./...\",\"acceptanceCriteria\":[\"go.mod has go 1.26\",\"build passes\",\"vet passes\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 2: Cobra CLI skeleton with --version",
+      "status": "pending",
+      "blockedBy": [2],
+      "description": "**Goal:** `gogdproto --version` prints `gogdproto 0.1.0`. TDD red/green via `cli.Execute(args, out, errOut)`.\n\n```json:metadata\n{\"files\":[\"internal/cli/root.go\",\"internal/cli/version.go\",\"internal/cli/root_test.go\",\"cmd/gogdproto/main.go\"],\"verifyCommand\":\"go test ./internal/cli/... -v\",\"acceptanceCriteria\":[\"--version prints gogdproto 0.1.0\",\"--help exits 0\",\"no-args prints usage\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 3: --log-level flag and component-tagged slog logger",
+      "status": "pending",
+      "blockedBy": [3],
+      "description": "**Goal:** `applog` package + CLI `--log-level` (default warn) wired through `applog.New` and `applog.For`.\n\n```json:metadata\n{\"files\":[\"internal/applog/applog.go\",\"internal/applog/applog_test.go\",\"internal/cli/root.go\",\"internal/cli/root_test.go\"],\"verifyCommand\":\"go test ./internal/applog/... ./internal/cli/... -v\",\"acceptanceCriteria\":[\"ParseLevel handles all 4 levels case-insensitive\",\"For adds component attr\",\"invalid level fails CLI\"]}\n```"
+    },
+    {
+      "id": 5,
+      "subject": "Task 4: Taskfile",
+      "status": "pending",
+      "blockedBy": [4],
+      "description": "**Goal:** `Taskfile.yml` with build/test/test:cover/lint/fmt/fmt:check/tidy/tidy:check/install/ci tasks. Default = ci.\n\n```json:metadata\n{\"files\":[\"Taskfile.yml\"],\"verifyCommand\":\"task build && ./bin/gogdproto --version\",\"acceptanceCriteria\":[\"task --list shows all tasks\",\"task build produces bin/gogdproto\",\"task test passes\"]}\n```"
+    },
+    {
+      "id": 6,
+      "subject": "Task 5: golangci-lint v2 configuration",
+      "status": "pending",
+      "blockedBy": [5],
+      "description": "**Goal:** `.golangci.yml` (v2 schema) with the agreed linter set; `task ci` is green.\n\n```json:metadata\n{\"files\":[\".golangci.yml\"],\"verifyCommand\":\"task ci\",\"acceptanceCriteria\":[\"v2 schema\",\"golangci-lint run exits 0\",\"task ci exits 0\"]}\n```"
+    },
+    {
+      "id": 7,
+      "subject": "Task 6: Pre-commit (prek) configuration",
+      "status": "pending",
+      "blockedBy": [6],
+      "description": "**Goal:** `.pre-commit-config.yaml` with pre-commit-hooks + local task hooks. Installed via `prek install`.\n\n```json:metadata\n{\"files\":[\".pre-commit-config.yaml\"],\"verifyCommand\":\"prek run --all-files\",\"acceptanceCriteria\":[\"prek install succeeds\",\"all hooks pass on current tree\"]}\n```"
+    },
+    {
+      "id": 8,
+      "subject": "Task 7: GitHub Actions workflow + push + green CI",
+      "status": "pending",
+      "blockedBy": [7],
+      "description": "**Goal:** `.github/workflows/pr.yml` runs `task ci`; pushed branch shows green run; close issue #1.\n\n```json:metadata\n{\"files\":[\".github/workflows/pr.yml\"],\"verifyCommand\":\"gh run watch --exit-status\",\"acceptanceCriteria\":[\"workflow runs on PR + push:main\",\"Go 1.26 + Task + golangci-lint installed\",\"task ci runs green\",\"coverage.out uploaded\",\"issue #1 closed\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-04-27T00:00:00Z"
+}
