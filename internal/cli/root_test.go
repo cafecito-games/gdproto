@@ -42,3 +42,22 @@ func TestRootNoArgsPrintsHelp(t *testing.T) {
 		t.Fatalf("expected help output, got: %q", out.String())
 	}
 }
+
+func TestRootInvalidLogLevel(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := cli.Execute([]string{"--log-level", "loud"}, &out, &errOut)
+	if code == 0 {
+		t.Fatalf("expected non-zero exit, got 0; stdout=%q stderr=%q", out.String(), errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "log level") {
+		t.Fatalf("expected error mentioning log level, got: %q", errOut.String())
+	}
+}
+
+func TestRootValidLogLevel(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := cli.Execute([]string{"--log-level", "debug", "--help"}, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr=%q", code, errOut.String())
+	}
+}
