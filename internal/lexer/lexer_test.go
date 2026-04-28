@@ -199,6 +199,62 @@ func TestKeywordsAll(t *testing.T) {
 	}
 }
 
+func TestSimpleInteger(t *testing.T) {
+	tokens, _ := lexer.Tokenize("123", "")
+	if tokens[0].Type != lexer.TokenIntLiteral || tokens[0].Value != "123" {
+		t.Errorf("got %+v, want IntLiteral 123", tokens[0])
+	}
+}
+
+func TestNegativeInteger(t *testing.T) {
+	tokens, _ := lexer.Tokenize("-456", "")
+	if tokens[0].Type != lexer.TokenIntLiteral || tokens[0].Value != "-456" {
+		t.Errorf("got %+v, want IntLiteral -456", tokens[0])
+	}
+}
+
+func TestZero(t *testing.T) {
+	tokens, _ := lexer.Tokenize("0", "")
+	if tokens[0].Type != lexer.TokenIntLiteral || tokens[0].Value != "0" {
+		t.Errorf("got %+v, want IntLiteral 0", tokens[0])
+	}
+}
+
+func TestHexNumber(t *testing.T) {
+	tokens, _ := lexer.Tokenize("0x1A2B", "")
+	if tokens[0].Type != lexer.TokenIntLiteral || tokens[0].Value != "0x1A2B" {
+		t.Errorf("got %+v, want IntLiteral 0x1A2B", tokens[0])
+	}
+}
+
+func TestOctalNumber(t *testing.T) {
+	tokens, _ := lexer.Tokenize("0755", "")
+	if tokens[0].Type != lexer.TokenIntLiteral || tokens[0].Value != "0755" {
+		t.Errorf("got %+v, want IntLiteral 0755", tokens[0])
+	}
+}
+
+func TestFloatDecimal(t *testing.T) {
+	tokens, _ := lexer.Tokenize("3.14", "")
+	if tokens[0].Type != lexer.TokenFloatLiteral || tokens[0].Value != "3.14" {
+		t.Errorf("got %+v, want FloatLiteral 3.14", tokens[0])
+	}
+}
+
+func TestFloatExponent(t *testing.T) {
+	tokens, _ := lexer.Tokenize("1.5e10", "")
+	if tokens[0].Type != lexer.TokenFloatLiteral || tokens[0].Value != "1.5e10" {
+		t.Errorf("got %+v, want FloatLiteral 1.5e10", tokens[0])
+	}
+}
+
+func TestFloatNegativeExponent(t *testing.T) {
+	tokens, _ := lexer.Tokenize("2.5e-3", "")
+	if tokens[0].Type != lexer.TokenFloatLiteral || tokens[0].Value != "2.5e-3" {
+		t.Errorf("got %+v, want FloatLiteral 2.5e-3", tokens[0])
+	}
+}
+
 func TestMultipleKeywords(t *testing.T) {
 	tokens, err := lexer.Tokenize("message enum repeated", "")
 	if err != nil {

@@ -40,6 +40,11 @@ func (l *lexer) run() ([]Token, error) {
 			continue
 		}
 
+		if isDigit(ch) || (ch == '-' && isDigit(l.peek(1))) {
+			l.tokens = append(l.tokens, l.readNumber())
+			continue
+		}
+
 		return nil, &LexerError{
 			File:    l.filename,
 			Line:    line,
@@ -97,6 +102,81 @@ func (l *lexer) readIdentifier() Token {
 		tt = kw
 	}
 	return Token{Type: tt, Value: value, Line: startLine, Column: startCol}
+}
+
+func isDigit(ch byte) bool { return ch >= '0' && ch <= '9' }
+
+func isHexDigit(ch byte) bool {
+	return isDigit(ch) || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F')
+}
+
+// peek returns the byte at l.pos+offset, or 0 if out of bounds.
+func (l *lexer) peek(offset int) byte {
+	pos := l.pos + offset
+	if pos < 0 || pos >= len(l.source) {
+		return 0
+	}
+	return l.source[pos]
+}
+
+func (l *lexer) readNumber() Token {
+	startLine, startCol := l.line, l.column
+	start := l.pos
+
+	if l.source[l.pos] == '-' {
+		l.advance()
+	}
+
+	if l.source[l.pos] == '0' && l.pos+1 < len(l.source) && (l.source[l.pos+1] == 'x' || l.source[l.pos+1] == 'X') {
+		l.advance()
+		l.advance()
+		for l.pos < len(l.source) && isHexDigit(l.source[l.pos]) {
+			l.advance()
+		}
+		return Token{Type: TokenIntLiteral, Value: l.source[start:l.pos], Line: startLine, Column: startCol}
+	}
+
+	if l.source[l.pos] == '0' && l.pos+1 < len(l.source) && isDigit(l.source[l.pos+1]) {
+		l.advance()
+		for l.pos < len(l.source) {
+			ch := l.source[l.pos]
+			if ch < '0' || ch > '7' {
+				break
+			}
+			l.advance()
+		}
+		return Token{Type: TokenIntLiteral, Value: l.source[start:l.pos], Line: startLine, Column: startCol}
+	}
+
+	for l.pos < len(l.source) && isDigit(l.source[l.pos]) {
+		l.advance()
+	}
+
+	isFloat := false
+	if l.pos < len(l.source) && l.source[l.pos] == '.' {
+		isFloat = true
+		l.advance()
+		for l.pos < len(l.source) && isDigit(l.source[l.pos]) {
+			l.advance()
+		}
+	}
+
+	if l.pos < len(l.source) && (l.source[l.pos] == 'e' || l.source[l.pos] == 'E') {
+		isFloat = true
+		l.advance()
+		if l.pos < len(l.source) && (l.source[l.pos] == '+' || l.source[l.pos] == '-') {
+			l.advance()
+		}
+		for l.pos < len(l.source) && isDigit(l.source[l.pos]) {
+			l.advance()
+		}
+	}
+
+	tt := TokenIntLiteral
+	if isFloat {
+		tt = TokenFloatLiteral
+	}
+	return Token{Type: tt, Value: l.source[start:l.pos], Line: startLine, Column: startCol}
 }
 
 func singleCharSymbol(ch byte) (TokenType, bool) {
