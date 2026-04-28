@@ -1,6 +1,9 @@
 package gdast
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestGDScriptJoinsItemsWithNewline(t *testing.T) {
 	s := GDScript{Items: []Node{
@@ -81,4 +84,184 @@ var (
 	_ Statement  = RawStatement{}
 	_ Expression = RawExpression{}
 	_ Node       = GDScript{}
+
+	_ Expression = Literal{}
+	_ Expression = Variable{}
+	_ Expression = BinaryOp{}
+	_ Expression = UnaryOp{}
+	_ Expression = CallExpr{}
+	_ Expression = GetAttr{}
+	_ Expression = Subscript{}
+	_ Expression = Array{}
+	_ Expression = Dictionary{}
+	_ Expression = TypeCast{}
+	_ Expression = TernaryOp{}
 )
+
+func TestLiteralInt(t *testing.T) {
+	if got := (Literal{Value: 42}).ToGDScript(0); got != "42" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestLiteralFloat(t *testing.T) {
+	if got := (Literal{Value: 3.14}).ToGDScript(0); got != "3.14" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestLiteralFloatInf(t *testing.T) {
+	if got := (Literal{Value: math.Inf(1)}).ToGDScript(0); got != "INF" {
+		t.Errorf("got %q", got)
+	}
+	if got := (Literal{Value: math.Inf(-1)}).ToGDScript(0); got != "-INF" {
+		t.Errorf("got %q", got)
+	}
+	if got := (Literal{Value: math.NaN()}).ToGDScript(0); got != "NAN" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestLiteralBool(t *testing.T) {
+	if got := (Literal{Value: true}).ToGDScript(0); got != "true" {
+		t.Errorf("got %q", got)
+	}
+	if got := (Literal{Value: false}).ToGDScript(0); got != "false" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestLiteralNil(t *testing.T) {
+	if got := (Literal{Value: nil}).ToGDScript(0); got != "null" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestLiteralStringDoubleQuoted(t *testing.T) {
+	if got := (Literal{Value: "hello"}).ToGDScript(0); got != `"hello"` {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestLiteralStringWithDoubleQuoteOnly(t *testing.T) {
+	if got := (Literal{Value: `say "hi"`}).ToGDScript(0); got != `'say "hi"'` {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestLiteralStringWithBothQuotes(t *testing.T) {
+	if got := (Literal{Value: `it's "hot"`}).ToGDScript(0); got != `"it's \"hot\""` {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestVariable(t *testing.T) {
+	if got := (Variable{Name: "x"}).ToGDScript(0); got != "x" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestBinaryOp(t *testing.T) {
+	b := BinaryOp{Left: Variable{Name: "a"}, Op: "+", Right: Variable{Name: "b"}}
+	if got := b.ToGDScript(0); got != "a + b" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestUnaryOpWord(t *testing.T) {
+	u := UnaryOp{Op: "not", Operand: Variable{Name: "x"}}
+	if got := u.ToGDScript(0); got != "not x" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestUnaryOpSymbol(t *testing.T) {
+	u := UnaryOp{Op: "-", Operand: Variable{Name: "x"}}
+	if got := u.ToGDScript(0); got != "-x" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestCallExprWithStringFunction(t *testing.T) {
+	c := CallExpr{Function: "f", Arguments: []Expression{Variable{Name: "a"}, Variable{Name: "b"}}}
+	if got := c.ToGDScript(0); got != "f(a, b)" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestCallExprNoArgs(t *testing.T) {
+	c := CallExpr{Function: "f"}
+	if got := c.ToGDScript(0); got != "f()" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestCallExprMethodCall(t *testing.T) {
+	c := CallExpr{
+		Function:  GetAttr{Object: Variable{Name: "obj"}, Attribute: "method"},
+		Arguments: []Expression{Literal{Value: 1}},
+	}
+	if got := c.ToGDScript(0); got != "obj.method(1)" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestGetAttr(t *testing.T) {
+	g := GetAttr{Object: Variable{Name: "obj"}, Attribute: "x"}
+	if got := g.ToGDScript(0); got != "obj.x" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestSubscript(t *testing.T) {
+	s := Subscript{Object: Variable{Name: "arr"}, Key: Literal{Value: 0}}
+	if got := s.ToGDScript(0); got != "arr[0]" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestArrayEmpty(t *testing.T) {
+	if got := (Array{}).ToGDScript(0); got != "[]" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestArrayWithElements(t *testing.T) {
+	a := Array{Elements: []Expression{Literal{Value: 1}, Literal{Value: 2}, Literal{Value: 3}}}
+	if got := a.ToGDScript(0); got != "[1, 2, 3]" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestDictionaryEmpty(t *testing.T) {
+	if got := (Dictionary{}).ToGDScript(0); got != "{}" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestDictionaryWithPairs(t *testing.T) {
+	d := Dictionary{Pairs: []DictPair{
+		{Key: Literal{Value: "key"}, Value: Literal{Value: "value"}},
+	}}
+	if got := d.ToGDScript(0); got != `{"key": "value"}` {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestTypeCast(t *testing.T) {
+	tc := TypeCast{Value: Variable{Name: "x"}, TypeName: "int"}
+	if got := tc.ToGDScript(0); got != "x as int" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestTernaryOp(t *testing.T) {
+	tr := TernaryOp{
+		Condition:  Variable{Name: "cond"},
+		TrueValue:  Variable{Name: "true_val"},
+		FalseValue: Variable{Name: "false_val"},
+	}
+	if got := tr.ToGDScript(0); got != "true_val if cond else false_val" {
+		t.Errorf("got %q", got)
+	}
+}
