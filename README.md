@@ -7,7 +7,7 @@ Two entry points:
 - **`gogdproto`** — direct CLI (`gogdproto in.proto -o out.gd`).
 - **`protoc-gen-gdscript`** — `protoc` plugin (`protoc --gdscript_out=…`).
 
-Both produce identical output. The compiler emits **two** files per invocation: the message wrapper, plus a sibling `proto_core_utils.gd` (the runtime — varint/zigzag/fixed encoders + decoders, error enum, text-format helpers).
+Both produce identical output when they are given the same proto-relative source path. The compiler emits **two** files per invocation: the message wrapper, plus a sibling `proto_core_utils.gd` (the runtime — varint/zigzag/fixed encoders + decoders, error enum, text-format helpers).
 
 ---
 
@@ -153,7 +153,7 @@ match msg.get_status():
 The wrapper file:
 
 ```
-class_name <Stem>Proto    # e.g. FooProto for foo.proto
+class_name <Stem>Proto    # derived from the proto path, e.g. FooProto for foo.proto or MyPkgFooProto for my_pkg/foo.proto
 
 extends RefCounted
 
@@ -180,7 +180,7 @@ class <Message> extends RefCounted:
     func to_bytes() -> PackedByteArray
     func from_bytes(data: PackedByteArray) -> int   # ProtoCoreUtils.ProtobufError
     func to_text() -> String                         # round-trippable text format
-    func from_text_format(text: String) -> int      # parser for to_text() output
+    func from_text(text: String) -> int             # parser for to_text() output
     func _to_string() -> String                      # Godot debug repr
 ```
 
