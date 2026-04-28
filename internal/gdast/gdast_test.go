@@ -96,6 +96,14 @@ var (
 	_ Expression = Dictionary{}
 	_ Expression = TypeCast{}
 	_ Expression = TernaryOp{}
+
+	_ Statement = DocString{}
+	_ Statement = Comment{}
+	_ Statement = DocumentationComment{}
+	_ Statement = ExpressionStatement{}
+	_ Statement = VarDeclaration{}
+	_ Statement = Assignment{}
+	_ Statement = ReturnStatement{}
 )
 
 func TestLiteralInt(t *testing.T) {
@@ -262,6 +270,116 @@ func TestTernaryOp(t *testing.T) {
 		FalseValue: Variable{Name: "false_val"},
 	}
 	if got := tr.ToGDScript(0); got != "true_val if cond else false_val" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestDocString(t *testing.T) {
+	if got := (DocString{Text: "text"}).ToGDScript(0); got != `"""text"""` {
+		t.Errorf("got %q", got)
+	}
+	if got := (DocString{Text: "text"}).ToGDScript(1); got != "\t"+`"""text"""` {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestCommentSingleLine(t *testing.T) {
+	if got := (Comment{Text: "hello"}).ToGDScript(0); got != "# hello" {
+		t.Errorf("got %q", got)
+	}
+	if got := (Comment{Text: "  hello  "}).ToGDScript(1); got != "\t# hello" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestCommentMultiLine(t *testing.T) {
+	c := Comment{Text: "line1\n\nline2"}
+	want := "# line1\n#\n# line2"
+	if got := c.ToGDScript(0); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestDocumentationCommentSingleLine(t *testing.T) {
+	if got := (DocumentationComment{Text: "doc"}).ToGDScript(0); got != "## doc" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestDocumentationCommentMultiLine(t *testing.T) {
+	d := DocumentationComment{Text: "a\n\nb"}
+	want := "## a\n##\n## b"
+	if got := d.ToGDScript(0); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestExpressionStatement(t *testing.T) {
+	es := ExpressionStatement{Expression: Variable{Name: "x"}}
+	if got := es.ToGDScript(0); got != "x" {
+		t.Errorf("got %q", got)
+	}
+	if got := es.ToGDScript(2); got != "\t\tx" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestVarDeclarationBare(t *testing.T) {
+	if got := (VarDeclaration{Name: "x"}).ToGDScript(0); got != "var x" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestVarDeclarationTypeOnly(t *testing.T) {
+	if got := (VarDeclaration{Name: "x", TypeHint: "int"}).ToGDScript(0); got != "var x: int" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestVarDeclarationTypeAndValue(t *testing.T) {
+	v := VarDeclaration{Name: "x", TypeHint: "int", InitialValue: Literal{Value: 5}}
+	if got := v.ToGDScript(0); got != "var x: int = 5" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestVarDeclarationInferred(t *testing.T) {
+	v := VarDeclaration{Name: "x", InitialValue: Literal{Value: 5}}
+	if got := v.ToGDScript(0); got != "var x := 5" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestVarDeclarationConst(t *testing.T) {
+	v := VarDeclaration{Name: "X", TypeHint: "int", InitialValue: Literal{Value: 5}, IsConst: true}
+	if got := v.ToGDScript(0); got != "const X: int = 5" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestAssignmentSimple(t *testing.T) {
+	a := Assignment{Target: Variable{Name: "x"}, Value: Literal{Value: 5}}
+	if got := a.ToGDScript(0); got != "x = 5" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestAssignmentCompound(t *testing.T) {
+	a := Assignment{Target: Variable{Name: "x"}, Value: Literal{Value: 1}, Operator: "+="}
+	if got := a.ToGDScript(1); got != "\tx += 1" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestReturnStatementBare(t *testing.T) {
+	if got := (ReturnStatement{}).ToGDScript(1); got != "\treturn" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestReturnStatementWithValue(t *testing.T) {
+	r := ReturnStatement{Value: Literal{Value: 42}}
+	if got := r.ToGDScript(1); got != "\treturn 42" {
 		t.Errorf("got %q", got)
 	}
 }
