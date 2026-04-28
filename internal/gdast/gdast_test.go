@@ -793,3 +793,44 @@ func TestBinaryOpHelpers(t *testing.T) {
 		})
 	}
 }
+
+func TestPersonExample(t *testing.T) {
+	person := ClassDefinition{
+		Name:               "",
+		ClassNameDirective: "Person",
+		Extends:            "RefCounted",
+		Statements: []Node{
+			Var("_name", "String", Lit("")),
+			Var("_age", "int", Lit(0)),
+			Function{
+				Name:       "get_name",
+				Parameters: nil,
+				ReturnType: "String",
+				Body:       []Statement{Ret(V("_name"))},
+			},
+			Function{
+				Name:       "set_name",
+				Parameters: []Parameter{{Name: "value", TypeHint: "String"}},
+				ReturnType: "void",
+				Body:       []Statement{Assign("_name", V("value"))},
+			},
+		},
+	}
+	got := person.ToGDScript(0)
+	want := "class_name Person\n" +
+		"\n" +
+		"extends RefCounted\n" +
+		"\n" +
+		"var _name: String = \"\"\n" +
+		"\n" +
+		"var _age: int = 0\n" +
+		"\n" +
+		"func get_name() -> String:\n" +
+		"\treturn _name\n" +
+		"\n" +
+		"func set_name(value: String) -> void:\n" +
+		"\t_name = value"
+	if got != want {
+		t.Errorf("got:\n%s\n\nwant:\n%s", got, want)
+	}
+}
