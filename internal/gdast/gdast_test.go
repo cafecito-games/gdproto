@@ -610,3 +610,186 @@ func TestClassDefinitionNested(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+func TestLitInt(t *testing.T) {
+	n := Lit(42)
+	if n.Value != 42 {
+		t.Errorf("got %v", n.Value)
+	}
+}
+
+func TestLitString(t *testing.T) {
+	n := Lit("hello")
+	if n.ToGDScript(0) != `"hello"` {
+		t.Errorf("got %q", n.ToGDScript(0))
+	}
+}
+
+func TestVHelper(t *testing.T) {
+	n := V("foo")
+	if n.Name != "foo" {
+		t.Errorf("got %v", n.Name)
+	}
+}
+
+func TestCallHelper(t *testing.T) {
+	n := Call("print", Lit(1), Lit(2))
+	if got := n.ToGDScript(0); got != "print(1, 2)" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestCallHelperWithExpression(t *testing.T) {
+	n := Call(Attr(V("obj"), "method"), Lit(1))
+	if got := n.ToGDScript(0); got != "obj.method(1)" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestAttrHelper(t *testing.T) {
+	n := Attr(V("obj"), "field")
+	if n.ToGDScript(0) != "obj.field" {
+		t.Errorf("got %q", n.ToGDScript(0))
+	}
+}
+
+func TestVarHelper(t *testing.T) {
+	n := Var("x", "int", Lit(0))
+	if n.ToGDScript(0) != "var x: int = 0" {
+		t.Errorf("got %q", n.ToGDScript(0))
+	}
+}
+
+func TestVarHelperNoValue(t *testing.T) {
+	n := Var("x", "int", nil)
+	if n.ToGDScript(0) != "var x: int" {
+		t.Errorf("got %q", n.ToGDScript(0))
+	}
+}
+
+func TestConstHelper(t *testing.T) {
+	n := Const("MAX", Lit(100), "int")
+	if !n.IsConst {
+		t.Errorf("expected IsConst true")
+	}
+	if n.ToGDScript(0) != "const MAX: int = 100" {
+		t.Errorf("got %q", n.ToGDScript(0))
+	}
+}
+
+func TestConstHelperNoTypeHint(t *testing.T) {
+	n := Const("MAX", Lit(100), "")
+	if n.ToGDScript(0) != "const MAX := 100" {
+		t.Errorf("got %q", n.ToGDScript(0))
+	}
+}
+
+func TestAssignHelperString(t *testing.T) {
+	n := Assign("x", Lit(0))
+	if n.ToGDScript(0) != "x = 0" {
+		t.Errorf("got %q", n.ToGDScript(0))
+	}
+}
+
+func TestAssignHelperExpression(t *testing.T) {
+	n := Assign(Attr(V("obj"), "field"), Lit(1))
+	if n.ToGDScript(0) != "obj.field = 1" {
+		t.Errorf("got %q", n.ToGDScript(0))
+	}
+}
+
+func TestAssignHelperCompound(t *testing.T) {
+	n := Assign("count", Lit(1), "+=")
+	if n.ToGDScript(0) != "count += 1" {
+		t.Errorf("got %q", n.ToGDScript(0))
+	}
+}
+
+func TestRetHelper(t *testing.T) {
+	n := Ret(Lit(42))
+	if n.ToGDScript(0) != "return 42" {
+		t.Errorf("got %q", n.ToGDScript(0))
+	}
+}
+
+func TestRetEmpty(t *testing.T) {
+	n := Ret(nil)
+	if n.ToGDScript(0) != "return" {
+		t.Errorf("got %q", n.ToGDScript(0))
+	}
+}
+
+func TestIfHelper(t *testing.T) {
+	n := If(V("cond"), []Statement{Ret(Lit(1))}, nil)
+	want := "if cond:\n\treturn 1"
+	if got := n.ToGDScript(0); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestIfHelperWithElse(t *testing.T) {
+	n := If(V("cond"), []Statement{Ret(Lit(1))}, []Statement{Ret(Lit(2))})
+	want := "if cond:\n\treturn 1\nelse:\n\treturn 2"
+	if got := n.ToGDScript(0); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestWhileHelper(t *testing.T) {
+	n := While(V("cond"), []Statement{BreakStatement{}})
+	want := "while cond:\n\tbreak"
+	if got := n.ToGDScript(0); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestForHelper(t *testing.T) {
+	n := For("i", V("arr"), []Statement{BreakStatement{}}, "")
+	want := "for i in arr:\n\tbreak"
+	if got := n.ToGDScript(0); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestForHelperWithType(t *testing.T) {
+	n := For("i", V("arr"), []Statement{BreakStatement{}}, "int")
+	want := "for var i: int in arr:\n\tbreak"
+	if got := n.ToGDScript(0); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestNotHelper(t *testing.T) {
+	n := Not(V("x"))
+	if n.ToGDScript(0) != "not x" {
+		t.Errorf("got %q", n.ToGDScript(0))
+	}
+}
+
+func TestBinaryOpHelpers(t *testing.T) {
+	cases := []struct {
+		name string
+		got  BinaryOp
+		want string
+	}{
+		{"Eq", Eq(V("a"), V("b")), "a == b"},
+		{"Ne", Ne(V("a"), V("b")), "a != b"},
+		{"Lt", Lt(V("a"), V("b")), "a < b"},
+		{"Gt", Gt(V("a"), V("b")), "a > b"},
+		{"Le", Le(V("a"), V("b")), "a <= b"},
+		{"Ge", Ge(V("a"), V("b")), "a >= b"},
+		{"And", And(V("a"), V("b")), "a and b"},
+		{"Or", Or(V("a"), V("b")), "a or b"},
+		{"Add", Add(V("a"), V("b")), "a + b"},
+		{"Sub", Sub(V("a"), V("b")), "a - b"},
+		{"Mul", Mul(V("a"), V("b")), "a * b"},
+		{"Div", Div(V("a"), V("b")), "a / b"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.got.ToGDScript(0); got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
