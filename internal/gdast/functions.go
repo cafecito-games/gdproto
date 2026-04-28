@@ -121,14 +121,12 @@ func (e EnumDefinition) ToGDScript(level int) string {
 
 	lines := []string{header}
 	innerPad := indent(level + 1)
-	for i, v := range e.Values {
+	for _, v := range e.Values {
 		line := innerPad + v.Name
 		if v.Value != nil {
 			line += " = " + strconv.Itoa(*v.Value)
 		}
-		if i < len(e.Values)-1 {
-			line += ","
-		}
+		line += ","
 		lines = append(lines, line)
 	}
 	lines = append(lines, pad+"}")
@@ -158,12 +156,19 @@ func (SignalDefinition) statement() {}
 // ClassDefinition models either a top-level GDScript file (when Name is empty)
 // or a nested `class` block. Top-level definitions emit `class_name` and
 // `extends` directives at the file scope. Statements are interleaved with
-// blank lines.
+// blank lines. HeaderComment, when non-empty on a top-level class, is rendered
+// as a `#` comment block before any `class_name`/`extends` directive and is
+// followed by an extra blank line.
 type ClassDefinition struct {
 	Name               string
 	Extends            string
 	ClassNameDirective string
+	HeaderComment      string
 	Statements         []Node
+	// TightStatements disables the automatic blank line that would otherwise
+	// be inserted between adjacent statements. When true, the caller controls
+	// spacing entirely via EmptyLine entries in Statements.
+	TightStatements bool
 }
 
 // ToGDScript renders the class header (if any) followed by the body.
@@ -173,6 +178,9 @@ func (c ClassDefinition) ToGDScript(level int) string {
 	bodyIndent := level
 
 	if c.Name == "" {
+		if c.HeaderComment != "" {
+			lines = append(lines, renderCommentBlock(c.HeaderComment, 0, "#"), "", "")
+		}
 		if c.ClassNameDirective != "" {
 			lines = append(lines, "class_name "+c.ClassNameDirective, "")
 		}
@@ -191,7 +199,7 @@ func (c ClassDefinition) ToGDScript(level int) string {
 
 	for i, stmt := range c.Statements {
 		lines = append(lines, stmt.ToGDScript(bodyIndent))
-		if i < len(c.Statements)-1 {
+		if !c.TightStatements && i < len(c.Statements)-1 {
 			lines = append(lines, "")
 		}
 	}

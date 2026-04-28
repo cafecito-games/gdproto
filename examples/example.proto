@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+// Example protobuf schema for a simple game
+
+enum PlayerStatus {
+    OFFLINE = 0;
+    ONLINE = 1;
+    AWAY = 2;
+    IN_GAME = 3;
+}
+
+message Player {
+    string username = 1;
+    int32 level = 2;
+    int32 experience = 3;
+    PlayerStatus status = 4;
+    repeated string inventory = 5;
+    map<string, int32> stats = 6;
+
+    message Position {
+        float x = 1;
+        float y = 2;
+        float z = 3;
+    }
+
+    Position position = 7;
+
+    oneof contact {
+        string email = 8;
+        string discord = 9;
+    }
+}
+
+message GameState {
+    repeated Player players = 1;
+    int64 timestamp = 2;
+    string map_name = 3;
+}
