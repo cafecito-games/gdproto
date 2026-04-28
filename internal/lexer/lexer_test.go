@@ -51,3 +51,83 @@ func TestLexerErrorIsError(t *testing.T) {
 		t.Fatal("LexerError must implement error")
 	}
 }
+
+func TestTokenizeEmpty(t *testing.T) {
+	tokens, err := lexer.Tokenize("", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tokens) != 1 || tokens[0].Type != lexer.TokenEOF {
+		t.Fatalf("got %+v, want single EOF", tokens)
+	}
+	if tokens[0].Line != 1 || tokens[0].Column != 1 {
+		t.Errorf("EOF position = %d:%d, want 1:1", tokens[0].Line, tokens[0].Column)
+	}
+}
+
+func TestTokenizeWhitespaceOnly(t *testing.T) {
+	tokens, err := lexer.Tokenize("   \t\n\r\n   ", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tokens) != 1 || tokens[0].Type != lexer.TokenEOF {
+		t.Fatalf("got %+v, want single EOF", tokens)
+	}
+}
+
+func TestTokenizeAllSymbols(t *testing.T) {
+	tokens, err := lexer.Tokenize("{}[]()<>;=,.", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []lexer.TokenType{
+		lexer.TokenLBrace, lexer.TokenRBrace,
+		lexer.TokenLBracket, lexer.TokenRBracket,
+		lexer.TokenLParen, lexer.TokenRParen,
+		lexer.TokenLT, lexer.TokenGT,
+		lexer.TokenSemicolon, lexer.TokenEquals,
+		lexer.TokenComma, lexer.TokenDot,
+		lexer.TokenEOF,
+	}
+	if len(tokens) != len(want) {
+		t.Fatalf("got %d tokens, want %d: %+v", len(tokens), len(want), tokens)
+	}
+	for i, w := range want {
+		if tokens[i].Type != w {
+			t.Errorf("token[%d].Type = %s, want %s", i, tokens[i].Type, w)
+		}
+	}
+}
+
+func TestSymbolPositionTracking(t *testing.T) {
+	tokens, err := lexer.Tokenize("=\n=", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tokens[0].Line != 1 || tokens[0].Column != 1 {
+		t.Errorf("first = at %d:%d, want 1:1", tokens[0].Line, tokens[0].Column)
+	}
+	if tokens[1].Line != 2 || tokens[1].Column != 1 {
+		t.Errorf("second = at %d:%d, want 2:1", tokens[1].Line, tokens[1].Column)
+	}
+}
+
+func TestUnexpectedCharacter(t *testing.T) {
+	_, err := lexer.Tokenize("@", "test.proto")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	var le *lexer.LexerError
+	if !errors.As(err, &le) {
+		t.Fatalf("expected *LexerError, got %T", err)
+	}
+	if !strings.Contains(le.Message, "Unexpected character") {
+		t.Errorf("message = %q, want contains 'Unexpected character'", le.Message)
+	}
+	if le.File != "test.proto" {
+		t.Errorf("file = %q, want %q", le.File, "test.proto")
+	}
+	if le.Line != 1 || le.Column != 1 {
+		t.Errorf("position = %d:%d, want 1:1", le.Line, le.Column)
+	}
+}
