@@ -55,7 +55,7 @@ func (g *generator) fieldSerialization(f *ast.Field) []gdast.Statement {
 
 	if f.Repeated {
 		forBody := []gdast.Statement{
-			gdast.RawStatement{Code: fmt.Sprintf("result.append_array(PBCore.encode_varint(%d))", tag)},
+			gdast.RawStatement{Code: fmt.Sprintf("result.append_array(ProtoCoreUtils.encode_varint(%d))", tag)},
 		}
 		forBody = append(forBody, valueSerialization("result", "item", f.FieldType)...)
 		return []gdast.Statement{
@@ -71,7 +71,7 @@ func (g *generator) fieldSerialization(f *ast.Field) []gdast.Statement {
 	condition := fieldDefaultCondition(fieldVar, f.FieldType)
 
 	ifBody := []gdast.Statement{
-		gdast.RawStatement{Code: fmt.Sprintf("result.append_array(PBCore.encode_varint(%d))", tag)},
+		gdast.RawStatement{Code: fmt.Sprintf("result.append_array(ProtoCoreUtils.encode_varint(%d))", tag)},
 	}
 	ifBody = append(ifBody, valueSerialization("result", fieldVar, f.FieldType)...)
 
@@ -102,36 +102,36 @@ func fieldDefaultCondition(fieldVar, protoType string) gdast.Expression {
 func valueSerialization(target, valueExpression, protoType string) []gdast.Statement {
 	switch protoType {
 	case "double":
-		return []gdast.Statement{rawf("%s.append_array(PBCore.encode_double(%s))", target, valueExpression)}
+		return []gdast.Statement{rawf("%s.append_array(ProtoCoreUtils.encode_double(%s))", target, valueExpression)}
 	case "float":
-		return []gdast.Statement{rawf("%s.append_array(PBCore.encode_float(%s))", target, valueExpression)}
+		return []gdast.Statement{rawf("%s.append_array(ProtoCoreUtils.encode_float(%s))", target, valueExpression)}
 	case "fixed32":
-		return []gdast.Statement{rawf("%s.append_array(PBCore.encode_fixed32(%s))", target, valueExpression)}
+		return []gdast.Statement{rawf("%s.append_array(ProtoCoreUtils.encode_fixed32(%s))", target, valueExpression)}
 	case "sfixed32":
-		return []gdast.Statement{rawf("%s.append_array(PBCore.encode_sfixed32(%s))", target, valueExpression)}
+		return []gdast.Statement{rawf("%s.append_array(ProtoCoreUtils.encode_sfixed32(%s))", target, valueExpression)}
 	case "fixed64":
-		return []gdast.Statement{rawf("%s.append_array(PBCore.encode_fixed64(%s))", target, valueExpression)}
+		return []gdast.Statement{rawf("%s.append_array(ProtoCoreUtils.encode_fixed64(%s))", target, valueExpression)}
 	case "sfixed64":
-		return []gdast.Statement{rawf("%s.append_array(PBCore.encode_sfixed64(%s))", target, valueExpression)}
+		return []gdast.Statement{rawf("%s.append_array(ProtoCoreUtils.encode_sfixed64(%s))", target, valueExpression)}
 	case "sint32":
-		return []gdast.Statement{rawf("%s.append_array(PBCore.encode_varint(PBCore.encode_zigzag32(%s)))", target, valueExpression)}
+		return []gdast.Statement{rawf("%s.append_array(ProtoCoreUtils.encode_varint(ProtoCoreUtils.encode_zigzag32(%s)))", target, valueExpression)}
 	case "sint64":
-		return []gdast.Statement{rawf("%s.append_array(PBCore.encode_varint(PBCore.encode_zigzag64(%s)))", target, valueExpression)}
+		return []gdast.Statement{rawf("%s.append_array(ProtoCoreUtils.encode_varint(ProtoCoreUtils.encode_zigzag64(%s)))", target, valueExpression)}
 	case "int32", "int64", "uint32", "uint64", "bool":
-		return []gdast.Statement{rawf("%s.append_array(PBCore.encode_varint(%s))", target, valueExpression)}
+		return []gdast.Statement{rawf("%s.append_array(ProtoCoreUtils.encode_varint(%s))", target, valueExpression)}
 	case "string":
 		return []gdast.Statement{
 			gdast.VarDeclaration{
 				Name:         "str_data",
 				TypeHint:     "PackedByteArray",
-				InitialValue: gdast.RawExpression{Code: fmt.Sprintf("PBCore.encode_string(%s)", valueExpression)},
+				InitialValue: gdast.RawExpression{Code: fmt.Sprintf("ProtoCoreUtils.encode_string(%s)", valueExpression)},
 			},
-			rawf("%s.append_array(PBCore.encode_varint(str_data.size()))", target),
+			rawf("%s.append_array(ProtoCoreUtils.encode_varint(str_data.size()))", target),
 			rawf("%s.append_array(str_data)", target),
 		}
 	case "bytes":
 		return []gdast.Statement{
-			rawf("%s.append_array(PBCore.encode_varint(%s.size()))", target, valueExpression),
+			rawf("%s.append_array(ProtoCoreUtils.encode_varint(%s.size()))", target, valueExpression),
 			rawf("%s.append_array(%s)", target, valueExpression),
 		}
 	default:
@@ -144,7 +144,7 @@ func valueSerialization(target, valueExpression, protoType string) []gdast.State
 				TypeHint:     "PackedByteArray",
 				InitialValue: gdast.RawExpression{Code: fmt.Sprintf("%s.to_bytes()", valueExpression)},
 			},
-			rawf("%s.append_array(PBCore.encode_varint(msg_data.size()))", target),
+			rawf("%s.append_array(ProtoCoreUtils.encode_varint(msg_data.size()))", target),
 			rawf("%s.append_array(msg_data)", target),
 		}
 	}
@@ -169,20 +169,20 @@ func (g *generator) mapSerialization(mf *ast.MapField) []gdast.Statement {
 		},
 		gdast.EmptyLine{},
 		gdast.Comment{Text: "Entry field 1: key"},
-		rawf("entry.append_array(PBCore.encode_varint(%d))", keyTag),
+		rawf("entry.append_array(ProtoCoreUtils.encode_varint(%d))", keyTag),
 	}
 	forBody = append(forBody, mapEntryValueSerialization("key", mf.KeyType)...)
 	forBody = append(forBody,
 		gdast.EmptyLine{},
 		gdast.Comment{Text: "Entry field 2: value"},
-		rawf("entry.append_array(PBCore.encode_varint(%d))", valueTag),
+		rawf("entry.append_array(ProtoCoreUtils.encode_varint(%d))", valueTag),
 	)
 	forBody = append(forBody, mapEntryValueSerialization("value", mf.ValueType)...)
 	forBody = append(forBody,
 		gdast.EmptyLine{},
 		gdast.Comment{Text: "Append entry to result"},
-		rawf("result.append_array(PBCore.encode_varint(%d))", tag),
-		rawf("result.append_array(PBCore.encode_varint(entry.size()))"),
+		rawf("result.append_array(ProtoCoreUtils.encode_varint(%d))", tag),
+		rawf("result.append_array(ProtoCoreUtils.encode_varint(entry.size()))"),
 		rawf("result.append_array(entry)"),
 	)
 
@@ -202,36 +202,36 @@ func (g *generator) mapSerialization(mf *ast.MapField) []gdast.Statement {
 func mapEntryValueSerialization(varName, protoType string) []gdast.Statement {
 	switch protoType {
 	case "double":
-		return []gdast.Statement{rawf("entry.append_array(PBCore.encode_double(%s))", varName)}
+		return []gdast.Statement{rawf("entry.append_array(ProtoCoreUtils.encode_double(%s))", varName)}
 	case "float":
-		return []gdast.Statement{rawf("entry.append_array(PBCore.encode_float(%s))", varName)}
+		return []gdast.Statement{rawf("entry.append_array(ProtoCoreUtils.encode_float(%s))", varName)}
 	case "fixed32":
-		return []gdast.Statement{rawf("entry.append_array(PBCore.encode_fixed32(%s))", varName)}
+		return []gdast.Statement{rawf("entry.append_array(ProtoCoreUtils.encode_fixed32(%s))", varName)}
 	case "sfixed32":
-		return []gdast.Statement{rawf("entry.append_array(PBCore.encode_sfixed32(%s))", varName)}
+		return []gdast.Statement{rawf("entry.append_array(ProtoCoreUtils.encode_sfixed32(%s))", varName)}
 	case "fixed64":
-		return []gdast.Statement{rawf("entry.append_array(PBCore.encode_fixed64(%s))", varName)}
+		return []gdast.Statement{rawf("entry.append_array(ProtoCoreUtils.encode_fixed64(%s))", varName)}
 	case "sfixed64":
-		return []gdast.Statement{rawf("entry.append_array(PBCore.encode_sfixed64(%s))", varName)}
+		return []gdast.Statement{rawf("entry.append_array(ProtoCoreUtils.encode_sfixed64(%s))", varName)}
 	case "sint32":
-		return []gdast.Statement{rawf("entry.append_array(PBCore.encode_varint(PBCore.encode_zigzag32(%s)))", varName)}
+		return []gdast.Statement{rawf("entry.append_array(ProtoCoreUtils.encode_varint(ProtoCoreUtils.encode_zigzag32(%s)))", varName)}
 	case "sint64":
-		return []gdast.Statement{rawf("entry.append_array(PBCore.encode_varint(PBCore.encode_zigzag64(%s)))", varName)}
+		return []gdast.Statement{rawf("entry.append_array(ProtoCoreUtils.encode_varint(ProtoCoreUtils.encode_zigzag64(%s)))", varName)}
 	case "int32", "int64", "uint32", "uint64", "bool":
-		return []gdast.Statement{rawf("entry.append_array(PBCore.encode_varint(%s))", varName)}
+		return []gdast.Statement{rawf("entry.append_array(ProtoCoreUtils.encode_varint(%s))", varName)}
 	case "string":
 		return []gdast.Statement{
 			gdast.VarDeclaration{
 				Name:         varName + "_data",
 				TypeHint:     "PackedByteArray",
-				InitialValue: gdast.RawExpression{Code: fmt.Sprintf("PBCore.encode_string(%s)", varName)},
+				InitialValue: gdast.RawExpression{Code: fmt.Sprintf("ProtoCoreUtils.encode_string(%s)", varName)},
 			},
-			rawf("entry.append_array(PBCore.encode_varint(%s_data.size()))", varName),
+			rawf("entry.append_array(ProtoCoreUtils.encode_varint(%s_data.size()))", varName),
 			rawf("entry.append_array(%s_data)", varName),
 		}
 	case "bytes":
 		return []gdast.Statement{
-			rawf("entry.append_array(PBCore.encode_varint(%s.size()))", varName),
+			rawf("entry.append_array(ProtoCoreUtils.encode_varint(%s.size()))", varName),
 			rawf("entry.append_array(%s)", varName),
 		}
 	default:
@@ -241,7 +241,7 @@ func mapEntryValueSerialization(varName, protoType string) []gdast.Statement {
 				TypeHint:     "PackedByteArray",
 				InitialValue: gdast.RawExpression{Code: fmt.Sprintf("%s.to_bytes()", varName)},
 			},
-			rawf("entry.append_array(PBCore.encode_varint(%s_msg_data.size()))", varName),
+			rawf("entry.append_array(ProtoCoreUtils.encode_varint(%s_msg_data.size()))", varName),
 			rawf("entry.append_array(%s_msg_data)", varName),
 		}
 	}

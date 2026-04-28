@@ -82,7 +82,7 @@ func (g *generator) generateFromBytes(m *ast.Message) gdast.Function {
 			Body:      whileBody,
 		},
 		gdast.EmptyLine{},
-		gdast.Ret(gdast.RawExpression{Code: "PB_ERR.NO_ERRORS"}),
+		gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.NO_ERRORS"}),
 	)
 
 	return gdast.Function{
@@ -101,12 +101,12 @@ func tagReadingStatements() []gdast.Statement {
 		gdast.VarDeclaration{
 			Name:         "tag_result",
 			TypeHint:     "Dictionary",
-			InitialValue: gdast.RawExpression{Code: "PBCore.decode_varint(data, offset)"},
+			InitialValue: gdast.RawExpression{Code: "ProtoCoreUtils.decode_varint(data, offset)"},
 		},
 		gdast.IfStatement{
 			Condition: gdast.Eq(gdast.RawExpression{Code: "tag_result.size"}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
-				gdast.Ret(gdast.RawExpression{Code: "PB_ERR.VARINT_NOT_FOUND"}),
+				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND"}),
 			},
 		},
 		gdast.VarDeclaration{
@@ -119,12 +119,12 @@ func tagReadingStatements() []gdast.Statement {
 		gdast.VarDeclaration{
 			Name:         "field_number",
 			TypeHint:     "int",
-			InitialValue: gdast.RawExpression{Code: "PBCore.get_field_number(tag)"},
+			InitialValue: gdast.RawExpression{Code: "ProtoCoreUtils.get_field_number(tag)"},
 		},
 		gdast.VarDeclaration{
 			Name:         "wire_type",
 			TypeHint:     "int",
-			InitialValue: gdast.RawExpression{Code: "PBCore.get_wire_type(tag)"},
+			InitialValue: gdast.RawExpression{Code: "ProtoCoreUtils.get_wire_type(tag)"},
 		},
 		gdast.EmptyLine{},
 	}
@@ -140,11 +140,11 @@ func skipUnknownFieldMatch() gdast.MatchStatement {
 				Pattern: "0",
 				Comment: "Varint",
 				Body: []gdast.Statement{
-					inferredVar("skip_result", "PBCore.decode_varint(data, offset)"),
+					inferredVar("skip_result", "ProtoCoreUtils.decode_varint(data, offset)"),
 					gdast.IfStatement{
 						Condition: gdast.Eq(gdast.RawExpression{Code: "skip_result.size"}, gdast.Lit(-1)),
 						Body: []gdast.Statement{
-							gdast.Ret(gdast.RawExpression{Code: "PB_ERR.VARINT_NOT_FOUND"}),
+							gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND"}),
 						},
 					},
 					rawf("offset += skip_result.size"),
@@ -159,11 +159,11 @@ func skipUnknownFieldMatch() gdast.MatchStatement {
 				Pattern: "2",
 				Comment: "Length-delimited",
 				Body: []gdast.Statement{
-					inferredVar("skip_length_result", "PBCore.decode_varint(data, offset)"),
+					inferredVar("skip_length_result", "ProtoCoreUtils.decode_varint(data, offset)"),
 					gdast.IfStatement{
 						Condition: gdast.Eq(gdast.RawExpression{Code: "skip_length_result.size"}, gdast.Lit(-1)),
 						Body: []gdast.Statement{
-							gdast.Ret(gdast.RawExpression{Code: "PB_ERR.LENGTH_DELIMITED_SIZE_NOT_FOUND"}),
+							gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND"}),
 						},
 					},
 					rawf("offset += skip_length_result.size + skip_length_result.value"),
@@ -177,7 +177,7 @@ func skipUnknownFieldMatch() gdast.MatchStatement {
 			{
 				Pattern: "_",
 				Body: []gdast.Statement{
-					gdast.Ret(gdast.RawExpression{Code: "PB_ERR.UNDEFINED_STATE"}),
+					gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.UNDEFINED_STATE"}),
 				},
 			},
 		},
@@ -204,21 +204,21 @@ func (g *generator) singleFieldDeserialization(f *ast.Field) []gdast.Statement {
 	case "int32", "int64", "uint32", "uint64", "bool":
 		return varintAssign(fieldVar, f.FieldType == "bool")
 	case "sint32":
-		return zigzagAssign(fieldVar, "PBCore.decode_zigzag32")
+		return zigzagAssign(fieldVar, "ProtoCoreUtils.decode_zigzag32")
 	case "sint64":
-		return zigzagAssign(fieldVar, "PBCore.decode_zigzag64")
+		return zigzagAssign(fieldVar, "ProtoCoreUtils.decode_zigzag64")
 	case "float":
-		return fixedAssign(fieldVar, "PBCore.decode_float", 4)
+		return fixedAssign(fieldVar, "ProtoCoreUtils.decode_float", 4)
 	case "double":
-		return fixedAssign(fieldVar, "PBCore.decode_double", 8)
+		return fixedAssign(fieldVar, "ProtoCoreUtils.decode_double", 8)
 	case "fixed32":
-		return fixedAssign(fieldVar, "PBCore.decode_fixed32", 4)
+		return fixedAssign(fieldVar, "ProtoCoreUtils.decode_fixed32", 4)
 	case "sfixed32":
-		return fixedAssign(fieldVar, "PBCore.decode_sfixed32", 4)
+		return fixedAssign(fieldVar, "ProtoCoreUtils.decode_sfixed32", 4)
 	case "fixed64":
-		return fixedAssign(fieldVar, "PBCore.decode_fixed64", 8)
+		return fixedAssign(fieldVar, "ProtoCoreUtils.decode_fixed64", 8)
 	case "sfixed64":
-		return fixedAssign(fieldVar, "PBCore.decode_sfixed64", 8)
+		return fixedAssign(fieldVar, "ProtoCoreUtils.decode_sfixed64", 8)
 	case "string":
 		return stringAssign(fieldVar)
 	case "bytes":
@@ -254,11 +254,11 @@ func (g *generator) repeatedFieldDeserialization(f *ast.Field) []gdast.Statement
 // converts the integer to a bool via `!= 0`.
 func varintAssign(fieldVar string, asBool bool) []gdast.Statement {
 	stmts := []gdast.Statement{
-		inferredVar("result", "PBCore.decode_varint(data, offset)"),
+		inferredVar("result", "ProtoCoreUtils.decode_varint(data, offset)"),
 		gdast.IfStatement{
 			Condition: gdast.Eq(gdast.RawExpression{Code: "result.size"}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
-				gdast.Ret(gdast.RawExpression{Code: "PB_ERR.VARINT_NOT_FOUND"}),
+				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND"}),
 			},
 		},
 	}
@@ -275,11 +275,11 @@ func varintAssign(fieldVar string, asBool bool) []gdast.Statement {
 // the signed value before assigning into fieldVar.
 func zigzagAssign(fieldVar, decodeFunc string) []gdast.Statement {
 	return []gdast.Statement{
-		inferredVar("result", "PBCore.decode_varint(data, offset)"),
+		inferredVar("result", "ProtoCoreUtils.decode_varint(data, offset)"),
 		gdast.IfStatement{
 			Condition: gdast.Eq(gdast.RawExpression{Code: "result.size"}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
-				gdast.Ret(gdast.RawExpression{Code: "PB_ERR.VARINT_NOT_FOUND"}),
+				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND"}),
 			},
 		},
 		rawf("%s = %s(result.value)", fieldVar, decodeFunc),
@@ -294,7 +294,7 @@ func fixedAssign(fieldVar, decodeFunc string, width int) []gdast.Statement {
 		gdast.IfStatement{
 			Condition: gdast.RawExpression{Code: fmt.Sprintf("offset + %d > data.size()", width)},
 			Body: []gdast.Statement{
-				gdast.Ret(gdast.RawExpression{Code: "PB_ERR.PARSE_INCOMPLETE"}),
+				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.PARSE_INCOMPLETE"}),
 			},
 		},
 		rawf("%s = %s(data, offset)", fieldVar, decodeFunc),
@@ -306,7 +306,7 @@ func fixedAssign(fieldVar, decodeFunc string, width int) []gdast.Statement {
 func stringAssign(fieldVar string) []gdast.Statement {
 	stmts := lengthPrefixDecode()
 	stmts = append(stmts,
-		rawf("%s = PBCore.decode_string(data, offset, length)", fieldVar),
+		rawf("%s = ProtoCoreUtils.decode_string(data, offset, length)", fieldVar),
 		rawf("offset += length"),
 	)
 	return stmts
@@ -336,7 +336,7 @@ func messageAssign(fieldVar, typeName string) []gdast.Statement {
 		rawf("%s = %s.new()", fieldVar, typeName),
 		inferredVar("msg_result", fmt.Sprintf("%s.from_bytes(msg_data)", fieldVar)),
 		gdast.IfStatement{
-			Condition: gdast.Ne(gdast.V("msg_result"), gdast.RawExpression{Code: "PB_ERR.NO_ERRORS"}),
+			Condition: gdast.Ne(gdast.V("msg_result"), gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.NO_ERRORS"}),
 			Body: []gdast.Statement{
 				gdast.Ret(gdast.V("msg_result")),
 			},
@@ -350,11 +350,11 @@ func messageAssign(fieldVar, typeName string) []gdast.Statement {
 // prefix and validates it against the remaining buffer size.
 func lengthPrefixDecode() []gdast.Statement {
 	return []gdast.Statement{
-		inferredVar("length_result", "PBCore.decode_varint(data, offset)"),
+		inferredVar("length_result", "ProtoCoreUtils.decode_varint(data, offset)"),
 		gdast.IfStatement{
 			Condition: gdast.Eq(gdast.RawExpression{Code: "length_result.size"}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
-				gdast.Ret(gdast.RawExpression{Code: "PB_ERR.LENGTH_DELIMITED_SIZE_NOT_FOUND"}),
+				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND"}),
 			},
 		},
 		rawf("offset += length_result.size"),
@@ -366,7 +366,7 @@ func lengthPrefixDecode() []gdast.Statement {
 		gdast.IfStatement{
 			Condition: gdast.RawExpression{Code: "offset + length > data.size()"},
 			Body: []gdast.Statement{
-				gdast.Ret(gdast.RawExpression{Code: "PB_ERR.LENGTH_DELIMITED_SIZE_MISMATCH"}),
+				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_MISMATCH"}),
 			},
 		},
 	}
@@ -378,7 +378,7 @@ func lengthPrefixDecode() []gdast.Statement {
 func repeatedStringAppend(fieldVar string) []gdast.Statement {
 	stmts := lengthPrefixDecode()
 	stmts = append(stmts,
-		rawf("%s.append(PBCore.decode_string(data, offset, length))", fieldVar),
+		rawf("%s.append(ProtoCoreUtils.decode_string(data, offset, length))", fieldVar),
 		rawf("offset += length"),
 	)
 	return stmts
@@ -409,7 +409,7 @@ func repeatedMessageAppend(fieldVar, typeName string) []gdast.Statement {
 		inferredVar("msg_item", fmt.Sprintf("%s.new()", typeName)),
 		inferredVar("msg_result", "msg_item.from_bytes(msg_data)"),
 		gdast.IfStatement{
-			Condition: gdast.Ne(gdast.V("msg_result"), gdast.RawExpression{Code: "PB_ERR.NO_ERRORS"}),
+			Condition: gdast.Ne(gdast.V("msg_result"), gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.NO_ERRORS"}),
 			Body: []gdast.Statement{
 				gdast.Ret(gdast.V("msg_result")),
 			},
@@ -426,11 +426,11 @@ func repeatedMessageAppend(fieldVar, typeName string) []gdast.Statement {
 // means a single unpacked value matching the element type.
 func repeatedNumericPackedOrUnpacked(fieldVar, protoType string) []gdast.Statement {
 	packedBody := []gdast.Statement{
-		inferredVar("length_result", "PBCore.decode_varint(data, offset)"),
+		inferredVar("length_result", "ProtoCoreUtils.decode_varint(data, offset)"),
 		gdast.IfStatement{
 			Condition: gdast.Eq(gdast.RawExpression{Code: "length_result.size"}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
-				gdast.Ret(gdast.RawExpression{Code: "PB_ERR.LENGTH_DELIMITED_SIZE_NOT_FOUND"}),
+				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND"}),
 			},
 		},
 		rawf("offset += length_result.size"),
@@ -468,21 +468,21 @@ func packedElementDecode(fieldVar, protoType string) []gdast.Statement {
 	case "bool":
 		return varintAppend(fieldVar, true)
 	case "sint32":
-		return zigzagAppend(fieldVar, "PBCore.decode_zigzag32")
+		return zigzagAppend(fieldVar, "ProtoCoreUtils.decode_zigzag32")
 	case "sint64":
-		return zigzagAppend(fieldVar, "PBCore.decode_zigzag64")
+		return zigzagAppend(fieldVar, "ProtoCoreUtils.decode_zigzag64")
 	case "float":
-		return fixedAppend(fieldVar, "PBCore.decode_float", 4)
+		return fixedAppend(fieldVar, "ProtoCoreUtils.decode_float", 4)
 	case "double":
-		return fixedAppend(fieldVar, "PBCore.decode_double", 8)
+		return fixedAppend(fieldVar, "ProtoCoreUtils.decode_double", 8)
 	case "fixed32":
-		return fixedAppend(fieldVar, "PBCore.decode_fixed32", 4)
+		return fixedAppend(fieldVar, "ProtoCoreUtils.decode_fixed32", 4)
 	case "sfixed32":
-		return fixedAppend(fieldVar, "PBCore.decode_sfixed32", 4)
+		return fixedAppend(fieldVar, "ProtoCoreUtils.decode_sfixed32", 4)
 	case "fixed64":
-		return fixedAppend(fieldVar, "PBCore.decode_fixed64", 8)
+		return fixedAppend(fieldVar, "ProtoCoreUtils.decode_fixed64", 8)
 	case "sfixed64":
-		return fixedAppend(fieldVar, "PBCore.decode_sfixed64", 8)
+		return fixedAppend(fieldVar, "ProtoCoreUtils.decode_sfixed64", 8)
 	}
 	return nil
 }
@@ -497,11 +497,11 @@ func singleNumericAppend(fieldVar, protoType string) []gdast.Statement {
 // asBool, the value is converted with `!= 0`.
 func varintAppend(fieldVar string, asBool bool) []gdast.Statement {
 	stmts := []gdast.Statement{
-		inferredVar("result", "PBCore.decode_varint(data, offset)"),
+		inferredVar("result", "ProtoCoreUtils.decode_varint(data, offset)"),
 		gdast.IfStatement{
 			Condition: gdast.Eq(gdast.RawExpression{Code: "result.size"}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
-				gdast.Ret(gdast.RawExpression{Code: "PB_ERR.VARINT_NOT_FOUND"}),
+				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND"}),
 			},
 		},
 	}
@@ -518,11 +518,11 @@ func varintAppend(fieldVar string, asBool bool) []gdast.Statement {
 // the result to fieldVar.
 func zigzagAppend(fieldVar, decodeFunc string) []gdast.Statement {
 	return []gdast.Statement{
-		inferredVar("result", "PBCore.decode_varint(data, offset)"),
+		inferredVar("result", "ProtoCoreUtils.decode_varint(data, offset)"),
 		gdast.IfStatement{
 			Condition: gdast.Eq(gdast.RawExpression{Code: "result.size"}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
-				gdast.Ret(gdast.RawExpression{Code: "PB_ERR.VARINT_NOT_FOUND"}),
+				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND"}),
 			},
 		},
 		rawf("%s.append(%s(result.value))", fieldVar, decodeFunc),
@@ -536,7 +536,7 @@ func fixedAppend(fieldVar, decodeFunc string, width int) []gdast.Statement {
 		gdast.IfStatement{
 			Condition: gdast.RawExpression{Code: fmt.Sprintf("offset + %d > data.size()", width)},
 			Body: []gdast.Statement{
-				gdast.Ret(gdast.RawExpression{Code: "PB_ERR.PARSE_INCOMPLETE"}),
+				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.PARSE_INCOMPLETE"}),
 			},
 		},
 		rawf("%s.append(%s(data, offset))", fieldVar, decodeFunc),
@@ -580,11 +580,11 @@ func mapFieldDeserialization(mf *ast.MapField) []gdast.Statement {
 // from `entry_data` and dispatches to either the key or value decoder.
 func mapEntryLoopBody(mf *ast.MapField) []gdast.Statement {
 	return []gdast.Statement{
-		inferredVar("entry_tag_result", "PBCore.decode_varint(entry_data, entry_offset)"),
+		inferredVar("entry_tag_result", "ProtoCoreUtils.decode_varint(entry_data, entry_offset)"),
 		gdast.IfStatement{
 			Condition: gdast.Eq(gdast.RawExpression{Code: "entry_tag_result.size"}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
-				gdast.Ret(gdast.RawExpression{Code: "PB_ERR.VARINT_NOT_FOUND"}),
+				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND"}),
 			},
 		},
 		gdast.VarDeclaration{
@@ -596,7 +596,7 @@ func mapEntryLoopBody(mf *ast.MapField) []gdast.Statement {
 		gdast.VarDeclaration{
 			Name:         "entry_field_number",
 			TypeHint:     "int",
-			InitialValue: gdast.RawExpression{Code: "PBCore.get_field_number(entry_tag)"},
+			InitialValue: gdast.RawExpression{Code: "ProtoCoreUtils.get_field_number(entry_tag)"},
 		},
 		gdast.EmptyLine{},
 		gdast.MatchStatement{
@@ -628,21 +628,21 @@ func mapEntryDecode(target, protoType string) []gdast.Statement {
 	case "int32", "int64", "uint32", "uint64", "bool":
 		return mapVarintAssign(target, protoType == "bool")
 	case "sint32":
-		return mapZigzagAssign(target, "PBCore.decode_zigzag32")
+		return mapZigzagAssign(target, "ProtoCoreUtils.decode_zigzag32")
 	case "sint64":
-		return mapZigzagAssign(target, "PBCore.decode_zigzag64")
+		return mapZigzagAssign(target, "ProtoCoreUtils.decode_zigzag64")
 	case "float":
-		return mapFixedAssign(target, "PBCore.decode_float", 4)
+		return mapFixedAssign(target, "ProtoCoreUtils.decode_float", 4)
 	case "double":
-		return mapFixedAssign(target, "PBCore.decode_double", 8)
+		return mapFixedAssign(target, "ProtoCoreUtils.decode_double", 8)
 	case "fixed32":
-		return mapFixedAssign(target, "PBCore.decode_fixed32", 4)
+		return mapFixedAssign(target, "ProtoCoreUtils.decode_fixed32", 4)
 	case "sfixed32":
-		return mapFixedAssign(target, "PBCore.decode_sfixed32", 4)
+		return mapFixedAssign(target, "ProtoCoreUtils.decode_sfixed32", 4)
 	case "fixed64":
-		return mapFixedAssign(target, "PBCore.decode_fixed64", 8)
+		return mapFixedAssign(target, "ProtoCoreUtils.decode_fixed64", 8)
 	case "sfixed64":
-		return mapFixedAssign(target, "PBCore.decode_sfixed64", 8)
+		return mapFixedAssign(target, "ProtoCoreUtils.decode_sfixed64", 8)
 	case "string":
 		return mapStringAssign(target)
 	case "bytes":
@@ -656,11 +656,11 @@ func mapEntryDecode(target, protoType string) []gdast.Statement {
 // mapVarintAssign decodes a varint from the entry buffer into target.
 func mapVarintAssign(target string, asBool bool) []gdast.Statement {
 	stmts := []gdast.Statement{
-		inferredVar("result", "PBCore.decode_varint(entry_data, entry_offset)"),
+		inferredVar("result", "ProtoCoreUtils.decode_varint(entry_data, entry_offset)"),
 		gdast.IfStatement{
 			Condition: gdast.Eq(gdast.RawExpression{Code: "result.size"}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
-				gdast.Ret(gdast.RawExpression{Code: "PB_ERR.VARINT_NOT_FOUND"}),
+				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND"}),
 			},
 		},
 	}
@@ -676,11 +676,11 @@ func mapVarintAssign(target string, asBool bool) []gdast.Statement {
 // mapZigzagAssign decodes a zig-zag varint from the entry buffer into target.
 func mapZigzagAssign(target, decodeFunc string) []gdast.Statement {
 	return []gdast.Statement{
-		inferredVar("result", "PBCore.decode_varint(entry_data, entry_offset)"),
+		inferredVar("result", "ProtoCoreUtils.decode_varint(entry_data, entry_offset)"),
 		gdast.IfStatement{
 			Condition: gdast.Eq(gdast.RawExpression{Code: "result.size"}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
-				gdast.Ret(gdast.RawExpression{Code: "PB_ERR.VARINT_NOT_FOUND"}),
+				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND"}),
 			},
 		},
 		rawf("%s = %s(result.value)", target, decodeFunc),
@@ -695,7 +695,7 @@ func mapFixedAssign(target, decodeFunc string, width int) []gdast.Statement {
 		gdast.IfStatement{
 			Condition: gdast.RawExpression{Code: fmt.Sprintf("entry_offset + %d > entry_data.size()", width)},
 			Body: []gdast.Statement{
-				gdast.Ret(gdast.RawExpression{Code: "PB_ERR.PARSE_INCOMPLETE"}),
+				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.PARSE_INCOMPLETE"}),
 			},
 		},
 		rawf("%s = %s(entry_data, entry_offset)", target, decodeFunc),
@@ -707,11 +707,11 @@ func mapFixedAssign(target, decodeFunc string, width int) []gdast.Statement {
 // target.
 func mapStringAssign(target string) []gdast.Statement {
 	return []gdast.Statement{
-		inferredVar("len_result", "PBCore.decode_varint(entry_data, entry_offset)"),
+		inferredVar("len_result", "ProtoCoreUtils.decode_varint(entry_data, entry_offset)"),
 		gdast.IfStatement{
 			Condition: gdast.Eq(gdast.RawExpression{Code: "len_result.size"}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
-				gdast.Ret(gdast.RawExpression{Code: "PB_ERR.LENGTH_DELIMITED_SIZE_NOT_FOUND"}),
+				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND"}),
 			},
 		},
 		rawf("entry_offset += len_result.size"),
@@ -723,10 +723,10 @@ func mapStringAssign(target string) []gdast.Statement {
 		gdast.IfStatement{
 			Condition: gdast.RawExpression{Code: "entry_offset + str_len > entry_data.size()"},
 			Body: []gdast.Statement{
-				gdast.Ret(gdast.RawExpression{Code: "PB_ERR.LENGTH_DELIMITED_SIZE_MISMATCH"}),
+				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_MISMATCH"}),
 			},
 		},
-		rawf("%s = PBCore.decode_string(entry_data, entry_offset, str_len)", target),
+		rawf("%s = ProtoCoreUtils.decode_string(entry_data, entry_offset, str_len)", target),
 		rawf("entry_offset += str_len"),
 	}
 }
@@ -735,11 +735,11 @@ func mapStringAssign(target string) []gdast.Statement {
 // into target.
 func mapBytesAssign(target string) []gdast.Statement {
 	return []gdast.Statement{
-		inferredVar("len_result", "PBCore.decode_varint(entry_data, entry_offset)"),
+		inferredVar("len_result", "ProtoCoreUtils.decode_varint(entry_data, entry_offset)"),
 		gdast.IfStatement{
 			Condition: gdast.Eq(gdast.RawExpression{Code: "len_result.size"}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
-				gdast.Ret(gdast.RawExpression{Code: "PB_ERR.LENGTH_DELIMITED_SIZE_NOT_FOUND"}),
+				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND"}),
 			},
 		},
 		rawf("entry_offset += len_result.size"),
@@ -751,7 +751,7 @@ func mapBytesAssign(target string) []gdast.Statement {
 		gdast.IfStatement{
 			Condition: gdast.RawExpression{Code: "entry_offset + byte_len > entry_data.size()"},
 			Body: []gdast.Statement{
-				gdast.Ret(gdast.RawExpression{Code: "PB_ERR.LENGTH_DELIMITED_SIZE_MISMATCH"}),
+				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_MISMATCH"}),
 			},
 		},
 		rawf("%s = entry_data.slice(entry_offset, entry_offset + byte_len)", target),
@@ -764,11 +764,11 @@ func mapBytesAssign(target string) []gdast.Statement {
 // calling from_bytes; nested errors are propagated.
 func mapMessageAssign(target, typeName string) []gdast.Statement {
 	return []gdast.Statement{
-		inferredVar("len_result", "PBCore.decode_varint(entry_data, entry_offset)"),
+		inferredVar("len_result", "ProtoCoreUtils.decode_varint(entry_data, entry_offset)"),
 		gdast.IfStatement{
 			Condition: gdast.Eq(gdast.RawExpression{Code: "len_result.size"}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
-				gdast.Ret(gdast.RawExpression{Code: "PB_ERR.LENGTH_DELIMITED_SIZE_NOT_FOUND"}),
+				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND"}),
 			},
 		},
 		rawf("entry_offset += len_result.size"),
@@ -780,7 +780,7 @@ func mapMessageAssign(target, typeName string) []gdast.Statement {
 		gdast.IfStatement{
 			Condition: gdast.RawExpression{Code: "entry_offset + msg_len > entry_data.size()"},
 			Body: []gdast.Statement{
-				gdast.Ret(gdast.RawExpression{Code: "PB_ERR.LENGTH_DELIMITED_SIZE_MISMATCH"}),
+				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_MISMATCH"}),
 			},
 		},
 		gdast.VarDeclaration{
@@ -791,7 +791,7 @@ func mapMessageAssign(target, typeName string) []gdast.Statement {
 		rawf("%s = %s.new()", target, typeName),
 		inferredVar("entry_msg_result", fmt.Sprintf("%s.from_bytes(entry_msg_data)", target)),
 		gdast.IfStatement{
-			Condition: gdast.Ne(gdast.V("entry_msg_result"), gdast.RawExpression{Code: "PB_ERR.NO_ERRORS"}),
+			Condition: gdast.Ne(gdast.V("entry_msg_result"), gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.NO_ERRORS"}),
 			Body: []gdast.Statement{
 				gdast.Ret(gdast.V("entry_msg_result")),
 			},
