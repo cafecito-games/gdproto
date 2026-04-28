@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/cafecito-games/gogdproto/internal/ast"
 	"github.com/cafecito-games/gogdproto/internal/lexer"
@@ -85,12 +86,97 @@ func (p *parser) parseFile() (*ast.ProtoFile, error) {
 		Syntax:   syntax,
 	}
 
-	if !p.match(lexer.TokenEOF) {
-		tok := p.current()
-		return nil, p.errorf(tok, "Unexpected token: %s", tok.Type)
+	for !p.match(lexer.TokenEOF) {
+		switch {
+		case p.match(lexer.TokenImport):
+			imp, err := p.parseImport()
+			if err != nil {
+				return nil, err
+			}
+			file.Imports = append(file.Imports, imp)
+		case p.match(lexer.TokenPackage):
+			pkg, err := p.parsePackage()
+			if err != nil {
+				return nil, err
+			}
+			file.Package = pkg
+		case p.match(lexer.TokenOption):
+			opt, err := p.parseOption()
+			if err != nil {
+				return nil, err
+			}
+			if file.Options == nil {
+				file.Options = map[string]any{}
+			}
+			file.Options[opt.Name] = opt.Value
+		case p.match(lexer.TokenMessage):
+			return nil, p.errorf(p.current(), "Message parsing not yet implemented")
+		case p.match(lexer.TokenEnum):
+			return nil, p.errorf(p.current(), "Enum parsing not yet implemented")
+		default:
+			tok := p.current()
+			return nil, p.errorf(tok, "Unexpected token: %s", tok.Type)
+		}
 	}
 
 	return file, nil
+}
+
+func (p *parser) parseImport() (*ast.Import, error) {
+	impTok := p.current()
+	if _, err := p.expect(lexer.TokenImport); err != nil {
+		return nil, err
+	}
+	public := false
+	if p.match(lexer.TokenPublic) {
+		public = true
+		p.advance()
+	}
+	pathTok, err := p.expect(lexer.TokenStringLiteral)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.expect(lexer.TokenSemicolon); err != nil {
+		return nil, err
+	}
+	return &ast.Import{
+		Position: ast.Position{Line: impTok.Line, Column: impTok.Column},
+		Path:     pathTok.Value,
+		Public:   public,
+	}, nil
+}
+
+func (p *parser) parsePackage() (string, error) {
+	if _, err := p.expect(lexer.TokenPackage); err != nil {
+		return "", err
+	}
+	name, err := p.parseDottedIdent()
+	if err != nil {
+		return "", err
+	}
+	if _, err := p.expect(lexer.TokenSemicolon); err != nil {
+		return "", err
+	}
+	return name, nil
+}
+
+// parseDottedIdent parses Foo, Foo.Bar, Foo.Bar.Baz (identifiers separated
+// by dots). At least one identifier required.
+func (p *parser) parseDottedIdent() (string, error) {
+	head, err := p.expect(lexer.TokenIdentifier)
+	if err != nil {
+		return "", err
+	}
+	parts := []string{head.Value}
+	for p.match(lexer.TokenDot) {
+		p.advance()
+		next, err := p.expect(lexer.TokenIdentifier)
+		if err != nil {
+			return "", err
+		}
+		parts = append(parts, next.Value)
+	}
+	return strings.Join(parts, "."), nil
 }
 
 func (p *parser) parseSyntax() (string, error) {

@@ -59,3 +59,95 @@ func TestSyntaxMissing(t *testing.T) {
 		t.Errorf("Message = %q, want contains 'Expected TokenSyntax'", pe.Message)
 	}
 }
+
+func TestSimpleImport(t *testing.T) {
+	src := `syntax = "proto3"; import "other.proto";`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(file.Imports) != 1 {
+		t.Fatalf("got %d imports, want 1", len(file.Imports))
+	}
+	if file.Imports[0].Path != "other.proto" || file.Imports[0].Public {
+		t.Errorf("got %+v", file.Imports[0])
+	}
+}
+
+func TestPublicImport(t *testing.T) {
+	src := `syntax = "proto3"; import public "x.proto";`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !file.Imports[0].Public {
+		t.Error("expected public=true")
+	}
+}
+
+func TestMultipleImports(t *testing.T) {
+	src := `syntax = "proto3";
+import "foo.proto";
+import "bar.proto";
+import public "baz.proto";`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(file.Imports) != 3 {
+		t.Fatalf("got %d", len(file.Imports))
+	}
+	if file.Imports[2].Path != "baz.proto" || !file.Imports[2].Public {
+		t.Errorf("got %+v", file.Imports[2])
+	}
+}
+
+func TestSimplePackage(t *testing.T) {
+	file, err := parseSource(t, `syntax = "proto3"; package mypackage;`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Package != "mypackage" {
+		t.Errorf("Package = %q", file.Package)
+	}
+}
+
+func TestDottedPackage(t *testing.T) {
+	file, err := parseSource(t, `syntax = "proto3"; package com.example.proto;`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Package != "com.example.proto" {
+		t.Errorf("Package = %q", file.Package)
+	}
+}
+
+func TestFileOptionIdentifier(t *testing.T) {
+	file, err := parseSource(t, `syntax = "proto3"; option optimize_for = SPEED;`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Options["optimize_for"] != "SPEED" {
+		t.Errorf("got %v", file.Options)
+	}
+}
+
+func TestFileOptionInt(t *testing.T) {
+	file, err := parseSource(t, `syntax = "proto3"; option max_size = 42;`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, ok := file.Options["max_size"].(int64); !ok || v != 42 {
+		t.Errorf("got %v %T", file.Options["max_size"], file.Options["max_size"])
+	}
+}
+
+func TestFileOptionBool(t *testing.T) {
+	file, err := parseSource(t, `syntax = "proto3"; option deprecated = true;`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Options["deprecated"] != true {
+		t.Errorf("got %v", file.Options["deprecated"])
+	}
+}
