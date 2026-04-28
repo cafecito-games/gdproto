@@ -370,19 +370,71 @@ func fromTextMapEntryParser(protoType, target, indent string) string {
 	return b.String()
 }
 
-// generateParseEnumValueHelpers emits one `_parse_enum_value_<field>` helper
-// per enum-typed field on the message. The helper maps enum value names back
-// to their integer values; unknown names map to 0. from_text relies on these
-// helpers to decode textual enum values.
-func (g *generator) generateParseEnumValueHelpers(m *ast.Message) []gdast.Node {
+// generateEnumNameAndParserHelpers emits both `_get_enum_name_<field>` and
+// `_parse_enum_value_<field>` helpers for every enum-typed field on the
+// message. to_text uses the former to render enum values as their declared
+// names; from_text uses the latter to parse textual enum names back to their
+// integer values.
+func (g *generator) generateEnumNameAndParserHelpers(m *ast.Message) []gdast.Node {
 	var out []gdast.Node
-	for _, f := range m.Fields {
-		if !isEnumType(g, f.FieldType) {
-			continue
+	enumFields := g.collectEnumFields(m)
+	for i, f := range enumFields {
+		out = append(out, g.generateGetEnumNameHelper(f), g.generateParseEnumValueHelper(f))
+		if i < len(enumFields)-1 {
+			out = append(out, gdast.EmptyLine{})
 		}
-		out = append(out, g.generateParseEnumValueHelper(f))
 	}
 	return out
+}
+
+// collectEnumFields returns every enum-typed field on the message, scanning
+// regular and oneof fields in declaration order.
+func (g *generator) collectEnumFields(m *ast.Message) []*ast.Field {
+	var fields []*ast.Field
+	for _, f := range m.Fields {
+		if isEnumType(g, f.FieldType) || f.IsEnum {
+			fields = append(fields, f)
+		}
+	}
+	for _, oneof := range m.Oneofs {
+		for _, f := range oneof.Fields {
+			if isEnumType(g, f.FieldType) || f.IsEnum {
+				fields = append(fields, f)
+			}
+		}
+	}
+	return fields
+}
+
+// generateGetEnumNameHelper emits the `_get_enum_name_<field>` function that
+// maps an enum integer value back to its declared symbolic name. Unknown
+// values fall through to `str(value)` so the text output remains stable.
+func (g *generator) generateGetEnumNameHelper(f *ast.Field) gdast.Function {
+	enum := g.findEnum(f.FieldType)
+	cases := make([]gdast.MatchCase, 0, len(enum.Values)+1)
+	for _, v := range enum.Values {
+		cases = append(cases, gdast.MatchCase{
+			Pattern: f.FieldType + "." + v.Name,
+			Body:    []gdast.Statement{gdast.Ret(gdast.Lit(v.Name))},
+		})
+	}
+	cases = append(cases, gdast.MatchCase{
+		Pattern: "_",
+		Body:    []gdast.Statement{gdast.Ret(gdast.Call("str", gdast.V("value")))},
+	})
+
+	return gdast.Function{
+		Name:       "_get_enum_name_" + f.Name,
+		Parameters: []gdast.Parameter{{Name: "value", TypeHint: "int"}},
+		ReturnType: "String",
+		Body: []gdast.Statement{
+			gdast.DocString{Text: "Get enum name for " + f.Name + " value."},
+			gdast.MatchStatement{
+				Expression: gdast.V("value"),
+				Cases:      cases,
+			},
+		},
+	}
 }
 
 func (g *generator) generateParseEnumValueHelper(f *ast.Field) gdast.Function {

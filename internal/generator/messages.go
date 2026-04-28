@@ -17,39 +17,39 @@ func generateEnum(e *ast.Enum) gdast.EnumDefinition {
 
 // generateMessage produces the class block for a proto message including
 // nested enums, nested messages, field declarations, oneof tracking variables,
-// and accessor stubs. Serialization methods are added in later tasks.
+// accessors, enum-name helpers, and serialization methods. The output spacing
+// mirrors Python's reference generator: ClassDefinition auto-adds one blank
+// line between adjacent statements, and explicit gdast.EmptyLine entries each
+// add one additional blank line on top.
 func (g *generator) generateMessage(m *ast.Message) *gdast.ClassDefinition {
 	var statements []gdast.Node
-	blank := func() { statements = append(statements, gdast.EmptyLine{}) }
 
 	for _, e := range m.NestedEnums {
 		statements = append(statements,
 			gdast.Comment{Text: "Nested enum"},
 			generateEnum(e),
+			gdast.EmptyLine{},
 		)
-		blank()
 	}
 
 	for _, nested := range m.NestedMessages {
 		statements = append(statements,
 			gdast.Comment{Text: "Nested message"},
 			g.generateMessage(nested),
+			gdast.EmptyLine{},
 		)
-		blank()
 	}
 
 	statements = append(statements, gdast.Comment{Text: "Fields"})
 	statements = append(statements, g.generateFieldDeclarations(m)...)
+	statements = append(statements, gdast.EmptyLine{})
 
 	if len(m.Oneofs) > 0 {
-		blank()
 		statements = append(statements, gdast.Comment{Text: "Oneof enums"})
 		for _, oneof := range m.Oneofs {
 			statements = append(statements, generateOneofEnum(oneof))
 		}
-
-		blank()
-		statements = append(statements, gdast.Comment{Text: "Oneof tracking"})
+		statements = append(statements, gdast.EmptyLine{}, gdast.Comment{Text: "Oneof tracking"})
 		for _, oneof := range m.Oneofs {
 			enumName := oneofEnumName(oneof.Name)
 			statements = append(statements, gdast.VarDeclaration{
@@ -58,33 +58,34 @@ func (g *generator) generateMessage(m *ast.Message) *gdast.ClassDefinition {
 				InitialValue: gdast.RawExpression{Code: enumName + ".UNSET"},
 			})
 		}
+		statements = append(statements, gdast.EmptyLine{})
 	}
 
-	blank()
 	statements = append(statements, gdast.Comment{Text: "Accessors"})
 	statements = append(statements, g.generateAccessors(m)...)
+	statements = append(statements, gdast.EmptyLine{})
 
 	if len(m.Oneofs) > 0 {
-		blank()
 		statements = append(statements, gdast.Comment{Text: "Oneof case getters"})
 		for _, oneof := range m.Oneofs {
 			statements = append(statements, generateOneofCaseGetter(oneof))
 		}
+		statements = append(statements, gdast.EmptyLine{})
 	}
 
-	if helpers := g.generateParseEnumValueHelpers(m); len(helpers) > 0 {
-		blank()
-		statements = append(statements, gdast.Comment{Text: "Enum value parsers"})
+	if helpers := g.generateEnumNameAndParserHelpers(m); len(helpers) > 0 {
+		statements = append(statements, gdast.Comment{Text: "Enum name lookup helpers"})
 		statements = append(statements, helpers...)
+		statements = append(statements, gdast.EmptyLine{})
 	}
 
-	blank()
-	blank()
 	statements = append(statements,
 		gdast.Comment{Text: "Serialization"},
 		g.generateToBytes(m),
 		gdast.EmptyLine{},
 		g.generateFromBytes(m),
+		gdast.EmptyLine{},
+		g.generateToText(m),
 		gdast.EmptyLine{},
 		g.generateFromText(m),
 		gdast.EmptyLine{},
@@ -92,10 +93,9 @@ func (g *generator) generateMessage(m *ast.Message) *gdast.ClassDefinition {
 	)
 
 	return &gdast.ClassDefinition{
-		Name:            m.Name,
-		Extends:         "RefCounted",
-		Statements:      statements,
-		TightStatements: true,
+		Name:       m.Name,
+		Extends:    "RefCounted",
+		Statements: statements,
 	}
 }
 
@@ -158,12 +158,14 @@ func (g *generator) typeName(protoType string) string {
 }
 
 // fieldDefault returns the default-value expression for a field's declaration.
-// Scalar fields use their proto3 zero value; message and enum fields default
-// to null (the Python reference generator stores enum-typed fields as nullable
-// references, mirroring message field semantics).
+// Scalar fields use their proto3 zero value; enum-typed fields use the integer
+// literal 0 (the proto3 enum zero value); message fields default to null.
 func (g *generator) fieldDefault(f *ast.Field) string {
 	if def, ok := scalarDefaultMap[f.FieldType]; ok {
 		return def
+	}
+	if f.IsEnum || g.enumTypes[f.FieldType] {
+		return "0"
 	}
 	return "null"
 }

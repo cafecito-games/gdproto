@@ -17,26 +17,19 @@ func (g *generator) generateToBytes(m *ast.Message) gdast.Function {
 			TypeHint:     "PackedByteArray",
 			InitialValue: gdast.Call("PackedByteArray"),
 		},
-		gdast.EmptyLine{},
 	}
 
 	for _, f := range m.Fields {
 		body = append(body, g.fieldSerialization(f)...)
-		body = append(body, gdast.EmptyLine{})
 	}
 	for _, oneof := range m.Oneofs {
 		body = append(body, g.oneofSerialization(oneof)...)
-		body = append(body, gdast.EmptyLine{})
 	}
 	for _, mf := range m.Maps {
 		body = append(body, g.mapSerialization(mf)...)
-		body = append(body, gdast.EmptyLine{})
 	}
 
-	body = append(body,
-		gdast.EmptyLine{},
-		gdast.Ret(gdast.V("result")),
-	)
+	body = append(body, gdast.Ret(gdast.V("result")))
 
 	return gdast.Function{
 		Name:       "to_bytes",
@@ -57,7 +50,7 @@ func (g *generator) oneofSerialization(oneof *ast.Oneof) []gdast.Statement {
 			gdast.Comment{Text: fmt.Sprintf("Field %s", f.Name)},
 			rawf("result.append_array(ProtoCoreUtils.encode_varint(%d))", tag),
 		}
-		caseBody = append(caseBody, valueSerialization("result", fieldVar, f.FieldType)...)
+		caseBody = append(caseBody, g.valueSerialization("result", fieldVar, f)...)
 		cases = append(cases, gdast.MatchCase{
 			Pattern: oneofEnumQualified(oneof.Name, f.Name),
 			Body:    caseBody,
@@ -82,7 +75,7 @@ func (g *generator) fieldSerialization(f *ast.Field) []gdast.Statement {
 		forBody := []gdast.Statement{
 			gdast.RawStatement{Code: fmt.Sprintf("result.append_array(ProtoCoreUtils.encode_varint(%d))", tag)},
 		}
-		forBody = append(forBody, valueSerialization("result", "item", f.FieldType)...)
+		forBody = append(forBody, g.valueSerialization("result", "item", f)...)
 		return []gdast.Statement{
 			gdast.Comment{Text: fmt.Sprintf("Field %s (repeated)", f.Name)},
 			gdast.ForStatement{
@@ -93,12 +86,12 @@ func (g *generator) fieldSerialization(f *ast.Field) []gdast.Statement {
 		}
 	}
 
-	condition := fieldDefaultCondition(fieldVar, f.FieldType)
+	condition := g.fieldDefaultCondition(fieldVar, f)
 
 	ifBody := []gdast.Statement{
 		gdast.RawStatement{Code: fmt.Sprintf("result.append_array(ProtoCoreUtils.encode_varint(%d))", tag)},
 	}
-	ifBody = append(ifBody, valueSerialization("result", fieldVar, f.FieldType)...)
+	ifBody = append(ifBody, g.valueSerialization("result", fieldVar, f)...)
 
 	return []gdast.Statement{
 		gdast.Comment{Text: fmt.Sprintf("Field %s", f.Name)},
@@ -109,22 +102,40 @@ func (g *generator) fieldSerialization(f *ast.Field) []gdast.Statement {
 	}
 }
 
+// isEnumField reports whether f's declared type resolves to an enum.
+func (g *generator) isEnumField(f *ast.Field) bool {
+	return f.IsEnum || g.enumTypes[f.FieldType]
+}
+
 // fieldDefaultCondition returns the GDScript expression that guards the
 // serialization of a non-repeated field. Scalar types compare against their
-// proto3 zero value; message-like types (including enum-typed fields stored
-// as nullable references in the generated output) compare against null.
-func fieldDefaultCondition(fieldVar, protoType string) gdast.Expression {
-	if def, ok := scalarDefaultMap[protoType]; ok {
+// proto3 zero value; enum-typed fields compare against 0 (the proto3 enum
+// zero value); message types compare against null.
+func (g *generator) fieldDefaultCondition(fieldVar string, f *ast.Field) gdast.Expression {
+	if def, ok := scalarDefaultMap[f.FieldType]; ok {
 		return gdast.Ne(gdast.V(fieldVar), gdast.RawExpression{Code: def})
+	}
+	if g.isEnumField(f) {
+		return gdast.Ne(gdast.V(fieldVar), gdast.RawExpression{Code: "0"})
 	}
 	return gdast.Ne(gdast.V(fieldVar), gdast.Lit(nil))
 }
 
 // valueSerialization emits the encode-call statements that append the bytes
-// for a single value of the given proto type to the named target buffer.
+// for a single value of the given proto field to the named target buffer.
 // Target is typically "result" or "entry"; valueExpression is the GDScript
 // expression evaluating to the value to encode.
-func valueSerialization(target, valueExpression, protoType string) []gdast.Statement {
+func (g *generator) valueSerialization(target, valueExpression string, f *ast.Field) []gdast.Statement {
+	if g.isEnumField(f) {
+		return []gdast.Statement{rawf("%s.append_array(ProtoCoreUtils.encode_varint(%s))", target, valueExpression)}
+	}
+	return valueSerializationForType(target, valueExpression, f.FieldType)
+}
+
+// valueSerializationForType is the underlying type-driven serializer used for
+// scalar fields and (with the enum branch handled by the caller) enum fields
+// that have already been classified.
+func valueSerializationForType(target, valueExpression, protoType string) []gdast.Statement {
 	switch protoType {
 	case "double":
 		return []gdast.Statement{rawf("%s.append_array(ProtoCoreUtils.encode_double(%s))", target, valueExpression)}
@@ -184,7 +195,7 @@ func (g *generator) mapSerialization(mf *ast.MapField) []gdast.Statement {
 	valueTag := (2 << 3) | wireType(mf.ValueType)
 
 	forBody := []gdast.Statement{
-		rawf("var value = %s[key]", fieldVar),
+		rawf("var value := %s[key]", fieldVar),
 		gdast.EmptyLine{},
 		gdast.Comment{Text: "Build map entry"},
 		gdast.VarDeclaration{

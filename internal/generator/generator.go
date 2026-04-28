@@ -58,6 +58,9 @@ func (g *generator) generate() (*gdast.ClassDefinition, error) {
 	for _, m := range g.file.Messages {
 		appendItem(g.generateMessage(m))
 	}
+	if len(statements) > 0 {
+		statements = append(statements, gdast.EmptyLine{}, gdast.EmptyLine{})
+	}
 
 	return &gdast.ClassDefinition{
 		ClassNameDirective: wrapperClassName(g.sourceName),

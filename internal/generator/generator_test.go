@@ -176,9 +176,11 @@ func TestGenerateAccessorBodies(t *testing.T) {
 		"func set_username(value: String) -> void:\n\t\t_username = value",
 		// Scalar getter body
 		"func get_username() -> String:\n\t\treturn _username",
-		// Enum-typed field uses message-like accessors and null default.
-		"var _status: PlayerStatus = null",
-		"func new_status() -> PlayerStatus:\n\t\t_status = PlayerStatus.new()\n\t\treturn _status",
+		// Enum-typed field uses scalar-style accessors with the proto3 enum
+		// zero default (the integer literal 0).
+		"var _status: PlayerStatus = 0",
+		"func set_status(value: PlayerStatus) -> void:\n\t\t_status = value",
+		"func get_status() -> PlayerStatus:\n\t\treturn _status",
 		// Nested message field uses message-like accessor with new_.
 		"func new_position() -> Position:\n\t\t_position = Position.new()\n\t\treturn _position",
 		// Repeated scalar adds a value.
@@ -282,7 +284,7 @@ func TestGenerateToBytesStringRepeatedMessageOneofMap(t *testing.T) {
 		`if _email != "":`,
 		"# Map field stats",
 		"for key in _stats:",
-		"var value = _stats[key]",
+		"var value := _stats[key]",
 		"# Build map entry",
 		"var entry: PackedByteArray = PackedByteArray()",
 		"# Entry field 1: key",
@@ -316,12 +318,12 @@ func TestGenerateFromBytesScalar(t *testing.T) {
 	}
 	out := cls.ToGDScript(0)
 	for _, want := range []string{
-		"func from_bytes(data: PackedByteArray) -> int:",
+		"func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:",
 		`"""Deserialize message from bytes."""`,
 		"var offset: int = 0",
 		"while offset < data.size():",
 		"# Read field tag",
-		"var tag_result: Dictionary = ProtoCoreUtils.decode_varint(data, offset)",
+		"var tag_result := ProtoCoreUtils.decode_varint(data, offset)",
 		"if tag_result.size == -1:",
 		"return ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND",
 		"var field_number: int = ProtoCoreUtils.get_field_number(tag)",
@@ -372,22 +374,22 @@ func TestGenerateFromBytesComplex(t *testing.T) {
 		"# Field username",
 		"_username = ProtoCoreUtils.decode_string(data, offset, length)",
 		"# Field level",
-		"var result = ProtoCoreUtils.decode_varint(data, offset)",
+		"var result := ProtoCoreUtils.decode_varint(data, offset)",
 		"_level = result.value",
 		"# Field position",
 		"_position = Position.new()",
-		"var msg_result = _position.from_bytes(msg_data)",
+		"var msg_result := _position.from_bytes(msg_data)",
 		"if msg_result != ProtoCoreUtils.ProtobufError.NO_ERRORS:",
 		"# Field inventory",
 		"_inventory.append(ProtoCoreUtils.decode_string(data, offset, length))",
 		"# Field friends",
-		"var msg_item = Player.new()",
+		"var msg_item := Player.new()",
 		"_friends.append(msg_item)",
 		"# Map field stats",
 		"var entry_data: PackedByteArray = data.slice(offset, offset + length)",
 		"var entry_offset: int = 0",
-		`var map_key = ""`,
-		"var map_value = 0",
+		`var map_key := ""`,
+		"var map_value := 0",
 		"match entry_field_number:",
 		"# Entry key",
 		"map_key = ProtoCoreUtils.decode_string(entry_data, entry_offset, str_len)",
@@ -402,11 +404,6 @@ func TestGenerateFromBytesComplex(t *testing.T) {
 }
 
 func TestGoldenExample(t *testing.T) {
-	// TODO(M7-T6): remove this skip once the generator output matches the
-	// updated 1300-line golden byte-for-byte. T0 only fixes the wrapper
-	// prefix; the body still diverges (PBCore -> ProtoCoreUtils, oneof
-	// enums, text-format to_string, from_text_format).
-	t.Skip("M7 in progress; will pass at T6")
 	src, err := os.ReadFile("../../examples/example.proto")
 	if err != nil {
 		t.Fatalf("read example.proto: %v", err)

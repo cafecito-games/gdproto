@@ -17,9 +17,6 @@ import (
 // in a CodeGeneratorRequest, and asserting the response file matches the
 // committed golden byte-for-byte. The test skips when protoc is unavailable.
 func TestRunWithExampleProto(t *testing.T) {
-	// TODO(M7-T6): remove this skip once the wrapper output matches the
-	// updated 1300-line golden byte-for-byte.
-	t.Skip("M7 in progress; will pass at T6")
 	if _, err := exec.LookPath("protoc"); err != nil {
 		t.Skip("protoc not on PATH")
 	}

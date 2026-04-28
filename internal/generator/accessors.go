@@ -24,11 +24,9 @@ func (g *generator) generateAccessors(m *ast.Message) []gdast.Node {
 	}
 
 	var out []gdast.Node
-	for i, group := range groups {
-		if i > 0 {
-			out = append(out, gdast.EmptyLine{})
-		}
+	for _, group := range groups {
 		out = append(out, group...)
+		out = append(out, gdast.EmptyLine{})
 	}
 	return out
 }
@@ -191,15 +189,14 @@ func (g *generator) mapAccessors(mf *ast.MapField) []gdast.Node {
 }
 
 // isMessageLikeType reports whether the field's type renders with a `new_`
-// constructor accessor. Scalars and enums imported from another proto file
-// use scalar-style accessors. Same-file enums fall through to the
-// message-like branch to preserve compatibility with the reference output,
-// which models locally-defined enums as null-defaulting references.
+// constructor accessor. Scalars and enum-typed fields use scalar-style
+// accessors (set/get with the proto3 zero default); message-typed fields use
+// the message-like accessor pair (new/get).
 func (g *generator) isMessageLikeType(f *ast.Field) bool {
 	if _, ok := scalarTypeMap[f.FieldType]; ok {
 		return false
 	}
-	if f.IsEnum && f.SourceFile != "" && f.SourceFile != g.sourceName {
+	if f.IsEnum || g.enumTypes[f.FieldType] {
 		return false
 	}
 	return true

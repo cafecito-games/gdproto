@@ -8,12 +8,11 @@ import (
 	"github.com/cafecito-games/gogdproto/internal/gdast"
 )
 
-// inferredVar emits `var name = <code>` as a RawStatement. The reference
-// generator never uses the walrus form (`:=`) here; instead it always writes
-// out the bare-`=` form even when there is no explicit type hint, so we drop
-// down to a raw statement to match exactly.
+// inferredVar emits `var name := <code>` (walrus form) as a RawStatement,
+// matching the reference generator's local-variable declarations inside
+// from_bytes/decode helpers.
 func inferredVar(name, code string) gdast.RawStatement {
-	return gdast.RawStatement{Code: "var " + name + " = " + code}
+	return gdast.RawStatement{Code: "var " + name + " := " + code}
 }
 
 // generateFromBytes builds the `from_bytes` method that deserializes a
@@ -45,6 +44,16 @@ func (g *generator) generateFromBytes(m *ast.Message) gdast.Function {
 			Body:    g.fieldDeserialization(f),
 		})
 	}
+	for _, mf := range m.Maps {
+		caseBody := []gdast.Statement{
+			gdast.Comment{Text: fmt.Sprintf("Map field %s", mf.Name)},
+		}
+		caseBody = append(caseBody, mapFieldDeserialization(mf)...)
+		cases = append(cases, gdast.MatchCase{
+			Pattern: strconv.Itoa(mf.Number),
+			Body:    caseBody,
+		})
+	}
 	for _, o := range m.Oneofs {
 		for _, f := range o.Fields {
 			body := g.fieldDeserialization(f)
@@ -57,16 +66,6 @@ func (g *generator) generateFromBytes(m *ast.Message) gdast.Function {
 				Body:    body,
 			})
 		}
-	}
-	for _, mf := range m.Maps {
-		caseBody := []gdast.Statement{
-			gdast.Comment{Text: fmt.Sprintf("Map field %s", mf.Name)},
-		}
-		caseBody = append(caseBody, mapFieldDeserialization(mf)...)
-		cases = append(cases, gdast.MatchCase{
-			Pattern: strconv.Itoa(mf.Number),
-			Body:    caseBody,
-		})
 	}
 	cases = append(cases, gdast.MatchCase{
 		Pattern: "_",
@@ -93,7 +92,7 @@ func (g *generator) generateFromBytes(m *ast.Message) gdast.Function {
 	return gdast.Function{
 		Name:       "from_bytes",
 		Parameters: []gdast.Parameter{{Name: "data", TypeHint: "PackedByteArray"}},
-		ReturnType: "int",
+		ReturnType: "ProtoCoreUtils.ProtobufError",
 		Body:       body,
 	}
 }
@@ -103,11 +102,7 @@ func (g *generator) generateFromBytes(m *ast.Message) gdast.Function {
 func tagReadingStatements() []gdast.Statement {
 	return []gdast.Statement{
 		gdast.Comment{Text: "Read field tag"},
-		gdast.VarDeclaration{
-			Name:         "tag_result",
-			TypeHint:     "Dictionary",
-			InitialValue: gdast.RawExpression{Code: "ProtoCoreUtils.decode_varint(data, offset)"},
-		},
+		inferredVar("tag_result", "ProtoCoreUtils.decode_varint(data, offset)"),
 		gdast.IfStatement{
 			Condition: gdast.Eq(gdast.RawExpression{Code: "tag_result.size"}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
@@ -205,6 +200,9 @@ func (g *generator) fieldDeserialization(f *ast.Field) []gdast.Statement {
 // inline into its private storage variable, then advances `offset`.
 func (g *generator) singleFieldDeserialization(f *ast.Field) []gdast.Statement {
 	fieldVar := "_" + f.Name
+	if g.isEnumField(f) {
+		return varintAssign(fieldVar, false)
+	}
 	switch f.FieldType {
 	case "int32", "int64", "uint32", "uint64", "bool":
 		return varintAssign(fieldVar, f.FieldType == "bool")
