@@ -504,7 +504,7 @@ class Player extends RefCounted:
 			result.append_array(ProtoCoreUtils.encode_varint(_experience))
 		# Field status
 		if _status != 0:
-			result.append_array(ProtoCoreUtils.encode_varint(34))
+			result.append_array(ProtoCoreUtils.encode_varint(32))
 			result.append_array(ProtoCoreUtils.encode_varint(_status))
 		# Field inventory (repeated)
 		for item in _inventory:

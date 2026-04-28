@@ -44,7 +44,7 @@ func (g *generator) generateToBytes(m *ast.Message) gdast.Function {
 func (g *generator) oneofSerialization(oneof *ast.Oneof) []gdast.Statement {
 	cases := make([]gdast.MatchCase, 0, len(oneof.Fields))
 	for _, f := range oneof.Fields {
-		tag := (f.Number << 3) | wireType(f.FieldType)
+		tag := (f.Number << 3) | g.fieldWireType(f)
 		fieldVar := "_" + f.Name
 		caseBody := []gdast.Statement{
 			gdast.Comment{Text: fmt.Sprintf("Field %s", f.Name)},
@@ -68,7 +68,7 @@ func (g *generator) oneofSerialization(oneof *ast.Oneof) []gdast.Statement {
 // fieldSerialization produces the comment and conditional/loop block that
 // serializes a single regular or oneof field.
 func (g *generator) fieldSerialization(f *ast.Field) []gdast.Statement {
-	tag := (f.Number << 3) | wireType(f.FieldType)
+	tag := (f.Number << 3) | g.fieldWireType(f)
 	fieldVar := "_" + f.Name
 
 	if f.Repeated {
@@ -105,6 +105,26 @@ func (g *generator) fieldSerialization(f *ast.Field) []gdast.Statement {
 // isEnumField reports whether f's declared type resolves to an enum.
 func (g *generator) isEnumField(f *ast.Field) bool {
 	return f.IsEnum || g.enumTypes[f.FieldType]
+}
+
+// fieldWireType returns the wire-type code for a field, treating enum-typed
+// fields as varint per the proto3 spec. (The Python reference reproduces a
+// bug here that emits wire type 2 for enums; we deliberately diverge so
+// canonical protoc-generated decoders accept our output.)
+func (g *generator) fieldWireType(f *ast.Field) int {
+	if g.isEnumField(f) {
+		return wireTypeVarint
+	}
+	return wireType(f.FieldType)
+}
+
+// mapValueWireType returns the wire-type code for a map value, treating
+// enum-typed values as varint (same fix as fieldWireType).
+func (g *generator) mapValueWireType(mf *ast.MapField) int {
+	if mf.ValueIsEnum || g.enumTypes[mf.ValueType] {
+		return wireTypeVarint
+	}
+	return wireType(mf.ValueType)
 }
 
 // fieldDefaultCondition returns the GDScript expression that guards the
@@ -192,7 +212,7 @@ func (g *generator) mapSerialization(mf *ast.MapField) []gdast.Statement {
 	fieldVar := "_" + mf.Name
 	tag := (mf.Number << 3) | wireTypeLengthDelimited
 	keyTag := (1 << 3) | wireType(mf.KeyType)
-	valueTag := (2 << 3) | wireType(mf.ValueType)
+	valueTag := (2 << 3) | g.mapValueWireType(mf)
 
 	forBody := []gdast.Statement{
 		rawf("var value := %s[key]", fieldVar),
