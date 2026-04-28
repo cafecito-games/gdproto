@@ -403,6 +403,44 @@ func TestGenerateFromBytesComplex(t *testing.T) {
 	}
 }
 
+func TestEnumFieldWireTypeIsVarint(t *testing.T) {
+	src := `syntax = "proto3";
+enum Platform {
+	PLATFORM_UNSPECIFIED = 0;
+	PLATFORM_DESKTOP = 1;
+}
+message Hello {
+	string token = 1;
+	Platform platform = 2;
+}`
+	tokens, err := lexer.Tokenize(src, "hello.proto")
+	if err != nil {
+		t.Fatal(err)
+	}
+	file, err := parser.Parse(tokens, "hello.proto")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if errs := validator.Validate(file, "hello.proto"); len(errs) != 0 {
+		t.Fatalf("validation: %+v", errs)
+	}
+	cls, err := generator.Generate(file, "hello.proto")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := cls.ToGDScript(0)
+	// Field 2 with wire type 0 (varint) → tag = (2 << 3) | 0 = 16. The
+	// faithful-Python output emits 18 (wire type 2, length-delimited),
+	// which canonical protoc decoders reject. This regression test locks
+	// in our fix.
+	if !strings.Contains(out, "encode_varint(16)") {
+		t.Errorf("expected encode_varint(16) for enum field 2; output:\n%s", out)
+	}
+	if strings.Contains(out, "encode_varint(18)") {
+		t.Errorf("enum field is using length-delimited wire type 2 (tag 18); should be varint (tag 16)")
+	}
+}
+
 func TestGoldenExample(t *testing.T) {
 	src, err := os.ReadFile("../../examples/example.proto")
 	if err != nil {
