@@ -54,3 +54,60 @@ func TestProto2Rejected(t *testing.T) {
 		t.Errorf("got %q", errs[0].Message)
 	}
 }
+
+func TestEnumDuplicateNumber(t *testing.T) {
+	src := `syntax = "proto3"; enum E { A = 0; B = 0; }`
+	errs := validate(t, src)
+	if len(errs) != 1 || !strings.Contains(errs[0].Message, "Duplicate enum value number") {
+		t.Errorf("got %+v", errs)
+	}
+}
+
+func TestEnumAllowAlias(t *testing.T) {
+	src := `syntax = "proto3";
+enum E {
+    option allow_alias = true;
+    A = 0;
+    B = 0;
+}`
+	errs := validate(t, src)
+	if len(errs) != 0 {
+		t.Errorf("got %+v", errs)
+	}
+}
+
+func TestEnumDuplicateName(t *testing.T) {
+	src := `syntax = "proto3"; enum E { A = 0; A = 1; }`
+	errs := validate(t, src)
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e.Message, "Duplicate enum value name") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected duplicate-name error, got %+v", errs)
+	}
+}
+
+func TestEnumFirstNotZero(t *testing.T) {
+	src := `syntax = "proto3"; enum E { A = 1; B = 2; }`
+	errs := validate(t, src)
+	if len(errs) != 1 || !strings.Contains(errs[0].Message, "First enum value in proto3 must be zero") {
+		t.Errorf("got %+v", errs)
+	}
+}
+
+func TestEnumNameKeyword(t *testing.T) {
+	src := `syntax = "proto3"; enum Message { A = 0; }`
+	errs := validate(t, src)
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e.Message, "reserved keyword") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected reserved-keyword error, got %+v", errs)
+	}
+}

@@ -43,7 +43,9 @@ func (v *validator) addError(message string, line, column int) {
 func (v *validator) validate() {
 	v.validateSyntax()
 	v.buildTypeRegistry(nil, "")
-	// Enum and message validation will be wired in subsequent tasks.
+	for _, enum := range v.file.Enums {
+		v.validateEnum(enum)
+	}
 }
 
 // validateSyntax checks that the file declares proto3.
