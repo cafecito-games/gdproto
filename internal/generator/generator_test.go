@@ -294,6 +294,109 @@ func TestGenerateToBytesStringRepeatedMessageOneofMap(t *testing.T) {
 	}
 }
 
+func TestGenerateFromBytesScalar(t *testing.T) {
+	file := &ast.ProtoFile{
+		Syntax: "proto3",
+		Messages: []*ast.Message{{
+			Name: "Position",
+			Fields: []*ast.Field{
+				{FieldType: "float", Name: "x", Number: 1},
+				{FieldType: "float", Name: "y", Number: 2},
+				{FieldType: "float", Name: "z", Number: 3},
+			},
+		}},
+	}
+	cls, err := generator.Generate(file, "example.proto")
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	out := cls.ToGDScript(0)
+	for _, want := range []string{
+		"func from_bytes(data: PackedByteArray) -> int:",
+		`"""Deserialize message from bytes."""`,
+		"var offset: int = 0",
+		"while offset < data.size():",
+		"# Read field tag",
+		"var tag_result: Dictionary = PBCore.decode_varint(data, offset)",
+		"if tag_result.size == -1:",
+		"return PB_ERR.VARINT_NOT_FOUND",
+		"var field_number: int = PBCore.get_field_number(tag)",
+		"var wire_type: int = PBCore.get_wire_type(tag)",
+		"match field_number:",
+		"# Field x",
+		"if offset + 4 > data.size():",
+		"return PB_ERR.PARSE_INCOMPLETE",
+		"_x = PBCore.decode_float(data, offset)",
+		"offset += 4",
+		"# Skip unknown field",
+		"match wire_type:",
+		"return PB_ERR.UNDEFINED_STATE",
+		"return PB_ERR.NO_ERRORS",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("from_bytes scalar output missing fragment %q\n--- full output ---\n%s", want, out)
+		}
+	}
+}
+
+func TestGenerateFromBytesComplex(t *testing.T) {
+	file := &ast.ProtoFile{
+		Syntax: "proto3",
+		Messages: []*ast.Message{{
+			Name: "Player",
+			Fields: []*ast.Field{
+				{FieldType: "string", Name: "username", Number: 1},
+				{FieldType: "int32", Name: "level", Number: 2},
+				{FieldType: "Position", Name: "position", Number: 3},
+				{FieldType: "string", Name: "inventory", Number: 4, Repeated: true},
+				{FieldType: "Player", Name: "friends", Number: 5, Repeated: true},
+			},
+			Maps: []*ast.MapField{{
+				Name:      "stats",
+				KeyType:   "string",
+				ValueType: "int32",
+				Number:    6,
+			}},
+		}},
+	}
+	cls, err := generator.Generate(file, "example.proto")
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	out := cls.ToGDScript(0)
+	for _, want := range []string{
+		"# Field username",
+		"_username = PBCore.decode_string(data, offset, length)",
+		"# Field level",
+		"var result = PBCore.decode_varint(data, offset)",
+		"_level = result.value",
+		"# Field position",
+		"_position = Position.new()",
+		"var msg_result = _position.from_bytes(msg_data)",
+		"if msg_result != PB_ERR.NO_ERRORS:",
+		"# Field inventory",
+		"_inventory.append(PBCore.decode_string(data, offset, length))",
+		"# Field friends",
+		"var msg_item = Player.new()",
+		"_friends.append(msg_item)",
+		"# Map field stats",
+		"var entry_data: PackedByteArray = data.slice(offset, offset + length)",
+		"var entry_offset: int = 0",
+		`var map_key = ""`,
+		"var map_value = 0",
+		"match entry_field_number:",
+		"# Entry key",
+		"map_key = PBCore.decode_string(entry_data, entry_offset, str_len)",
+		"# Entry value",
+		"map_value = result.value",
+		"_stats[map_key] = map_value",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("from_bytes complex output missing fragment %q\n--- full output ---\n%s", want, out)
+		}
+	}
+}
+
 func minInt(a, b int) int {
 	if a < b {
 		return a

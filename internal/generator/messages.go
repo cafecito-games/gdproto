@@ -62,6 +62,8 @@ func (g *generator) generateMessage(m *ast.Message) *gdast.ClassDefinition {
 	statements = append(statements,
 		gdast.Comment{Text: "Serialization"},
 		g.generateToBytes(m),
+		gdast.EmptyLine{},
+		g.generateFromBytes(m),
 	)
 
 	return &gdast.ClassDefinition{
