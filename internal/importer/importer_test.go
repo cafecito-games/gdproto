@@ -2,6 +2,8 @@ package importer_test
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/cafecito-games/gogdproto/internal/ast"
@@ -173,6 +175,181 @@ message M {
 	}
 	if !f.IsEnum {
 		t.Errorf("IsEnum = false, want true")
+	}
+}
+
+func TestResolveExternal_OneofImported(t *testing.T) {
+	other := `syntax = "proto3"; enum Kind { K0 = 0; K1 = 1; } message Payload { int32 v = 1; }`
+	in := `syntax = "proto3";
+import "other.proto";
+message M {
+    oneof choice {
+        Kind k = 1;
+        Payload p = 2;
+    }
+}`
+	fs := &memFS{files: map[string]string{"other.proto": other}}
+	file := parseFile(t, in)
+	if err := importer.ResolveExternal(file, "in.proto", fs); err != nil {
+		t.Fatal(err)
+	}
+	var kField, pField *ast.Field
+	for _, m := range file.Messages {
+		for _, o := range m.Oneofs {
+			for _, f := range o.Fields {
+				switch f.Name {
+				case "k":
+					kField = f
+				case "p":
+					pField = f
+				}
+			}
+		}
+	}
+	if kField == nil || kField.SourceFile != "other.proto" || !kField.IsEnum {
+		t.Errorf("k: %+v", kField)
+	}
+	if pField == nil || pField.SourceFile != "other.proto" || pField.IsEnum {
+		t.Errorf("p: %+v", pField)
+	}
+}
+
+func TestResolveExternal_NestedMessageAnnotated(t *testing.T) {
+	other := `syntax = "proto3"; enum E { A = 0; }`
+	in := `syntax = "proto3";
+import "other.proto";
+message Outer {
+    message Inner {
+        E e = 1;
+    }
+}`
+	fs := &memFS{files: map[string]string{"other.proto": other}}
+	file := parseFile(t, in)
+	if err := importer.ResolveExternal(file, "in.proto", fs); err != nil {
+		t.Fatal(err)
+	}
+	inner := file.Messages[0].NestedMessages[0]
+	f := inner.Fields[0]
+	if f.SourceFile != "other.proto" || !f.IsEnum {
+		t.Errorf("got %+v", f)
+	}
+}
+
+func TestResolveExternal_FullTypePathFallback(t *testing.T) {
+	// Field already has FullTypePath set but its raw FieldType won't
+	// match the lookup; resolution should fall back to FullTypePath.
+	other := `syntax = "proto3"; package shared; enum E { A = 0; }`
+	fs := &memFS{files: map[string]string{"other.proto": other}}
+	file := &ast.ProtoFile{
+		Position: ast.Position{Line: 1, Column: 1},
+		Syntax:   "proto3",
+		Imports:  []*ast.Import{{Position: ast.Position{Line: 2, Column: 1}, Path: "other.proto"}},
+		Messages: []*ast.Message{
+			{
+				Position: ast.Position{Line: 3, Column: 1},
+				Name:     "M",
+				Fields: []*ast.Field{
+					{
+						Position:     ast.Position{Line: 4, Column: 1},
+						FieldType:    "UnknownAlias",
+						FullTypePath: "shared.E",
+						Name:         "f",
+						Number:       1,
+					},
+				},
+			},
+		},
+	}
+	if err := importer.ResolveExternal(file, "in.proto", fs); err != nil {
+		t.Fatal(err)
+	}
+	f := file.Messages[0].Fields[0]
+	if f.SourceFile != "other.proto" || !f.IsEnum {
+		t.Errorf("expected fallback resolution; got %+v", f)
+	}
+}
+
+func must[T any](v T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+	return v
+}
+
+func TestOSFSReadAndExists(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "a.proto")
+	if err := os.WriteFile(path, []byte(`syntax = "proto3";`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fs := &importer.OSFS{BaseDir: dir}
+	if !fs.Exists("a.proto") {
+		t.Errorf("Exists(a.proto) = false")
+	}
+	data, err := fs.Read("a.proto")
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if string(data) != `syntax = "proto3";` {
+		t.Errorf("Read returned %q", data)
+	}
+	if fs.Exists("missing.proto") {
+		t.Errorf("Exists(missing.proto) = true")
+	}
+	if _, err := fs.Read("missing.proto"); err == nil {
+		t.Errorf("Read(missing.proto) returned no error")
+	}
+}
+
+func TestOSFSWalkUp(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "parent.proto"), []byte(`syntax = "proto3"; enum E { A = 0; }`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	subDir := filepath.Join(dir, "sub")
+	if err := os.Mkdir(subDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	childPath := filepath.Join(subDir, "child.proto")
+	if err := os.WriteFile(childPath, []byte(`syntax = "proto3"; import "parent.proto"; message M { E e = 1; }`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	tokens, err := lexer.Tokenize(string(must(os.ReadFile(childPath))), childPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	file, err := parser.Parse(tokens, childPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fs := &importer.OSFS{BaseDir: subDir}
+	if err := importer.ResolveExternal(file, childPath, fs); err != nil {
+		t.Fatal(err)
+	}
+	f := file.Messages[0].Fields[0]
+	if f.SourceFile == "" || !f.IsEnum {
+		t.Errorf("expected import resolution; got %+v", f)
+	}
+}
+
+func TestOSFSWalkUpBasename(t *testing.T) {
+	// Place the target file two levels above BaseDir under a different
+	// relative path so only the basename strategy can match.
+	dir := t.TempDir()
+	deep := filepath.Join(dir, "a", "b", "c")
+	if err := os.MkdirAll(deep, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Target at dir/shared.proto; import path "nested/shared.proto"
+	// won't match dir+path, but basename "shared.proto" will.
+	if err := os.WriteFile(filepath.Join(dir, "shared.proto"), []byte(`syntax = "proto3";`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fs := &importer.OSFS{BaseDir: deep}
+	if !fs.Exists("nested/shared.proto") {
+		t.Errorf("expected basename walk-up to find shared.proto")
 	}
 }
 

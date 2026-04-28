@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/cafecito-games/gogdproto/internal/ast"
+	"github.com/cafecito-games/gogdproto/internal/importer"
 	"github.com/cafecito-games/gogdproto/internal/lexer"
 	"github.com/cafecito-games/gogdproto/internal/parser"
 	"github.com/cafecito-games/gogdproto/internal/validator"
@@ -352,6 +353,72 @@ message F {
 	}
 	if !found {
 		t.Errorf("got %+v", errs)
+	}
+}
+
+func TestComplexFileValidates(t *testing.T) {
+	src := `syntax = "proto3";
+package com.example;
+
+enum Status { UNKNOWN = 0; ACTIVE = 1; INACTIVE = 2; }
+
+message Person {
+    string name = 1;
+    int32 age = 2;
+    Status status = 3;
+    repeated string emails = 4;
+    map<string, string> metadata = 5;
+
+    message Phone { string number = 1; string type = 2; }
+    repeated Phone phones = 6;
+
+    oneof contact { string email = 7; string phone = 8; }
+}`
+	if errs := validate(t, src); len(errs) != 0 {
+		t.Errorf("got %+v", errs)
+	}
+}
+
+// memFS is a minimal in-memory FS used by the importer+validator
+// integration test below.
+type memFS struct{ files map[string]string }
+
+func (m *memFS) Read(path string) ([]byte, error) {
+	if c, ok := m.files[path]; ok {
+		return []byte(c), nil
+	}
+	return nil, nil
+}
+
+func (m *memFS) Exists(path string) bool { _, ok := m.files[path]; return ok }
+
+func TestImporterValidatorIntegration(t *testing.T) {
+	other := `syntax = "proto3"; package shared; enum Color { RED = 0; BLUE = 1; } message Shape { int32 sides = 1; }`
+	src := `syntax = "proto3";
+package myapp;
+import "other.proto";
+
+message Drawing {
+    shared.Color color = 1;
+    shared.Shape shape = 2;
+    repeated shared.Color palette = 3;
+    map<string, shared.Color> swatches = 4;
+}`
+	tokens, err := lexer.Tokenize(src, "in.proto")
+	if err != nil {
+		t.Fatal(err)
+	}
+	file, err := parser.Parse(tokens, "in.proto")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fs := &memFS{files: map[string]string{"other.proto": other}}
+	if err := importer.ResolveExternal(file, "in.proto", fs); err != nil {
+		t.Fatal(err)
+	}
+	errs := validator.Validate(file, "in.proto")
+	if len(errs) != 0 {
+		t.Errorf("expected 0 errors after import resolution; got %+v", errs)
 	}
 }
 
