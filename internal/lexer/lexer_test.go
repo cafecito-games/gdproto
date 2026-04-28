@@ -131,3 +131,88 @@ func TestUnexpectedCharacter(t *testing.T) {
 		t.Errorf("position = %d:%d, want 1:1", le.Line, le.Column)
 	}
 }
+
+func TestSimpleIdentifier(t *testing.T) {
+	tokens, err := lexer.Tokenize("MyMessage", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tokens[0].Type != lexer.TokenIdentifier || tokens[0].Value != "MyMessage" {
+		t.Errorf("got %+v, want Identifier 'MyMessage'", tokens[0])
+	}
+}
+
+func TestIdentifierVariants(t *testing.T) {
+	cases := []string{"field123", "my_field_name", "_private"}
+	for _, src := range cases {
+		tokens, err := lexer.Tokenize(src, "")
+		if err != nil {
+			t.Errorf("Tokenize(%q) error: %v", src, err)
+			continue
+		}
+		if tokens[0].Type != lexer.TokenIdentifier || tokens[0].Value != src {
+			t.Errorf("Tokenize(%q): got %+v, want Identifier %q", src, tokens[0], src)
+		}
+	}
+}
+
+func TestKeywordsAll(t *testing.T) {
+	cases := map[string]lexer.TokenType{
+		"syntax":   lexer.TokenSyntax,
+		"message":  lexer.TokenMessage,
+		"enum":     lexer.TokenEnum,
+		"repeated": lexer.TokenRepeated,
+		"map":      lexer.TokenMap,
+		"oneof":    lexer.TokenOneof,
+		"import":   lexer.TokenImport,
+		"public":   lexer.TokenPublic,
+		"option":   lexer.TokenOption,
+		"packed":   lexer.TokenPacked,
+		"reserved": lexer.TokenReserved,
+		"package":  lexer.TokenPackage,
+		"service":  lexer.TokenService,
+		"rpc":      lexer.TokenRPC,
+		"returns":  lexer.TokenReturns,
+		"stream":   lexer.TokenStream,
+		"int32":    lexer.TokenInt32,
+		"int64":    lexer.TokenInt64,
+		"string":   lexer.TokenString,
+		"bool":     lexer.TokenBool,
+		"bytes":    lexer.TokenBytes,
+		"double":   lexer.TokenDouble,
+		"float":    lexer.TokenFloat,
+		"true":     lexer.TokenTrue,
+		"false":    lexer.TokenFalse,
+	}
+	for word, want := range cases {
+		tokens, err := lexer.Tokenize(word, "")
+		if err != nil {
+			t.Errorf("Tokenize(%q) error: %v", word, err)
+			continue
+		}
+		if tokens[0].Type != want {
+			t.Errorf("Tokenize(%q): got %s, want %s", word, tokens[0].Type, want)
+		}
+		if tokens[0].Value != word {
+			t.Errorf("Tokenize(%q): value = %q, want %q", word, tokens[0].Value, word)
+		}
+	}
+}
+
+func TestMultipleKeywords(t *testing.T) {
+	tokens, err := lexer.Tokenize("message enum repeated", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []lexer.TokenType{
+		lexer.TokenMessage, lexer.TokenEnum, lexer.TokenRepeated, lexer.TokenEOF,
+	}
+	if len(tokens) != len(want) {
+		t.Fatalf("got %d tokens, want %d", len(tokens), len(want))
+	}
+	for i, w := range want {
+		if tokens[i].Type != w {
+			t.Errorf("token[%d] = %s, want %s", i, tokens[i].Type, w)
+		}
+	}
+}
