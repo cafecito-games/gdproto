@@ -16,6 +16,7 @@ message Player {
     PlayerStatus status = 4;
     repeated string inventory = 5;
     map<string, int32> stats = 6;
+    map<string, PlayerStatus> status_effects = 10;
 
     message Position {
         float x = 1;
