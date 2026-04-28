@@ -38,38 +38,57 @@ func ResolveExternal(file *ast.ProtoFile, inputPath string, fs FS) error {
 }
 
 // buildExternalRegistry parses every import and collects its top-level
-// and nested types keyed by fully qualified name.
+// and nested types keyed by fully qualified name. Public re-exports are
+// followed transitively, with cycle detection to guard against import
+// loops.
 func buildExternalRegistry(file *ast.ProtoFile, fs FS) map[string]importedType {
 	out := map[string]importedType{}
+	visited := map[string]bool{}
 	for _, imp := range file.Imports {
-		if !fs.Exists(imp.Path) {
-			continue
-		}
-		data, err := fs.Read(imp.Path)
-		if err != nil {
-			continue
-		}
-		tokens, err := lexer.Tokenize(string(data), imp.Path)
-		if err != nil {
-			continue
-		}
-		impFile, err := parser.Parse(tokens, imp.Path)
-		if err != nil {
-			continue
-		}
-		prefix := ""
-		if impFile.Package != "" {
-			prefix = impFile.Package + "."
-		}
-		for _, m := range impFile.Messages {
-			collectFromMessage(out, m, prefix, imp.Path)
-		}
-		for _, e := range impFile.Enums {
-			fullName := prefix + e.Name
-			out[fullName] = importedType{SourceFile: imp.Path, IsEnum: true, FullName: fullName}
-		}
+		collectImportedTypes(out, visited, imp.Path, fs)
 	}
 	return out
+}
+
+// collectImportedTypes parses path through fs, records its types into
+// out, then recurses into its public re-exports. Already-visited paths
+// short-circuit, preventing infinite loops on circular imports.
+func collectImportedTypes(out map[string]importedType, visited map[string]bool, path string, fs FS) {
+	if visited[path] {
+		return
+	}
+	visited[path] = true
+	if !fs.Exists(path) {
+		return
+	}
+	data, err := fs.Read(path)
+	if err != nil {
+		return
+	}
+	tokens, err := lexer.Tokenize(string(data), path)
+	if err != nil {
+		return
+	}
+	impFile, err := parser.Parse(tokens, path)
+	if err != nil {
+		return
+	}
+	prefix := ""
+	if impFile.Package != "" {
+		prefix = impFile.Package + "."
+	}
+	for _, m := range impFile.Messages {
+		collectFromMessage(out, m, prefix, path)
+	}
+	for _, e := range impFile.Enums {
+		fullName := prefix + e.Name
+		out[fullName] = importedType{SourceFile: path, IsEnum: true, FullName: fullName}
+	}
+	for _, nested := range impFile.Imports {
+		if nested.Public {
+			collectImportedTypes(out, visited, nested.Path, fs)
+		}
+	}
 }
 
 // collectFromMessage recursively records a message and all of its
