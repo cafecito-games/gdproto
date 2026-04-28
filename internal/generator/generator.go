@@ -60,6 +60,11 @@ func (g *generator) generate() (*gdast.ClassDefinition, error) {
 		}
 	}
 
+	statements = append(statements,
+		pbCoreSectionHeaderStatement(),
+		pbCoreClassStatement(),
+	)
+
 	return &gdast.ClassDefinition{
 		HeaderComment: headerCommentText(headerSourceName(g.sourceName)),
 		Extends:       "RefCounted",

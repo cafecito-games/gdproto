@@ -64,6 +64,8 @@ func (g *generator) generateMessage(m *ast.Message) *gdast.ClassDefinition {
 		g.generateToBytes(m),
 		gdast.EmptyLine{},
 		g.generateFromBytes(m),
+		gdast.EmptyLine{},
+		g.generateToString(m),
 	)
 
 	return &gdast.ClassDefinition{

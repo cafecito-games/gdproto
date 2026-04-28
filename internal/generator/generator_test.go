@@ -1,11 +1,15 @@
 package generator_test
 
 import (
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/cafecito-games/gogdproto/internal/ast"
 	"github.com/cafecito-games/gogdproto/internal/generator"
+	"github.com/cafecito-games/gogdproto/internal/lexer"
+	"github.com/cafecito-games/gogdproto/internal/parser"
+	"github.com/cafecito-games/gogdproto/internal/validator"
 )
 
 func TestGenerateEmptyProto(t *testing.T) {
@@ -394,6 +398,50 @@ func TestGenerateFromBytesComplex(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("from_bytes complex output missing fragment %q\n--- full output ---\n%s", want, out)
 		}
+	}
+}
+
+func TestGoldenExample(t *testing.T) {
+	src, err := os.ReadFile("../../examples/example.proto")
+	if err != nil {
+		t.Fatalf("read example.proto: %v", err)
+	}
+	tokens, err := lexer.Tokenize(string(src), "example.proto")
+	if err != nil {
+		t.Fatalf("tokenize: %v", err)
+	}
+	file, err := parser.Parse(tokens, "example.proto")
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if errs := validator.Validate(file, "example.proto"); len(errs) != 0 {
+		t.Fatalf("validation errors: %+v", errs)
+	}
+	cls, err := generator.Generate(file, "example.proto")
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	got := cls.ToGDScript(0)
+	if !strings.HasSuffix(got, "\n") {
+		got += "\n"
+	}
+	wantBytes, err := os.ReadFile("../../examples/golden.gd")
+	if err != nil {
+		t.Fatalf("read golden.gd: %v", err)
+	}
+	want := string(wantBytes)
+	if got == want {
+		return
+	}
+	gotLines := strings.Split(got, "\n")
+	wantLines := strings.Split(want, "\n")
+	for i := 0; i < len(gotLines) && i < len(wantLines); i++ {
+		if gotLines[i] != wantLines[i] {
+			t.Fatalf("first diff at line %d:\n  got:  %q\n  want: %q", i+1, gotLines[i], wantLines[i])
+		}
+	}
+	if len(gotLines) != len(wantLines) {
+		t.Fatalf("line count mismatch: got %d, want %d", len(gotLines), len(wantLines))
 	}
 }
 

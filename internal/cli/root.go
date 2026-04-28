@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -111,6 +112,9 @@ func runCompile(cmd *cobra.Command, inputPath, outputPath string) error {
 		return err
 	}
 	output := cls.ToGDScript(0)
+	if !strings.HasSuffix(output, "\n") {
+		output += "\n"
+	}
 
 	if dir := filepath.Dir(outputPath); dir != "" && dir != "." {
 		if err := os.MkdirAll(dir, 0o750); err != nil {

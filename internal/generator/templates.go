@@ -22,7 +22,7 @@ const errorEnumGDScript = `enum PB_ERR {
 // well as tag composition helpers. It is consumed by the PBCore class emitted
 // at the bottom of the generated file in later milestones.
 //
-//nolint:unused // used by serialization milestones (M5-T3+).
+//nolint:unused // superseded by pbCoreClassGDScript; retained for reference.
 const protobufCoreGDScript = "# Encode/decode varint (variable-length integer)\n" +
 	"static func encode_varint(value: int) -> PackedByteArray:\n" +
 	"\t\"\"\"Encode integer as varint.\"\"\"\n" +
@@ -414,9 +414,151 @@ func constantsSectionStatement() gdast.RawStatement {
 // protobufCoreStatement returns the proto core helper functions as a
 // RawStatement.
 //
-//nolint:unused // used by serialization milestones (M5-T3+).
+//nolint:unused // superseded by pbCoreClassStatement; retained for reference.
 func protobufCoreStatement() gdast.RawStatement {
 	return gdast.RawStatement{Code: protobufCoreGDScript}
+}
+
+// pbCoreClassGDScript is the verbatim source of the trailing `class PBCore:`
+// block that ships with every generated proto file. It bundles the encode/
+// decode helpers used by the per-message serialization methods. The string is
+// emitted as a single RawStatement at top level so its indentation, including
+// blank lines that carry a leading tab to keep with the class indentation
+// level, is preserved byte-for-byte.
+const pbCoreClassGDScript = "class PBCore:\n" +
+	"\t\"\"\"Core protobuf encoding/decoding utilities.\"\"\"\n" +
+	"\t\n" +
+	"\t# Encode/decode varint (variable-length integer)\n" +
+	"\tstatic func encode_varint(value: int) -> PackedByteArray:\n" +
+	"\t\t\"\"\"Encode integer as varint.\"\"\"\n" +
+	"\t\tvar result: PackedByteArray = PackedByteArray()\n" +
+	"\t\twhile value > 0x7F:\n" +
+	"\t\t\tresult.append((value & 0x7F) | 0x80)\n" +
+	"\t\t\tvalue >>= 7\n" +
+	"\t\tresult.append(value & 0x7F)\n" +
+	"\t\treturn result\n" +
+	"\t\n" +
+	"\tstatic func decode_varint(data: PackedByteArray, offset: int) -> Dictionary[String, int]:\n" +
+	"\t\t\"\"\"Decode varint from data.\n" +
+	"\t\t\n" +
+	"\t\tReturns:\n" +
+	"\t\t\tDictionary with 'value' and 'size' keys\n" +
+	"\t\t\"\"\"\n" +
+	"\t\tvar result: int = 0\n" +
+	"\t\tvar shift: int = 0\n" +
+	"\t\tvar size: int = 0\n" +
+	"\t\t\n" +
+	"\t\twhile offset + size < data.size():\n" +
+	"\t\t\tvar byte: int = data[offset + size]\n" +
+	"\t\t\tresult |= (byte & 0x7F) << shift\n" +
+	"\t\t\tsize += 1\n" +
+	"\t\t\tif (byte & 0x80) == 0:\n" +
+	"\t\t\t\treturn {\"value\": result, \"size\": size}\n" +
+	"\t\t\tshift += 7\n" +
+	"\t\t\tif shift > 63:\n" +
+	"\t\t\t\tbreak\n" +
+	"\t\t\n" +
+	"\t\treturn {\"value\": 0, \"size\": -1}\n" +
+	"\t\n" +
+	"\t# Encode/decode zigzag (for sint32/sint64)\n" +
+	"\tstatic func encode_zigzag32(value: int) -> int:\n" +
+	"\t\t\"\"\"Encode signed int32 using zigzag encoding.\"\"\"\n" +
+	"\t\treturn (value << 1) ^ (value >> 31)\n" +
+	"\t\n" +
+	"\tstatic func encode_zigzag64(value: int) -> int:\n" +
+	"\t\t\"\"\"Encode signed int64 using zigzag encoding.\"\"\"\n" +
+	"\t\treturn (value << 1) ^ (value >> 63)\n" +
+	"\t\n" +
+	"\tstatic func decode_zigzag32(value: int) -> int:\n" +
+	"\t\t\"\"\"Decode zigzag-encoded int32.\"\"\"\n" +
+	"\t\treturn (value >> 1) ^ (-(value & 1))\n" +
+	"\t\n" +
+	"\tstatic func decode_zigzag64(value: int) -> int:\n" +
+	"\t\t\"\"\"Decode zigzag-encoded int64.\"\"\"\n" +
+	"\t\treturn (value >> 1) ^ (-(value & 1))\n" +
+	"\t\n" +
+	"\t# Encode/decode fixed-size integers\n" +
+	"\tstatic func encode_fixed32(value: int) -> PackedByteArray:\n" +
+	"\t\t\"\"\"Encode 32-bit fixed integer.\"\"\"\n" +
+	"\t\tvar result: PackedByteArray = PackedByteArray()\n" +
+	"\t\tresult.resize(4)\n" +
+	"\t\tresult.encode_u32(0, value)\n" +
+	"\t\treturn result\n" +
+	"\t\n" +
+	"\tstatic func encode_fixed64(value: int) -> PackedByteArray:\n" +
+	"\t\t\"\"\"Encode 64-bit fixed integer.\"\"\"\n" +
+	"\t\tvar result: PackedByteArray = PackedByteArray()\n" +
+	"\t\tresult.resize(8)\n" +
+	"\t\tresult.encode_u64(0, value)\n" +
+	"\t\treturn result\n" +
+	"\t\n" +
+	"\tstatic func decode_fixed32(data: PackedByteArray, offset: int) -> int:\n" +
+	"\t\t\"\"\"Decode 32-bit fixed integer.\"\"\"\n" +
+	"\t\treturn data.decode_u32(offset)\n" +
+	"\t\n" +
+	"\tstatic func decode_fixed64(data: PackedByteArray, offset: int) -> int:\n" +
+	"\t\t\"\"\"Decode 64-bit fixed integer.\"\"\"\n" +
+	"\t\treturn data.decode_u64(offset)\n" +
+	"\t\n" +
+	"\t# Encode/decode float/double\n" +
+	"\tstatic func encode_float(value: float) -> PackedByteArray:\n" +
+	"\t\t\"\"\"Encode 32-bit float.\"\"\"\n" +
+	"\t\tvar result: PackedByteArray = PackedByteArray()\n" +
+	"\t\tresult.resize(4)\n" +
+	"\t\tresult.encode_float(0, value)\n" +
+	"\t\treturn result\n" +
+	"\t\n" +
+	"\tstatic func encode_double(value: float) -> PackedByteArray:\n" +
+	"\t\t\"\"\"Encode 64-bit double.\"\"\"\n" +
+	"\t\tvar result: PackedByteArray = PackedByteArray()\n" +
+	"\t\tresult.resize(8)\n" +
+	"\t\tresult.encode_double(0, value)\n" +
+	"\t\treturn result\n" +
+	"\t\n" +
+	"\tstatic func decode_float(data: PackedByteArray, offset: int) -> float:\n" +
+	"\t\t\"\"\"Decode 32-bit float.\"\"\"\n" +
+	"\t\treturn data.decode_float(offset)\n" +
+	"\t\n" +
+	"\tstatic func decode_double(data: PackedByteArray, offset: int) -> float:\n" +
+	"\t\t\"\"\"Decode 64-bit double.\"\"\"\n" +
+	"\t\treturn data.decode_double(offset)\n" +
+	"\t\n" +
+	"\t# Encode/decode string\n" +
+	"\tstatic func encode_string(value: String) -> PackedByteArray:\n" +
+	"\t\t\"\"\"Encode string as UTF-8.\"\"\"\n" +
+	"\t\treturn value.to_utf8_buffer()\n" +
+	"\t\n" +
+	"\tstatic func decode_string(data: PackedByteArray, offset: int, length: int) -> String:\n" +
+	"\t\t\"\"\"Decode UTF-8 string.\"\"\"\n" +
+	"\t\tvar slice: PackedByteArray = data.slice(offset, offset + length)\n" +
+	"\t\treturn slice.get_string_from_utf8()\n" +
+	"\t\n" +
+	"\t# Make field tag\n" +
+	"\tstatic func make_tag(field_number: int, wire_type: int) -> int:\n" +
+	"\t\t\"\"\"Make protobuf field tag.\"\"\"\n" +
+	"\t\treturn (field_number << 3) | wire_type\n" +
+	"\t\n" +
+	"\t# Get wire type from tag\n" +
+	"\tstatic func get_wire_type(tag: int) -> int:\n" +
+	"\t\t\"\"\"Extract wire type from tag.\"\"\"\n" +
+	"\t\treturn tag & 0x7\n" +
+	"\t\n" +
+	"\t# Get field number from tag\n" +
+	"\tstatic func get_field_number(tag: int) -> int:\n" +
+	"\t\t\"\"\"Extract field number from tag.\"\"\"\n" +
+	"\t\treturn tag >> 3"
+
+// pbCoreSectionHeaderStatement returns the banner comment that precedes the
+// trailing PBCore class block.
+func pbCoreSectionHeaderStatement() gdast.RawStatement {
+	bar := "# ============================================================================"
+	return gdast.RawStatement{Code: bar + "\n# Protobuf Core (Serialization utilities)\n" + bar}
+}
+
+// pbCoreClassStatement returns the trailing PBCore class block as a
+// RawStatement so its internal indentation is preserved verbatim.
+func pbCoreClassStatement() gdast.RawStatement {
+	return gdast.RawStatement{Code: pbCoreClassGDScript}
 }
 
 // textFormatUtilsStatement returns the text-format helper functions as a
