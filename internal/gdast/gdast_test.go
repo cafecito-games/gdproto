@@ -383,3 +383,98 @@ func TestReturnStatementWithValue(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+func TestIfSimple(t *testing.T) {
+	s := IfStatement{
+		Condition: Variable{Name: "x"},
+		Body:      []Statement{ReturnStatement{Value: Literal{Value: 1}}},
+	}
+	want := "if x:\n\treturn 1"
+	if got := s.ToGDScript(0); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestIfWithElifAndElse(t *testing.T) {
+	s := IfStatement{
+		Condition: Variable{Name: "a"},
+		Body:      []Statement{ReturnStatement{Value: Literal{Value: 1}}},
+		ElifBranches: []ElifBranch{
+			{Condition: Variable{Name: "b"}, Body: []Statement{ReturnStatement{Value: Literal{Value: 2}}}},
+		},
+		ElseBody: []Statement{ReturnStatement{Value: Literal{Value: 3}}},
+	}
+	want := "if a:\n\treturn 1\nelif b:\n\treturn 2\nelse:\n\treturn 3"
+	if got := s.ToGDScript(0); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestWhileEmptyBodyEmitsPass(t *testing.T) {
+	s := WhileStatement{Condition: Variable{Name: "running"}}
+	want := "while running:\n\tpass"
+	if got := s.ToGDScript(0); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestWhileWithBody(t *testing.T) {
+	s := WhileStatement{
+		Condition: Variable{Name: "running"},
+		Body:      []Statement{BreakStatement{}},
+	}
+	want := "while running:\n\tbreak"
+	if got := s.ToGDScript(0); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestForWithTypeHint(t *testing.T) {
+	s := ForStatement{
+		Variable: "i",
+		Iterable: Variable{Name: "arr"},
+		Body:     []Statement{ContinueStatement{}},
+		TypeHint: "int",
+	}
+	want := "for var i: int in arr:\n\tcontinue"
+	if got := s.ToGDScript(0); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestForWithoutTypeHint(t *testing.T) {
+	s := ForStatement{
+		Variable: "item",
+		Iterable: Variable{Name: "items"},
+	}
+	want := "for item in items:\n\tpass"
+	if got := s.ToGDScript(0); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestMatchWithWildcard(t *testing.T) {
+	s := MatchStatement{
+		Expression: Variable{Name: "v"},
+		Cases: []MatchCase{
+			{Pattern: Literal{Value: 1}, Body: []Statement{ReturnStatement{Value: Literal{Value: "one"}}}},
+			{Pattern: "_", Body: []Statement{ReturnStatement{Value: Literal{Value: "other"}}}},
+		},
+	}
+	want := "match v:\n\t1:\n\t\treturn \"one\"\n\t_:\n\t\treturn \"other\""
+	if got := s.ToGDScript(0); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestMatchCaseWithInlineComment(t *testing.T) {
+	c := MatchCase{
+		Pattern: Literal{Value: 1},
+		Body:    []Statement{PassStatement{}},
+		Comment: "first",
+	}
+	want := "1:  # first\n\tpass"
+	if got := c.ToGDScript(0); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
