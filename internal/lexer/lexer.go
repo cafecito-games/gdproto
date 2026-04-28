@@ -1,6 +1,10 @@
 package lexer
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+	"strings"
+)
 
 // Tokenize converts .proto source code into a stream of tokens.
 // The filename is used only in error messages; pass "" for "<input>".
@@ -29,9 +33,39 @@ func (l *lexer) run() ([]Token, error) {
 		ch := l.source[l.pos]
 		line, col := l.line, l.column
 
+		if ch == '/' && l.peek(1) == '/' {
+			l.skipLineComment()
+			continue
+		}
+		if ch == '/' && l.peek(1) == '*' {
+			if err := l.skipBlockComment(); err != nil {
+				return nil, err
+			}
+			continue
+		}
+
 		if t, ok := singleCharSymbol(ch); ok {
 			l.tokens = append(l.tokens, Token{Type: t, Value: string(ch), Line: line, Column: col})
 			l.advance()
+			continue
+		}
+
+		if isIdentStart(ch) {
+			l.tokens = append(l.tokens, l.readIdentifier())
+			continue
+		}
+
+		if isDigit(ch) || (ch == '-' && isDigit(l.peek(1))) {
+			l.tokens = append(l.tokens, l.readNumber())
+			continue
+		}
+
+		if ch == '"' || ch == '\'' {
+			tok, err := l.readString()
+			if err != nil {
+				return nil, err
+			}
+			l.tokens = append(l.tokens, tok)
 			continue
 		}
 
@@ -69,6 +103,236 @@ func (l *lexer) skipWhitespace() {
 			continue
 		}
 		return
+	}
+}
+
+func isIdentStart(ch byte) bool {
+	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_'
+}
+
+func isIdentContinue(ch byte) bool {
+	return isIdentStart(ch) || (ch >= '0' && ch <= '9')
+}
+
+func (l *lexer) readIdentifier() Token {
+	startLine, startCol := l.line, l.column
+	start := l.pos
+	for l.pos < len(l.source) && isIdentContinue(l.source[l.pos]) {
+		l.advance()
+	}
+	value := l.source[start:l.pos]
+	tt := TokenIdentifier
+	if kw, ok := keywords[value]; ok {
+		tt = kw
+	}
+	return Token{Type: tt, Value: value, Line: startLine, Column: startCol}
+}
+
+func isDigit(ch byte) bool { return ch >= '0' && ch <= '9' }
+
+func isHexDigit(ch byte) bool {
+	return isDigit(ch) || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F')
+}
+
+// peek returns the byte at l.pos+offset, or 0 if out of bounds.
+func (l *lexer) peek(offset int) byte {
+	pos := l.pos + offset
+	if pos < 0 || pos >= len(l.source) {
+		return 0
+	}
+	return l.source[pos]
+}
+
+func (l *lexer) readNumber() Token {
+	startLine, startCol := l.line, l.column
+	start := l.pos
+
+	if l.source[l.pos] == '-' {
+		l.advance()
+	}
+
+	if l.source[l.pos] == '0' && l.pos+1 < len(l.source) && (l.source[l.pos+1] == 'x' || l.source[l.pos+1] == 'X') {
+		l.advance()
+		l.advance()
+		for l.pos < len(l.source) && isHexDigit(l.source[l.pos]) {
+			l.advance()
+		}
+		return Token{Type: TokenIntLiteral, Value: l.source[start:l.pos], Line: startLine, Column: startCol}
+	}
+
+	if l.source[l.pos] == '0' && l.pos+1 < len(l.source) && isDigit(l.source[l.pos+1]) {
+		l.advance()
+		for l.pos < len(l.source) {
+			ch := l.source[l.pos]
+			if ch < '0' || ch > '7' {
+				break
+			}
+			l.advance()
+		}
+		return Token{Type: TokenIntLiteral, Value: l.source[start:l.pos], Line: startLine, Column: startCol}
+	}
+
+	for l.pos < len(l.source) && isDigit(l.source[l.pos]) {
+		l.advance()
+	}
+
+	isFloat := false
+	if l.pos < len(l.source) && l.source[l.pos] == '.' {
+		isFloat = true
+		l.advance()
+		for l.pos < len(l.source) && isDigit(l.source[l.pos]) {
+			l.advance()
+		}
+	}
+
+	if l.pos < len(l.source) && (l.source[l.pos] == 'e' || l.source[l.pos] == 'E') {
+		isFloat = true
+		l.advance()
+		if l.pos < len(l.source) && (l.source[l.pos] == '+' || l.source[l.pos] == '-') {
+			l.advance()
+		}
+		for l.pos < len(l.source) && isDigit(l.source[l.pos]) {
+			l.advance()
+		}
+	}
+
+	tt := TokenIntLiteral
+	if isFloat {
+		tt = TokenFloatLiteral
+	}
+	return Token{Type: tt, Value: l.source[start:l.pos], Line: startLine, Column: startCol}
+}
+
+func (l *lexer) readString() (Token, error) {
+	startLine, startCol := l.line, l.column
+	quote := l.source[l.pos]
+	l.advance()
+
+	var sb strings.Builder
+	for {
+		if l.pos >= len(l.source) {
+			return Token{}, &LexerError{
+				File:    l.filename,
+				Line:    startLine,
+				Column:  startCol,
+				Message: "Unterminated string literal",
+			}
+		}
+
+		ch := l.source[l.pos]
+
+		if ch == quote {
+			l.advance()
+			return Token{Type: TokenStringLiteral, Value: sb.String(), Line: startLine, Column: startCol}, nil
+		}
+
+		if ch == '\n' {
+			return Token{}, &LexerError{
+				File:    l.filename,
+				Line:    l.line,
+				Column:  l.column,
+				Message: "Newline in string literal",
+			}
+		}
+
+		if ch == '\\' {
+			l.advance()
+			if l.pos >= len(l.source) {
+				return Token{}, &LexerError{
+					File:    l.filename,
+					Line:    l.line,
+					Column:  l.column,
+					Message: "Unterminated escape sequence",
+				}
+			}
+			escaped := l.source[l.pos]
+			switch escaped {
+			case 'n':
+				sb.WriteByte('\n')
+				l.advance()
+			case 'r':
+				sb.WriteByte('\r')
+				l.advance()
+			case 't':
+				sb.WriteByte('\t')
+				l.advance()
+			case '\\':
+				sb.WriteByte('\\')
+				l.advance()
+			case '\'':
+				sb.WriteByte('\'')
+				l.advance()
+			case '"':
+				sb.WriteByte('"')
+				l.advance()
+			case '0':
+				sb.WriteByte(0)
+				l.advance()
+			case 'x':
+				l.advance()
+				if l.pos+1 >= len(l.source) || !isHexDigit(l.source[l.pos]) || !isHexDigit(l.source[l.pos+1]) {
+					return Token{}, &LexerError{
+						File:    l.filename,
+						Line:    l.line,
+						Column:  l.column,
+						Message: "Invalid hex escape sequence",
+					}
+				}
+				v, err := strconv.ParseUint(l.source[l.pos:l.pos+2], 16, 8)
+				if err != nil {
+					return Token{}, &LexerError{
+						File:    l.filename,
+						Line:    l.line,
+						Column:  l.column,
+						Message: "Invalid hex escape sequence",
+					}
+				}
+				sb.WriteByte(byte(v))
+				l.advance()
+				l.advance()
+			default:
+				return Token{}, &LexerError{
+					File:    l.filename,
+					Line:    l.line,
+					Column:  l.column,
+					Message: fmt.Sprintf("Invalid escape sequence: \\%c", escaped),
+				}
+			}
+			continue
+		}
+
+		sb.WriteByte(ch)
+		l.advance()
+	}
+}
+
+func (l *lexer) skipLineComment() {
+	l.advance()
+	l.advance()
+	for l.pos < len(l.source) && l.source[l.pos] != '\n' {
+		l.advance()
+	}
+}
+
+func (l *lexer) skipBlockComment() error {
+	startLine, startCol := l.line, l.column
+	l.advance()
+	l.advance()
+	for {
+		if l.pos >= len(l.source) {
+			return &LexerError{
+				File:    l.filename,
+				Line:    startLine,
+				Column:  startCol,
+				Message: "Unterminated block comment",
+			}
+		}
+		if l.source[l.pos] == '*' && l.peek(1) == '/' {
+			l.advance()
+			l.advance()
+			return nil
+		}
+		l.advance()
 	}
 }
 
