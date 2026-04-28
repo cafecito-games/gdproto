@@ -30,15 +30,6 @@ func (p *parser) current() lexer.Token {
 	return p.tokens[p.pos]
 }
 
-//nolint:unused // used by parsing tasks landing in subsequent commits.
-func (p *parser) peek(offset int) lexer.Token {
-	pos := p.pos + offset
-	if pos >= len(p.tokens) {
-		return p.tokens[len(p.tokens)-1]
-	}
-	return p.tokens[pos]
-}
-
 func (p *parser) advance() lexer.Token {
 	tok := p.current()
 	if p.pos < len(p.tokens)-1 {

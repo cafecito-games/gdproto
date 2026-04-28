@@ -584,3 +584,265 @@ func TestMessageOption(t *testing.T) {
 		t.Errorf("got %v", file.Messages[0].Options)
 	}
 }
+
+func TestCompleteExample(t *testing.T) {
+	src := `syntax = "proto3";
+
+import "other.proto";
+import public "base.proto";
+
+package com.example;
+
+enum Status {
+    UNKNOWN = 0;
+    ACTIVE = 1;
+    INACTIVE = 2;
+}
+
+message Person {
+    string name = 1;
+    int32 age = 2;
+    Status status = 3;
+    repeated string emails = 4;
+    map<string, string> metadata = 5;
+
+    message PhoneNumber {
+        string number = 1;
+        string type = 2;
+    }
+
+    repeated PhoneNumber phones = 6;
+
+    oneof contact_preference {
+        string email = 7;
+        string phone = 8;
+    }
+}`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if file.Syntax != "proto3" {
+		t.Errorf("syntax = %q", file.Syntax)
+	}
+	if len(file.Imports) != 2 {
+		t.Errorf("imports = %d, want 2", len(file.Imports))
+	}
+	if file.Package != "com.example" {
+		t.Errorf("package = %q", file.Package)
+	}
+	if len(file.Enums) != 1 || file.Enums[0].Name != "Status" || len(file.Enums[0].Values) != 3 {
+		t.Errorf("enum: %+v", file.Enums)
+	}
+	if len(file.Messages) != 1 {
+		t.Fatalf("messages = %d, want 1", len(file.Messages))
+	}
+	m := file.Messages[0]
+	if m.Name != "Person" {
+		t.Errorf("name = %q", m.Name)
+	}
+	if len(m.Fields) != 5 {
+		t.Errorf("fields = %d, want 5", len(m.Fields))
+	}
+	if len(m.Maps) != 1 {
+		t.Errorf("maps = %d, want 1", len(m.Maps))
+	}
+	if len(m.NestedMessages) != 1 || m.NestedMessages[0].Name != "PhoneNumber" {
+		t.Errorf("nested = %+v", m.NestedMessages)
+	}
+	if len(m.Oneofs) != 1 || m.Oneofs[0].Name != "contact_preference" {
+		t.Errorf("oneofs = %+v", m.Oneofs)
+	}
+}
+
+func TestParenthesizedOptionName(t *testing.T) {
+	src := `syntax = "proto3"; option (my.custom_option) = "value";`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Options["(my.custom_option)"] != "value" {
+		t.Errorf("got %v", file.Options)
+	}
+}
+
+func TestFileOptionString(t *testing.T) {
+	file, err := parseSource(t, `syntax = "proto3"; option go_package = "example.com/foo";`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Options["go_package"] != "example.com/foo" {
+		t.Errorf("got %v", file.Options)
+	}
+}
+
+func TestFileOptionFloat(t *testing.T) {
+	file, err := parseSource(t, `syntax = "proto3"; option scaling = 1.5;`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Options["scaling"] != 1.5 {
+		t.Errorf("got %v", file.Options)
+	}
+}
+
+func TestFileOptionFalse(t *testing.T) {
+	file, err := parseSource(t, `syntax = "proto3"; option enabled = false;`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Options["enabled"] != false {
+		t.Errorf("got %v", file.Options)
+	}
+}
+
+func TestEnumValueWithOptions(t *testing.T) {
+	src := `syntax = "proto3"; enum E { UNKNOWN = 0 [deprecated = true]; ACTIVE = 1; }`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := file.Enums[0].Values[0]
+	if v.Options["deprecated"] != true {
+		t.Errorf("got %v", v.Options)
+	}
+}
+
+func TestOneofWithOption(t *testing.T) {
+	src := `syntax = "proto3"; message M { oneof choice { option deprecated = true; string a = 1; } }`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(file.Messages[0].Oneofs) != 1 {
+		t.Fatalf("oneofs = %+v", file.Messages[0].Oneofs)
+	}
+}
+
+func TestOneofRepeatedRejected(t *testing.T) {
+	src := `syntax = "proto3"; message M { oneof choice { repeated string a = 1; } }`
+	_, err := parseSource(t, src)
+	if err == nil {
+		t.Fatal("expected error for repeated oneof field")
+	}
+}
+
+func TestAbsoluteType(t *testing.T) {
+	src := `syntax = "proto3"; message M { .foo.Bar baz = 1; }`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Messages[0].Fields[0].FieldType != ".foo.Bar" {
+		t.Errorf("got %q", file.Messages[0].Fields[0].FieldType)
+	}
+}
+
+func TestMapWithOptions(t *testing.T) {
+	src := `syntax = "proto3"; message M { map<string, int32> m = 1 [deprecated = true]; }`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Messages[0].Maps[0].Options["deprecated"] != true {
+		t.Errorf("got %v", file.Messages[0].Maps[0].Options)
+	}
+}
+
+func TestReservedRange(t *testing.T) {
+	src := `syntax = "proto3"; message M { reserved 9 to 11, 15; }`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := file.Messages[0].Reserved[0]
+	if len(r.Numbers) != 2 || r.Numbers[0].Start != 9 || r.Numbers[0].End != 11 || r.Numbers[1].Start != 15 || r.Numbers[1].End != 15 {
+		t.Errorf("got %+v", r.Numbers)
+	}
+}
+
+func TestParseErrorMissingSyntax(t *testing.T) {
+	_, err := parseSource(t, `package foo;`)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestParseErrorBadFieldNumber(t *testing.T) {
+	_, err := parseSource(t, `syntax = "proto3"; message M { string a = ; }`)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestParseErrorBadType(t *testing.T) {
+	_, err := parseSource(t, `syntax = "proto3"; message M { = a = 1; }`)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestParseErrorUnexpectedTopLevel(t *testing.T) {
+	_, err := parseSource(t, `syntax = "proto3"; foo bar;`)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestParseErrorOptionMissingValue(t *testing.T) {
+	_, err := parseSource(t, `syntax = "proto3"; option foo = ;`)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// errorCases exercises many parser error paths for coverage.
+func TestParserErrorCases(t *testing.T) {
+	cases := []string{
+		// missing semicolons / equals
+		`syntax "proto3";`,
+		`syntax = proto3;`,
+		`syntax = "proto3"`,
+		`syntax = "proto3"; import;`,
+		`syntax = "proto3"; import "foo.proto"`,
+		`syntax = "proto3"; package ;`,
+		`syntax = "proto3"; package foo`,
+		`syntax = "proto3"; option = 1;`,
+		`syntax = "proto3"; option foo 1;`,
+		`syntax = "proto3"; option foo = 1`,
+		`syntax = "proto3"; option (foo = 1;`,
+		`syntax = "proto3"; option (.foo) = 1;`,
+		`syntax = "proto3"; enum;`,
+		`syntax = "proto3"; enum E ;`,
+		`syntax = "proto3"; enum E { = 0; }`,
+		`syntax = "proto3"; enum E { A 0; }`,
+		`syntax = "proto3"; enum E { A = ; }`,
+		`syntax = "proto3"; enum E { A = 0 }`,
+		`syntax = "proto3"; message;`,
+		`syntax = "proto3"; message M ;`,
+		`syntax = "proto3"; message M { string = 1; }`,
+		`syntax = "proto3"; message M { string a 1; }`,
+		`syntax = "proto3"; message M { string a = 1 }`,
+		`syntax = "proto3"; message M { string a = 1 [deprecated true]; }`,
+		`syntax = "proto3"; message M { string a = 1 [deprecated = true; }`,
+		`syntax = "proto3"; message M { map<string int32> m = 1; }`,
+		`syntax = "proto3"; message M { map string, int32> m = 1; }`,
+		`syntax = "proto3"; message M { map<string, int32 m = 1; }`,
+		`syntax = "proto3"; message M { map<string, int32> = 1; }`,
+		`syntax = "proto3"; message M { map<string, int32> m 1; }`,
+		`syntax = "proto3"; message M { map<string, int32> m = ; }`,
+		`syntax = "proto3"; message M { map<string, int32> m = 1 }`,
+		`syntax = "proto3"; message M { oneof; }`,
+		`syntax = "proto3"; message M { oneof o ; }`,
+		`syntax = "proto3"; message M { reserved; }`,
+		`syntax = "proto3"; message M { reserved 1 to ; }`,
+		`syntax = "proto3"; message M { reserved 1 to 5 }`,
+		`syntax = "proto3"; message M { reserved "a" }`,
+		`syntax = "proto3"; package foo.;`,
+	}
+	for _, src := range cases {
+		if _, err := parseSource(t, src); err == nil {
+			t.Errorf("expected error for: %q", src)
+		}
+	}
+}
