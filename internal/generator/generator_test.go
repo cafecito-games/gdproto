@@ -450,6 +450,29 @@ func TestGoldenExample(t *testing.T) {
 	}
 }
 
+func TestProtoCoreUtilsGolden(t *testing.T) {
+	got := generator.GenerateProtoCoreUtilsRaw()
+	wantBytes, err := os.ReadFile("../../examples/proto_core_utils_golden.gd")
+	if err != nil {
+		t.Fatalf("read proto_core_utils_golden.gd: %v", err)
+	}
+	want := string(wantBytes)
+	if got == want {
+		return
+	}
+	gotLines := strings.Split(got, "\n")
+	wantLines := strings.Split(want, "\n")
+	for i := 0; i < len(gotLines) && i < len(wantLines); i++ {
+		if gotLines[i] != wantLines[i] {
+			t.Errorf("first diff at line %d:\n  got:  %q\n  want: %q", i+1, gotLines[i], wantLines[i])
+			break
+		}
+	}
+	if len(gotLines) != len(wantLines) {
+		t.Errorf("line counts: got %d, want %d", len(gotLines), len(wantLines))
+	}
+}
+
 func TestWrapperClassName(t *testing.T) {
 	cases := []struct {
 		in   string

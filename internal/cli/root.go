@@ -125,6 +125,12 @@ func runCompile(cmd *cobra.Command, inputPath, outputPath string) error {
 		return fmt.Errorf("write output: %w", err)
 	}
 
+	siblingPath := filepath.Join(filepath.Dir(outputPath), "proto_core_utils.gd")
+	if err := os.WriteFile(siblingPath, []byte(generator.GenerateProtoCoreUtilsRaw()), 0o644); err != nil { //nolint:gosec // sibling generated source written next to user-specified output.
+		return fmt.Errorf("write sibling: %w", err)
+	}
+
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "✓ Generated %s\n", outputPath)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "✓ Generated %s\n", siblingPath)
 	return nil
 }
