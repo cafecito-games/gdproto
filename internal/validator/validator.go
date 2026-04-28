@@ -46,6 +46,9 @@ func (v *validator) validate() {
 	for _, enum := range v.file.Enums {
 		v.validateEnum(enum)
 	}
+	for _, message := range v.file.Messages {
+		v.validateMessage(message, message.Name)
+	}
 }
 
 // validateSyntax checks that the file declares proto3.

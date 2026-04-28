@@ -1,8 +1,6 @@
 package validator
 
 // Field-number bounds defined by the protobuf specification.
-//
-//nolint:unused // consumed by subsequent validator tasks.
 const (
 	minFieldNumber = 1
 	maxFieldNumber = 536870911 // 2^29 - 1
@@ -11,8 +9,6 @@ const (
 )
 
 // validMapKeyTypes lists the integral and string types allowed as map keys.
-//
-//nolint:unused // consumed by subsequent validator tasks.
 var validMapKeyTypes = map[string]bool{
 	"int32":    true,
 	"int64":    true,

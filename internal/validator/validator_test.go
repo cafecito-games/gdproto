@@ -111,3 +111,127 @@ func TestEnumNameKeyword(t *testing.T) {
 		t.Errorf("expected reserved-keyword error, got %+v", errs)
 	}
 }
+
+func TestValidFieldNumbers(t *testing.T) {
+	src := `syntax = "proto3"; message F { int32 a = 1; int32 b = 100; int32 c = 536870911; }`
+	if errs := validate(t, src); len(errs) != 0 {
+		t.Errorf("got %+v", errs)
+	}
+}
+
+func TestDuplicateFieldNumber(t *testing.T) {
+	src := `syntax = "proto3"; message F { int32 a = 1; int32 b = 1; }`
+	errs := validate(t, src)
+	if len(errs) != 1 || !strings.Contains(errs[0].Message, "Duplicate field number") {
+		t.Errorf("got %+v", errs)
+	}
+}
+
+func TestFieldNumberZero(t *testing.T) {
+	src := `syntax = "proto3"; message F { int32 a = 0; }`
+	errs := validate(t, src)
+	if len(errs) != 1 || !strings.Contains(errs[0].Message, "out of valid range") {
+		t.Errorf("got %+v", errs)
+	}
+}
+
+func TestFieldNumberTooHigh(t *testing.T) {
+	src := `syntax = "proto3"; message F { int32 a = 536870912; }`
+	errs := validate(t, src)
+	if len(errs) != 1 || !strings.Contains(errs[0].Message, "out of valid range") {
+		t.Errorf("got %+v", errs)
+	}
+}
+
+func TestFieldNumberInReservedRange(t *testing.T) {
+	src := `syntax = "proto3"; message F { int32 a = 19000; }`
+	errs := validate(t, src)
+	if len(errs) != 1 || !strings.Contains(errs[0].Message, "in reserved range") {
+		t.Errorf("got %+v", errs)
+	}
+}
+
+func TestDuplicateFieldName(t *testing.T) {
+	src := `syntax = "proto3"; message F { int32 a = 1; int32 a = 2; }`
+	errs := validate(t, src)
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e.Message, "Duplicate field name") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("got %+v", errs)
+	}
+}
+
+func TestFieldNameKeyword(t *testing.T) {
+	src := `syntax = "proto3"; message F { int32 Message = 1; }`
+	errs := validate(t, src)
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e.Message, "reserved keyword") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("got %+v", errs)
+	}
+}
+
+func TestFieldConflictReservedNumber(t *testing.T) {
+	src := `syntax = "proto3"; message F { reserved 5; int32 a = 5; }`
+	errs := validate(t, src)
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e.Message, "is reserved") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("got %+v", errs)
+	}
+}
+
+func TestFieldConflictReservedRange(t *testing.T) {
+	src := `syntax = "proto3"; message F { reserved 4 to 8; int32 a = 6; }`
+	errs := validate(t, src)
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e.Message, "conflicts with reserved range") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("got %+v", errs)
+	}
+}
+
+func TestFieldConflictReservedName(t *testing.T) {
+	src := `syntax = "proto3"; message F { reserved "foo"; int32 foo = 1; }`
+	errs := validate(t, src)
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e.Message, "is reserved") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("got %+v", errs)
+	}
+}
+
+func TestMapValid(t *testing.T) {
+	src := `syntax = "proto3"; message F { map<string, int32> m = 1; }`
+	if errs := validate(t, src); len(errs) != 0 {
+		t.Errorf("got %+v", errs)
+	}
+}
+
+func TestMapInvalidKey(t *testing.T) {
+	src := `syntax = "proto3"; message F { map<float, int32> m = 1; }`
+	errs := validate(t, src)
+	if len(errs) != 1 || !strings.Contains(errs[0].Message, "Invalid map key type") {
+		t.Errorf("got %+v", errs)
+	}
+}
