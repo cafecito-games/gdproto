@@ -165,13 +165,15 @@ func (g *generator) mapAccessors(mf *ast.MapField) []gdast.Node {
 }
 
 // isMessageLikeType reports whether the field's type renders with a `new_`
-// constructor accessor. This includes message types and (in the current
-// reference output) enum-typed fields stored as null-defaulting references.
+// constructor accessor. Scalars and enums imported from another proto file
+// use scalar-style accessors. Same-file enums fall through to the
+// message-like branch to preserve compatibility with the reference output,
+// which models locally-defined enums as null-defaulting references.
 func (g *generator) isMessageLikeType(f *ast.Field) bool {
 	if _, ok := scalarTypeMap[f.FieldType]; ok {
 		return false
 	}
-	if f.IsEnum {
+	if f.IsEnum && f.SourceFile != "" && f.SourceFile != g.sourceName {
 		return false
 	}
 	return true

@@ -11,15 +11,17 @@ tasks:
       - task: ci
 
   build:
-    desc: Build the gogdproto binary into ./bin.
+    desc: Build all binaries into ./bin.
     cmds:
       - mkdir -p bin
       - go build -o {{.BIN}} ./cmd/gogdproto
+      - go build -o bin/protoc-gen-gdscript ./cmd/protoc-gen-gdscript
 
   install:
-    desc: Install gogdproto into $GOPATH/bin.
+    desc: Install gogdproto and protoc-gen-gdscript into $GOPATH/bin.
     cmds:
       - go install ./cmd/gogdproto
+      - go install ./cmd/protoc-gen-gdscript
 
   test:
     desc: Run unit tests.
