@@ -32,7 +32,7 @@ func (v *validator) validateField(
 	message *ast.Message,
 	fieldNumbers map[int]string,
 	fieldNames map[string]bool,
-	_ string,
+	scope string,
 ) {
 	if field.Number < minFieldNumber || field.Number > maxFieldNumber {
 		v.addError(
@@ -80,6 +80,8 @@ func (v *validator) validateField(
 	}
 
 	v.checkReservedConflicts(field.Name, field.Number, field.Line, field.Column, message)
+
+	v.validateFieldType(field.FieldType, field.Line, field.Column, scope, field.FullTypePath, field.SourceFile)
 }
 
 // validateMapField applies field-level checks to a map field and additionally
@@ -90,7 +92,7 @@ func (v *validator) validateMapField(
 	message *ast.Message,
 	fieldNumbers map[int]string,
 	fieldNames map[string]bool,
-	_ string,
+	scope string,
 ) {
 	if mapField.Number < minFieldNumber || mapField.Number > maxFieldNumber {
 		v.addError(
@@ -139,6 +141,9 @@ func (v *validator) validateMapField(
 	}
 
 	v.checkReservedConflicts(mapField.Name, mapField.Number, mapField.Line, mapField.Column, message)
+
+	v.validateFieldType(mapField.KeyType, mapField.Line, mapField.Column, scope, "", "")
+	v.validateFieldType(mapField.ValueType, mapField.Line, mapField.Column, scope, mapField.FullValueTypePath, mapField.ValueSourceFile)
 }
 
 // checkReservedConflicts reports conflicts between a field's number/name and

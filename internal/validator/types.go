@@ -1,6 +1,9 @@
 package validator
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/cafecito-games/gogdproto/internal/ast"
 )
 
@@ -29,4 +32,55 @@ func (v *validator) buildTypeRegistry(message *ast.Message, prefix string) {
 		v.definedTypes[nestedPrefix] = true
 		v.buildTypeRegistry(nested, nestedPrefix)
 	}
+}
+
+// validateFieldType resolves a type reference against the registered type
+// set. Scalar types and types whose source file has been set by the importer
+// are accepted unconditionally. Other references are normalized (leading "."
+// stripped), looked up directly, then resolved through the file's package
+// prefix and finally walked up the enclosing scope to permit nested-type
+// shorthand. Unresolved references produce an "Undefined type" error.
+func (v *validator) validateFieldType(fieldType string, line, column int, currentScope, fullTypePath, sourceFile string) {
+	if scalarTypes[fieldType] {
+		return
+	}
+
+	if sourceFile != "" {
+		return
+	}
+
+	normalizedType := strings.TrimLeft(fieldType, ".")
+
+	if fullTypePath != "" && v.definedTypes[fullTypePath] {
+		return
+	}
+
+	if v.definedTypes[normalizedType] {
+		return
+	}
+
+	if v.file.Package != "" {
+		packagePrefix := v.file.Package + "."
+		if strings.HasPrefix(normalizedType, packagePrefix) {
+			packageRelative := normalizedType[len(packagePrefix):]
+			if v.definedTypes[packageRelative] {
+				return
+			}
+		}
+	}
+
+	if currentScope != "" {
+		typeParts := strings.Split(normalizedType, ".")
+		scopeParts := strings.Split(currentScope, ".")
+		for index := len(scopeParts); index > 0; index-- {
+			candidateParts := append([]string{}, scopeParts[:index]...)
+			candidateParts = append(candidateParts, typeParts...)
+			candidate := strings.Join(candidateParts, ".")
+			if v.definedTypes[candidate] {
+				return
+			}
+		}
+	}
+
+	v.addError(fmt.Sprintf("Undefined type %q", fieldType), line, column)
 }

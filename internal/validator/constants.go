@@ -25,8 +25,6 @@ var validMapKeyTypes = map[string]bool{
 }
 
 // scalarTypes lists every scalar type recognised by proto3.
-//
-//nolint:unused // consumed by subsequent validator tasks.
 var scalarTypes = map[string]bool{
 	"double":   true,
 	"float":    true,

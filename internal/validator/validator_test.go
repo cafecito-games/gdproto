@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cafecito-games/gogdproto/internal/ast"
 	"github.com/cafecito-games/gogdproto/internal/lexer"
 	"github.com/cafecito-games/gogdproto/internal/parser"
 	"github.com/cafecito-games/gogdproto/internal/validator"
@@ -233,5 +234,67 @@ func TestMapInvalidKey(t *testing.T) {
 	errs := validate(t, src)
 	if len(errs) != 1 || !strings.Contains(errs[0].Message, "Invalid map key type") {
 		t.Errorf("got %+v", errs)
+	}
+}
+
+func TestScalarTypesValid(t *testing.T) {
+	src := `syntax = "proto3"; message F { int32 a = 1; string b = 2; bytes c = 3; }`
+	if errs := validate(t, src); len(errs) != 0 {
+		t.Errorf("got %+v", errs)
+	}
+}
+
+func TestSimpleMessageTypeValid(t *testing.T) {
+	src := `syntax = "proto3"; message Inner {} message F { Inner i = 1; }`
+	if errs := validate(t, src); len(errs) != 0 {
+		t.Errorf("got %+v", errs)
+	}
+}
+
+func TestDottedTypeValid(t *testing.T) {
+	src := `syntax = "proto3"; message Outer { message Inner {} } message F { Outer.Inner v = 1; }`
+	if errs := validate(t, src); len(errs) != 0 {
+		t.Errorf("got %+v", errs)
+	}
+}
+
+func TestAbsoluteTypeValid(t *testing.T) {
+	src := `syntax = "proto3"; package pkg; message Inner {} message F { .pkg.Inner v = 1; }`
+	if errs := validate(t, src); len(errs) != 0 {
+		t.Errorf("got %+v", errs)
+	}
+}
+
+func TestUndefinedTypeError(t *testing.T) {
+	src := `syntax = "proto3"; message F { Missing v = 1; }`
+	errs := validate(t, src)
+	if len(errs) != 1 || !strings.Contains(errs[0].Message, "Undefined type") {
+		t.Errorf("got %+v", errs)
+	}
+}
+
+func TestImportedFieldSkipsLocalResolution(t *testing.T) {
+	importedAST := &ast.ProtoFile{
+		Position: ast.Position{Line: 1, Column: 1},
+		Syntax:   "proto3",
+		Messages: []*ast.Message{
+			{
+				Position: ast.Position{Line: 2, Column: 1},
+				Name:     "F",
+				Fields: []*ast.Field{
+					{
+						Position:   ast.Position{Line: 3, Column: 1},
+						FieldType:  "External",
+						Name:       "x",
+						Number:     1,
+						SourceFile: "other.proto",
+					},
+				},
+			},
+		},
+	}
+	errs := validator.Validate(importedAST, "test.proto")
+	if len(errs) != 0 {
+		t.Errorf("expected 0 errors for imported field, got %+v", errs)
 	}
 }
