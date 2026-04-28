@@ -107,7 +107,7 @@ func runCompile(cmd *cobra.Command, inputPath, outputPath string) error {
 		return fmt.Errorf("validation failed")
 	}
 
-	cls, err := generator.Generate(file, filepath.Base(inputPath))
+	cls, err := generator.Generate(file, sourceNameForCLI(inputPath))
 	if err != nil {
 		return err
 	}
@@ -133,4 +133,28 @@ func runCompile(cmd *cobra.Command, inputPath, outputPath string) error {
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "✓ Generated %s\n", outputPath)
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "✓ Generated %s\n", siblingPath)
 	return nil
+}
+
+func sourceNameForCLI(inputPath string) string {
+	cleaned := filepath.Clean(inputPath)
+	if !filepath.IsAbs(cleaned) {
+		parts := strings.Split(filepath.ToSlash(cleaned), "/")
+		filtered := parts[:0]
+		for _, part := range parts {
+			if part == "." || part == ".." || part == "" {
+				continue
+			}
+			filtered = append(filtered, part)
+		}
+		if len(filtered) == 0 {
+			return filepath.ToSlash(filepath.Base(cleaned))
+		}
+		return strings.Join(filtered, "/")
+	}
+	dir := filepath.Base(filepath.Dir(cleaned))
+	base := filepath.Base(cleaned)
+	if dir == "." || dir == string(filepath.Separator) || dir == "" {
+		return filepath.ToSlash(base)
+	}
+	return filepath.ToSlash(filepath.Join(dir, base))
 }

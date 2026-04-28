@@ -100,7 +100,7 @@ func (g *generator) fromTextFieldCase(f *ast.Field, oneofGroup string) string {
 	b.WriteString("\n")
 
 	switch {
-	case f.Repeated && isMessageType(g, f.FieldType):
+	case f.Repeated && isMessageType(f):
 		b.WriteString(fromTextRepeatedMessageBody(f))
 	case f.Repeated && f.FieldType == "string":
 		b.WriteString(fromTextStringBody(f, oneofGroup, true))
@@ -113,9 +113,9 @@ func (g *generator) fromTextFieldCase(f *ast.Field, oneofGroup string) string {
 		b.WriteString(fromTextFloatBody(f, oneofGroup))
 	case f.FieldType == "bool":
 		b.WriteString(fromTextBoolBody(f, oneofGroup))
-	case isEnumType(g, f.FieldType):
+	case isEnumType(f):
 		b.WriteString(fromTextEnumBody(f, oneofGroup))
-	case isMessageType(g, f.FieldType):
+	case isMessageType(f):
 		b.WriteString(fromTextMessageBody(f, oneofGroup))
 	default:
 		// Integer-like scalars: int32, int64, uint*, sint*, fixed*.
@@ -124,15 +124,15 @@ func (g *generator) fromTextFieldCase(f *ast.Field, oneofGroup string) string {
 	return b.String()
 }
 
-func isEnumType(g *generator, fieldType string) bool {
-	return g.enumTypes[fieldType]
+func isEnumType(f *ast.Field) bool {
+	return f.IsEnum
 }
 
-func isMessageType(g *generator, fieldType string) bool {
-	if _, ok := scalarTypeMap[fieldType]; ok {
+func isMessageType(f *ast.Field) bool {
+	if _, ok := scalarTypeMap[f.FieldType]; ok {
 		return false
 	}
-	return !g.enumTypes[fieldType]
+	return !f.IsEnum
 }
 
 func oneofAssignment(oneofGroup, fieldName string) string {
@@ -392,13 +392,13 @@ func (g *generator) generateEnumNameAndParserHelpers(m *ast.Message) []gdast.Nod
 func (g *generator) collectEnumFields(m *ast.Message) []*ast.Field {
 	var fields []*ast.Field
 	for _, f := range m.Fields {
-		if isEnumType(g, f.FieldType) || f.IsEnum {
+		if isEnumType(f) {
 			fields = append(fields, f)
 		}
 	}
 	for _, oneof := range m.Oneofs {
 		for _, f := range oneof.Fields {
-			if isEnumType(g, f.FieldType) || f.IsEnum {
+			if isEnumType(f) {
 				fields = append(fields, f)
 			}
 		}
@@ -475,21 +475,23 @@ func (g *generator) findEnum(name string) *ast.Enum {
 		}
 	}
 	for _, m := range g.file.Messages {
-		if e := findNestedEnum(m, name); e != nil {
+		if e := findNestedEnum(m, name, m.Name); e != nil {
 			return e
 		}
 	}
 	return nil
 }
 
-func findNestedEnum(m *ast.Message, name string) *ast.Enum {
+func findNestedEnum(m *ast.Message, name, prefix string) *ast.Enum {
 	for _, e := range m.NestedEnums {
-		if e.Name == name {
+		fullName := prefix + "." + e.Name
+		if e.Name == name || fullName == name {
 			return e
 		}
 	}
 	for _, nested := range m.NestedMessages {
-		if e := findNestedEnum(nested, name); e != nil {
+		nestedPrefix := prefix + "." + nested.Name
+		if e := findNestedEnum(nested, name, nestedPrefix); e != nil {
 			return e
 		}
 	}

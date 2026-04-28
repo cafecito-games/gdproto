@@ -228,7 +228,7 @@ func (g *generator) singleFieldDeserialization(f *ast.Field) []gdast.Statement {
 		return bytesAssign(fieldVar)
 	default:
 		// Treated as a message type (also covers enum-typed nullable refs).
-		typeName := g.typeName(f.FieldType)
+		typeName := g.renderedFieldType(f)
 		return messageAssign(fieldVar, typeName)
 	}
 }
@@ -248,7 +248,7 @@ func (g *generator) repeatedFieldDeserialization(f *ast.Field) []gdast.Statement
 			// Numeric scalar - covers varint, zigzag, fixed widths.
 			return repeatedNumericPackedOrUnpacked(fieldVar, f.FieldType)
 		}
-		typeName := g.typeName(f.FieldType)
+		typeName := g.renderedFieldType(f)
 		return repeatedMessageAppend(fieldVar, typeName)
 	}
 }
@@ -565,8 +565,8 @@ func mapFieldDeserialization(mf *ast.MapField) []gdast.Statement {
 			InitialValue: gdast.Lit(0),
 		},
 		gdast.EmptyLine{},
-		inferredVar("map_key", mapDefault(mf.KeyType)),
-		inferredVar("map_value", mapDefault(mf.ValueType)),
+		inferredVar("map_key", mapDefault(mf.KeyType, false)),
+		inferredVar("map_value", mapDefault(mf.ValueType, mf.ValueIsEnum)),
 		gdast.EmptyLine{},
 		gdast.WhileStatement{
 			Condition: gdast.Lt(gdast.V("entry_offset"), gdast.RawExpression{Code: "entry_data.size()"}),
@@ -609,14 +609,14 @@ func mapEntryLoopBody(mf *ast.MapField) []gdast.Statement {
 					Pattern: "1",
 					Body: append(
 						[]gdast.Statement{gdast.Comment{Text: "Entry key"}},
-						mapEntryDecode("map_key", mf.KeyType)...,
+						mapEntryDecode("map_key", mf.KeyType, false, gdscriptScalarType(mf.KeyType))...,
 					),
 				},
 				{
 					Pattern: "2",
 					Body: append(
 						[]gdast.Statement{gdast.Comment{Text: "Entry value"}},
-						mapEntryDecode("map_value", mf.ValueType)...,
+						mapEntryDecode("map_value", mf.ValueType, mf.ValueIsEnum, gRenderedMapType(mf))...,
 					),
 				},
 			},
@@ -626,7 +626,10 @@ func mapEntryLoopBody(mf *ast.MapField) []gdast.Statement {
 
 // mapEntryDecode produces the inline decode for a single map-entry field,
 // reading from `entry_data`/`entry_offset` and assigning into target.
-func mapEntryDecode(target, protoType string) []gdast.Statement {
+func mapEntryDecode(target, protoType string, isEnum bool, renderedType string) []gdast.Statement {
+	if isEnum {
+		return mapVarintAssign(target, false)
+	}
 	switch protoType {
 	case "int32", "int64", "uint32", "uint64", "bool":
 		return mapVarintAssign(target, protoType == "bool")
@@ -652,7 +655,7 @@ func mapEntryDecode(target, protoType string) []gdast.Statement {
 		return mapBytesAssign(target)
 	default:
 		// Map values may be messages.
-		return mapMessageAssign(target, protoType)
+		return mapMessageAssign(target, renderedType)
 	}
 }
 
@@ -805,9 +808,22 @@ func mapMessageAssign(target, typeName string) []gdast.Statement {
 
 // mapDefault returns the literal zero value used to initialize the running
 // `map_key` / `map_value` variables before the entry-loop populates them.
-func mapDefault(protoType string) string {
+func mapDefault(protoType string, isEnum bool) string {
+	if isEnum {
+		return "0"
+	}
 	if def, ok := scalarDefaultMap[protoType]; ok {
 		return def
 	}
 	return "null"
+}
+
+func gRenderedMapType(mf *ast.MapField) string {
+	if t, ok := scalarTypeMap[mf.ValueType]; ok {
+		return t
+	}
+	if mf.ValueSourceFile == "" {
+		return mf.ValueType
+	}
+	return wrapperClassName(mf.ValueSourceFile) + "." + mf.ValueType
 }

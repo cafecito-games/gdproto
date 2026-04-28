@@ -14,6 +14,7 @@ type importedType struct {
 	SourceFile string
 	IsEnum     bool
 	FullName   string
+	ShortName  string
 }
 
 // ResolveExternal walks file's imports, parses them via fs, builds a
@@ -78,11 +79,16 @@ func collectImportedTypes(out map[string]importedType, visited map[string]bool, 
 		prefix = impFile.Package + "."
 	}
 	for _, m := range impFile.Messages {
-		collectFromMessage(out, m, prefix, path)
+		collectFromMessage(out, m, prefix, "", path)
 	}
 	for _, e := range impFile.Enums {
 		fullName := prefix + e.Name
-		out[fullName] = importedType{SourceFile: path, IsEnum: true, FullName: fullName}
+		out[fullName] = importedType{
+			SourceFile: path,
+			IsEnum:     true,
+			FullName:   fullName,
+			ShortName:  e.Name,
+		}
 	}
 	for _, nested := range impFile.Imports {
 		if nested.Public {
@@ -93,16 +99,31 @@ func collectImportedTypes(out map[string]importedType, visited map[string]bool, 
 
 // collectFromMessage recursively records a message and all of its
 // nested messages and enums.
-func collectFromMessage(out map[string]importedType, m *ast.Message, prefix, sourceFile string) {
+func collectFromMessage(out map[string]importedType, m *ast.Message, prefix, relativePrefix, sourceFile string) {
 	fullName := prefix + m.Name
-	out[fullName] = importedType{SourceFile: sourceFile, IsEnum: false, FullName: fullName}
+	shortName := m.Name
+	if relativePrefix != "" {
+		shortName = relativePrefix + "." + m.Name
+	}
+	out[fullName] = importedType{
+		SourceFile: sourceFile,
+		IsEnum:     false,
+		FullName:   fullName,
+		ShortName:  shortName,
+	}
 	innerPrefix := fullName + "."
+	innerRelativePrefix := shortName + "."
 	for _, n := range m.NestedMessages {
-		collectFromMessage(out, n, innerPrefix, sourceFile)
+		collectFromMessage(out, n, innerPrefix, innerRelativePrefix[:len(innerRelativePrefix)-1], sourceFile)
 	}
 	for _, e := range m.NestedEnums {
 		inner := innerPrefix + e.Name
-		out[inner] = importedType{SourceFile: sourceFile, IsEnum: true, FullName: inner}
+		out[inner] = importedType{
+			SourceFile: sourceFile,
+			IsEnum:     true,
+			FullName:   inner,
+			ShortName:  innerRelativePrefix + e.Name,
+		}
 	}
 }
 
@@ -147,6 +168,7 @@ func resolveOne(typeName, fullPath string, lookup map[string]importedType) (impo
 func annotateMessage(m *ast.Message, lookup map[string]importedType) {
 	for _, f := range m.Fields {
 		if t, ok := resolveOne(f.FieldType, f.FullTypePath, lookup); ok {
+			f.FieldType = t.ShortName
 			f.SourceFile = t.SourceFile
 			f.FullTypePath = t.FullName
 			f.IsEnum = t.IsEnum
@@ -154,6 +176,7 @@ func annotateMessage(m *ast.Message, lookup map[string]importedType) {
 	}
 	for _, mp := range m.Maps {
 		if t, ok := resolveOne(mp.ValueType, mp.FullValueTypePath, lookup); ok {
+			mp.ValueType = t.ShortName
 			mp.ValueSourceFile = t.SourceFile
 			mp.FullValueTypePath = t.FullName
 			mp.ValueIsEnum = t.IsEnum
@@ -162,6 +185,7 @@ func annotateMessage(m *ast.Message, lookup map[string]importedType) {
 	for _, o := range m.Oneofs {
 		for _, f := range o.Fields {
 			if t, ok := resolveOne(f.FieldType, f.FullTypePath, lookup); ok {
+				f.FieldType = t.ShortName
 				f.SourceFile = t.SourceFile
 				f.FullTypePath = t.FullName
 				f.IsEnum = t.IsEnum

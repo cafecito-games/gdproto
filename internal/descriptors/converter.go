@@ -34,6 +34,9 @@ type converter struct {
 	// typeRegistry maps a fully-qualified type path (no leading dot) to the
 	// proto file in which it was declared. Used to populate Field.SourceFile.
 	typeRegistry map[string]string
+	// typeNames maps a fully-qualified type path (no leading dot) to the type
+	// name relative to its defining file.
+	typeNames map[string]string
 }
 
 // FromCodeGeneratorRequest converts every FileDescriptorProto in the request
@@ -62,12 +65,15 @@ func FromFileDescriptorProto(fdp *descriptorpb.FileDescriptorProto) (*ast.ProtoF
 }
 
 func newConverter(allFiles []*descriptorpb.FileDescriptorProto) *converter {
-	c := &converter{typeRegistry: map[string]string{}}
+	c := &converter{
+		typeRegistry: map[string]string{},
+		typeNames:    map[string]string{},
+	}
 	for _, fd := range allFiles {
 		pkg := fd.GetPackage()
 		source := fd.GetName()
 		for _, m := range fd.GetMessageType() {
-			c.registerMessage(m, pkg, source, "")
+			c.registerMessage(m, pkg, source, "", "")
 		}
 		for _, e := range fd.GetEnumType() {
 			full := e.GetName()
@@ -75,12 +81,13 @@ func newConverter(allFiles []*descriptorpb.FileDescriptorProto) *converter {
 				full = pkg + "." + full
 			}
 			c.typeRegistry[full] = source
+			c.typeNames[full] = e.GetName()
 		}
 	}
 	return c
 }
 
-func (c *converter) registerMessage(m *descriptorpb.DescriptorProto, pkg, source, parent string) {
+func (c *converter) registerMessage(m *descriptorpb.DescriptorProto, pkg, source, parent, relativeParent string) {
 	var full string
 	switch {
 	case parent != "":
@@ -90,15 +97,22 @@ func (c *converter) registerMessage(m *descriptorpb.DescriptorProto, pkg, source
 	default:
 		full = m.GetName()
 	}
+	relative := m.GetName()
+	if relativeParent != "" {
+		relative = relativeParent + "." + m.GetName()
+	}
 	c.typeRegistry[full] = source
+	c.typeNames[full] = relative
 	for _, nested := range m.GetNestedType() {
 		if nested.GetOptions().GetMapEntry() {
 			continue
 		}
-		c.registerMessage(nested, pkg, source, full)
+		c.registerMessage(nested, pkg, source, full, relative)
 	}
 	for _, e := range m.GetEnumType() {
-		c.typeRegistry[full+"."+e.GetName()] = source
+		enumFull := full + "." + e.GetName()
+		c.typeRegistry[enumFull] = source
+		c.typeNames[enumFull] = relative + "." + e.GetName()
 	}
 }
 
@@ -126,7 +140,7 @@ func (c *converter) convertFile(fd *descriptorpb.FileDescriptorProto) (*ast.Prot
 		file.Enums = append(file.Enums, c.convertEnum(e))
 	}
 	for _, m := range fd.GetMessageType() {
-		msg, err := c.convertMessage(m)
+		msg, err := c.convertMessage(m, fd.GetName(), m.GetName())
 		if err != nil {
 			return nil, err
 		}
@@ -135,7 +149,7 @@ func (c *converter) convertFile(fd *descriptorpb.FileDescriptorProto) (*ast.Prot
 	return file, nil
 }
 
-func (c *converter) convertMessage(d *descriptorpb.DescriptorProto) (*ast.Message, error) {
+func (c *converter) convertMessage(d *descriptorpb.DescriptorProto, sourceFile, relativeScope string) (*ast.Message, error) {
 	msg := &ast.Message{
 		Name:    d.GetName(),
 		Options: map[string]any{},
@@ -162,7 +176,7 @@ func (c *converter) convertMessage(d *descriptorpb.DescriptorProto) (*ast.Messag
 			f.GetType() == descriptorpb.FieldDescriptorProto_TYPE_MESSAGE {
 			short := lastSegment(f.GetTypeName())
 			if entry, ok := mapEntries[short]; ok {
-				mf, err := c.convertMapField(f, entry)
+				mf, err := c.convertMapField(f, entry, sourceFile, relativeScope)
 				if err != nil {
 					return nil, err
 				}
@@ -171,7 +185,7 @@ func (c *converter) convertMessage(d *descriptorpb.DescriptorProto) (*ast.Messag
 			}
 		}
 
-		field := c.convertField(f)
+		field := c.convertField(f, sourceFile, relativeScope)
 		if f.OneofIndex != nil {
 			idx := int(f.GetOneofIndex())
 			if idx >= 0 && idx < len(oneofNames) {
@@ -226,7 +240,8 @@ func (c *converter) convertMessage(d *descriptorpb.DescriptorProto) (*ast.Messag
 		if nested.GetOptions().GetMapEntry() {
 			continue
 		}
-		nm, err := c.convertMessage(nested)
+		nestedScope := relativeScope + "." + nested.GetName()
+		nm, err := c.convertMessage(nested, sourceFile, nestedScope)
 		if err != nil {
 			return nil, err
 		}
@@ -253,7 +268,7 @@ func (c *converter) convertMessage(d *descriptorpb.DescriptorProto) (*ast.Messag
 	return msg, nil
 }
 
-func (c *converter) convertField(f *descriptorpb.FieldDescriptorProto) *ast.Field {
+func (c *converter) convertField(f *descriptorpb.FieldDescriptorProto, sourceFile, relativeScope string) *ast.Field {
 	field := &ast.Field{
 		Name:     f.GetName(),
 		Number:   int(f.GetNumber()),
@@ -267,8 +282,11 @@ func (c *converter) convertField(f *descriptorpb.FieldDescriptorProto) *ast.Fiel
 		descriptorpb.FieldDescriptorProto_TYPE_ENUM:
 		fullPath := strings.TrimPrefix(f.GetTypeName(), ".")
 		field.FullTypePath = fullPath
-		field.FieldType = lastSegment(fullPath)
+		field.FieldType = c.typeNames[fullPath]
 		field.SourceFile = c.typeRegistry[fullPath]
+		if field.SourceFile == sourceFile {
+			field.FieldType = localReferenceName(field.FieldType, relativeScope)
+		}
 		field.IsEnum = f.GetType() == descriptorpb.FieldDescriptorProto_TYPE_ENUM
 	default:
 		if name, ok := scalarTypeNames[f.GetType()]; ok {
@@ -303,7 +321,7 @@ func (c *converter) convertEnum(e *descriptorpb.EnumDescriptorProto) *ast.Enum {
 	return out
 }
 
-func (c *converter) convertMapField(f *descriptorpb.FieldDescriptorProto, entry *descriptorpb.DescriptorProto) (*ast.MapField, error) {
+func (c *converter) convertMapField(f *descriptorpb.FieldDescriptorProto, entry *descriptorpb.DescriptorProto, sourceFile, relativeScope string) (*ast.MapField, error) {
 	if len(entry.GetField()) != 2 {
 		return nil, &mapEntryError{name: f.GetName()}
 	}
@@ -339,8 +357,11 @@ func (c *converter) convertMapField(f *descriptorpb.FieldDescriptorProto, entry 
 		descriptorpb.FieldDescriptorProto_TYPE_ENUM:
 		fullPath := strings.TrimPrefix(valueDescriptor.GetTypeName(), ".")
 		mf.FullValueTypePath = fullPath
-		mf.ValueType = lastSegment(fullPath)
+		mf.ValueType = c.typeNames[fullPath]
 		mf.ValueSourceFile = c.typeRegistry[fullPath]
+		if mf.ValueSourceFile == sourceFile {
+			mf.ValueType = localReferenceName(mf.ValueType, relativeScope)
+		}
 		mf.ValueIsEnum = valueDescriptor.GetType() == descriptorpb.FieldDescriptorProto_TYPE_ENUM
 	default:
 		if name, ok := scalarTypeNames[valueDescriptor.GetType()]; ok {
@@ -361,12 +382,20 @@ func (e *mapEntryError) Error() string {
 	return "invalid map entry for field " + e.name
 }
 
-// lastSegment returns the substring after the last '.' in name, or the whole
-// string if there is no '.'. Used to pull a short type name out of a
-// descriptor's fully-qualified TypeName (e.g., ".pkg.Outer.Entry" -> "Entry").
 func lastSegment(name string) string {
 	if idx := strings.LastIndex(name, "."); idx >= 0 {
 		return name[idx+1:]
 	}
 	return name
+}
+
+func localReferenceName(typeName, relativeScope string) string {
+	if relativeScope == "" {
+		return typeName
+	}
+	prefix := relativeScope + "."
+	if strings.HasPrefix(typeName, prefix) {
+		return strings.TrimPrefix(typeName, prefix)
+	}
+	return typeName
 }
