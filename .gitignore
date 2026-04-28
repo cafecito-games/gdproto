@@ -19,3 +19,6 @@ coverage.html
 
 # Pre-commit
 .prek-cache/
+
+# Claude Code session-local state
+.claude/
