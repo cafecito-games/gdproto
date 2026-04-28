@@ -194,6 +194,106 @@ func TestGenerateAccessorBodies(t *testing.T) {
 	}
 }
 
+func TestGenerateToBytesScalar(t *testing.T) {
+	file := &ast.ProtoFile{
+		Syntax: "proto3",
+		Messages: []*ast.Message{{
+			Name: "Position",
+			Fields: []*ast.Field{
+				{FieldType: "float", Name: "x", Number: 1},
+				{FieldType: "float", Name: "y", Number: 2},
+				{FieldType: "float", Name: "z", Number: 3},
+			},
+		}},
+	}
+	cls, err := generator.Generate(file, "example.proto")
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	out := cls.ToGDScript(0)
+	for _, want := range []string{
+		"func to_bytes() -> PackedByteArray:",
+		`"""Serialize message to bytes."""`,
+		"var result: PackedByteArray = PackedByteArray()",
+		"# Field x",
+		"if _x != 0.0:",
+		"result.append_array(PBCore.encode_varint(13))",
+		"result.append_array(PBCore.encode_float(_x))",
+		"# Field z",
+		"if _z != 0.0:",
+		"result.append_array(PBCore.encode_varint(29))",
+		"return result",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("to_bytes scalar output missing fragment %q\n--- full output ---\n%s", want, out)
+		}
+	}
+}
+
+func TestGenerateToBytesStringRepeatedMessageOneofMap(t *testing.T) {
+	file := &ast.ProtoFile{
+		Syntax: "proto3",
+		Messages: []*ast.Message{{
+			Name: "Player",
+			Fields: []*ast.Field{
+				{FieldType: "string", Name: "username", Number: 1},
+				{FieldType: "Position", Name: "position", Number: 2},
+				{FieldType: "string", Name: "inventory", Number: 3, Repeated: true},
+			},
+			Oneofs: []*ast.Oneof{{
+				Name: "contact",
+				Fields: []*ast.Field{
+					{FieldType: "string", Name: "email", Number: 4},
+				},
+			}},
+			Maps: []*ast.MapField{{
+				Name:      "stats",
+				KeyType:   "string",
+				ValueType: "int32",
+				Number:    5,
+			}},
+			NestedMessages: []*ast.Message{{
+				Name: "Position",
+				Fields: []*ast.Field{
+					{FieldType: "float", Name: "x", Number: 1},
+				},
+			}},
+		}},
+	}
+	cls, err := generator.Generate(file, "example.proto")
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	out := cls.ToGDScript(0)
+	for _, want := range []string{
+		"# Field username",
+		`if _username != "":`,
+		"var str_data: PackedByteArray = PBCore.encode_string(_username)",
+		"# Field position",
+		"if _position != null:",
+		"var msg_data: PackedByteArray = _position.to_bytes()",
+		"# Field inventory (repeated)",
+		"for item in _inventory:",
+		"# Field email",
+		`if _email != "":`,
+		"# Map field stats",
+		"for key in _stats:",
+		"var value = _stats[key]",
+		"# Build map entry",
+		"var entry: PackedByteArray = PackedByteArray()",
+		"# Entry field 1: key",
+		"var key_data: PackedByteArray = PBCore.encode_string(key)",
+		"# Entry field 2: value",
+		"entry.append_array(PBCore.encode_varint(value))",
+		"# Append entry to result",
+		"result.append_array(PBCore.encode_varint(42))",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("to_bytes complex output missing fragment %q\n--- full output ---\n%s", want, out)
+		}
+	}
+}
+
 func minInt(a, b int) int {
 	if a < b {
 		return a

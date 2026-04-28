@@ -57,6 +57,13 @@ func (g *generator) generateMessage(m *ast.Message) *gdast.ClassDefinition {
 	statements = append(statements, gdast.Comment{Text: "Accessors"})
 	statements = append(statements, g.generateAccessors(m)...)
 
+	blank()
+	blank()
+	statements = append(statements,
+		gdast.Comment{Text: "Serialization"},
+		g.generateToBytes(m),
+	)
+
 	return &gdast.ClassDefinition{
 		Name:            m.Name,
 		Extends:         "RefCounted",

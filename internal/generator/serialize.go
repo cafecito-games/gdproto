@@ -1,0 +1,253 @@
+package generator
+
+import (
+	"fmt"
+
+	"github.com/cafecito-games/gogdproto/internal/ast"
+	"github.com/cafecito-games/gogdproto/internal/gdast"
+)
+
+// generateToBytes builds the `to_bytes` method that serializes a message
+// instance to a PackedByteArray using the proto wire format.
+func (g *generator) generateToBytes(m *ast.Message) gdast.Function {
+	body := []gdast.Statement{
+		gdast.DocString{Text: "Serialize message to bytes."},
+		gdast.VarDeclaration{
+			Name:         "result",
+			TypeHint:     "PackedByteArray",
+			InitialValue: gdast.Call("PackedByteArray"),
+		},
+		gdast.EmptyLine{},
+	}
+
+	for _, f := range m.Fields {
+		body = append(body, g.fieldSerialization(f)...)
+		body = append(body, gdast.EmptyLine{})
+	}
+	for _, oneof := range m.Oneofs {
+		for _, f := range oneof.Fields {
+			body = append(body, g.fieldSerialization(f)...)
+			body = append(body, gdast.EmptyLine{})
+		}
+	}
+	for _, mf := range m.Maps {
+		body = append(body, g.mapSerialization(mf)...)
+		body = append(body, gdast.EmptyLine{})
+	}
+
+	body = append(body,
+		gdast.EmptyLine{},
+		gdast.Ret(gdast.V("result")),
+	)
+
+	return gdast.Function{
+		Name:       "to_bytes",
+		ReturnType: "PackedByteArray",
+		Body:       body,
+	}
+}
+
+// fieldSerialization produces the comment and conditional/loop block that
+// serializes a single regular or oneof field.
+func (g *generator) fieldSerialization(f *ast.Field) []gdast.Statement {
+	tag := (f.Number << 3) | wireType(f.FieldType)
+	fieldVar := "_" + f.Name
+
+	if f.Repeated {
+		forBody := []gdast.Statement{
+			gdast.RawStatement{Code: fmt.Sprintf("result.append_array(PBCore.encode_varint(%d))", tag)},
+		}
+		forBody = append(forBody, valueSerialization("result", "item", f.FieldType)...)
+		return []gdast.Statement{
+			gdast.Comment{Text: fmt.Sprintf("Field %s (repeated)", f.Name)},
+			gdast.ForStatement{
+				Variable: "item",
+				Iterable: gdast.V(fieldVar),
+				Body:     forBody,
+			},
+		}
+	}
+
+	condition := fieldDefaultCondition(fieldVar, f.FieldType)
+
+	ifBody := []gdast.Statement{
+		gdast.RawStatement{Code: fmt.Sprintf("result.append_array(PBCore.encode_varint(%d))", tag)},
+	}
+	ifBody = append(ifBody, valueSerialization("result", fieldVar, f.FieldType)...)
+
+	return []gdast.Statement{
+		gdast.Comment{Text: fmt.Sprintf("Field %s", f.Name)},
+		gdast.IfStatement{
+			Condition: condition,
+			Body:      ifBody,
+		},
+	}
+}
+
+// fieldDefaultCondition returns the GDScript expression that guards the
+// serialization of a non-repeated field. Scalar types compare against their
+// proto3 zero value; message-like types (including enum-typed fields stored
+// as nullable references in the generated output) compare against null.
+func fieldDefaultCondition(fieldVar, protoType string) gdast.Expression {
+	if def, ok := scalarDefaultMap[protoType]; ok {
+		return gdast.Ne(gdast.V(fieldVar), gdast.RawExpression{Code: def})
+	}
+	return gdast.Ne(gdast.V(fieldVar), gdast.Lit(nil))
+}
+
+// valueSerialization emits the encode-call statements that append the bytes
+// for a single value of the given proto type to the named target buffer.
+// Target is typically "result" or "entry"; valueExpression is the GDScript
+// expression evaluating to the value to encode.
+func valueSerialization(target, valueExpression, protoType string) []gdast.Statement {
+	switch protoType {
+	case "double":
+		return []gdast.Statement{rawf("%s.append_array(PBCore.encode_double(%s))", target, valueExpression)}
+	case "float":
+		return []gdast.Statement{rawf("%s.append_array(PBCore.encode_float(%s))", target, valueExpression)}
+	case "fixed32":
+		return []gdast.Statement{rawf("%s.append_array(PBCore.encode_fixed32(%s))", target, valueExpression)}
+	case "sfixed32":
+		return []gdast.Statement{rawf("%s.append_array(PBCore.encode_sfixed32(%s))", target, valueExpression)}
+	case "fixed64":
+		return []gdast.Statement{rawf("%s.append_array(PBCore.encode_fixed64(%s))", target, valueExpression)}
+	case "sfixed64":
+		return []gdast.Statement{rawf("%s.append_array(PBCore.encode_sfixed64(%s))", target, valueExpression)}
+	case "sint32":
+		return []gdast.Statement{rawf("%s.append_array(PBCore.encode_varint(PBCore.encode_zigzag32(%s)))", target, valueExpression)}
+	case "sint64":
+		return []gdast.Statement{rawf("%s.append_array(PBCore.encode_varint(PBCore.encode_zigzag64(%s)))", target, valueExpression)}
+	case "int32", "int64", "uint32", "uint64", "bool":
+		return []gdast.Statement{rawf("%s.append_array(PBCore.encode_varint(%s))", target, valueExpression)}
+	case "string":
+		return []gdast.Statement{
+			gdast.VarDeclaration{
+				Name:         "str_data",
+				TypeHint:     "PackedByteArray",
+				InitialValue: gdast.RawExpression{Code: fmt.Sprintf("PBCore.encode_string(%s)", valueExpression)},
+			},
+			rawf("%s.append_array(PBCore.encode_varint(str_data.size()))", target),
+			rawf("%s.append_array(str_data)", target),
+		}
+	case "bytes":
+		return []gdast.Statement{
+			rawf("%s.append_array(PBCore.encode_varint(%s.size()))", target, valueExpression),
+			rawf("%s.append_array(%s)", target, valueExpression),
+		}
+	default:
+		// Message types (and enum-typed fields, which are treated as nullable
+		// references in the generated output and therefore round-trip via
+		// to_bytes() like message values).
+		return []gdast.Statement{
+			gdast.VarDeclaration{
+				Name:         "msg_data",
+				TypeHint:     "PackedByteArray",
+				InitialValue: gdast.RawExpression{Code: fmt.Sprintf("%s.to_bytes()", valueExpression)},
+			},
+			rawf("%s.append_array(PBCore.encode_varint(msg_data.size()))", target),
+			rawf("%s.append_array(msg_data)", target),
+		}
+	}
+}
+
+// mapSerialization emits the comment and for-loop block that serializes a map
+// field as a sequence of length-delimited entry messages.
+func (g *generator) mapSerialization(mf *ast.MapField) []gdast.Statement {
+	fieldVar := "_" + mf.Name
+	tag := (mf.Number << 3) | wireTypeLengthDelimited
+	keyTag := (1 << 3) | wireType(mf.KeyType)
+	valueTag := (2 << 3) | wireType(mf.ValueType)
+
+	forBody := []gdast.Statement{
+		rawf("var value = %s[key]", fieldVar),
+		gdast.EmptyLine{},
+		gdast.Comment{Text: "Build map entry"},
+		gdast.VarDeclaration{
+			Name:         "entry",
+			TypeHint:     "PackedByteArray",
+			InitialValue: gdast.Call("PackedByteArray"),
+		},
+		gdast.EmptyLine{},
+		gdast.Comment{Text: "Entry field 1: key"},
+		rawf("entry.append_array(PBCore.encode_varint(%d))", keyTag),
+	}
+	forBody = append(forBody, mapEntryValueSerialization("key", mf.KeyType)...)
+	forBody = append(forBody,
+		gdast.EmptyLine{},
+		gdast.Comment{Text: "Entry field 2: value"},
+		rawf("entry.append_array(PBCore.encode_varint(%d))", valueTag),
+	)
+	forBody = append(forBody, mapEntryValueSerialization("value", mf.ValueType)...)
+	forBody = append(forBody,
+		gdast.EmptyLine{},
+		gdast.Comment{Text: "Append entry to result"},
+		rawf("result.append_array(PBCore.encode_varint(%d))", tag),
+		rawf("result.append_array(PBCore.encode_varint(entry.size()))"),
+		rawf("result.append_array(entry)"),
+	)
+
+	return []gdast.Statement{
+		gdast.Comment{Text: fmt.Sprintf("Map field %s", mf.Name)},
+		gdast.ForStatement{
+			Variable: "key",
+			Iterable: gdast.V(fieldVar),
+			Body:     forBody,
+		},
+	}
+}
+
+// mapEntryValueSerialization is a parallel of valueSerialization specialized
+// for map entry fields. Its variable names embed the entry-side prefix so
+// that a single entry can carry distinct buffers for the key and value.
+func mapEntryValueSerialization(varName, protoType string) []gdast.Statement {
+	switch protoType {
+	case "double":
+		return []gdast.Statement{rawf("entry.append_array(PBCore.encode_double(%s))", varName)}
+	case "float":
+		return []gdast.Statement{rawf("entry.append_array(PBCore.encode_float(%s))", varName)}
+	case "fixed32":
+		return []gdast.Statement{rawf("entry.append_array(PBCore.encode_fixed32(%s))", varName)}
+	case "sfixed32":
+		return []gdast.Statement{rawf("entry.append_array(PBCore.encode_sfixed32(%s))", varName)}
+	case "fixed64":
+		return []gdast.Statement{rawf("entry.append_array(PBCore.encode_fixed64(%s))", varName)}
+	case "sfixed64":
+		return []gdast.Statement{rawf("entry.append_array(PBCore.encode_sfixed64(%s))", varName)}
+	case "sint32":
+		return []gdast.Statement{rawf("entry.append_array(PBCore.encode_varint(PBCore.encode_zigzag32(%s)))", varName)}
+	case "sint64":
+		return []gdast.Statement{rawf("entry.append_array(PBCore.encode_varint(PBCore.encode_zigzag64(%s)))", varName)}
+	case "int32", "int64", "uint32", "uint64", "bool":
+		return []gdast.Statement{rawf("entry.append_array(PBCore.encode_varint(%s))", varName)}
+	case "string":
+		return []gdast.Statement{
+			gdast.VarDeclaration{
+				Name:         varName + "_data",
+				TypeHint:     "PackedByteArray",
+				InitialValue: gdast.RawExpression{Code: fmt.Sprintf("PBCore.encode_string(%s)", varName)},
+			},
+			rawf("entry.append_array(PBCore.encode_varint(%s_data.size()))", varName),
+			rawf("entry.append_array(%s_data)", varName),
+		}
+	case "bytes":
+		return []gdast.Statement{
+			rawf("entry.append_array(PBCore.encode_varint(%s.size()))", varName),
+			rawf("entry.append_array(%s)", varName),
+		}
+	default:
+		return []gdast.Statement{
+			gdast.VarDeclaration{
+				Name:         varName + "_msg_data",
+				TypeHint:     "PackedByteArray",
+				InitialValue: gdast.RawExpression{Code: fmt.Sprintf("%s.to_bytes()", varName)},
+			},
+			rawf("entry.append_array(PBCore.encode_varint(%s_msg_data.size()))", varName),
+			rawf("entry.append_array(%s_msg_data)", varName),
+		}
+	}
+}
+
+// rawf builds a RawStatement formatted like fmt.Sprintf.
+func rawf(format string, args ...any) gdast.RawStatement {
+	return gdast.RawStatement{Code: fmt.Sprintf(format, args...)}
+}
