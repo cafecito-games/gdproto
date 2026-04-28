@@ -33,6 +33,17 @@ func (l *lexer) run() ([]Token, error) {
 		ch := l.source[l.pos]
 		line, col := l.line, l.column
 
+		if ch == '/' && l.peek(1) == '/' {
+			l.skipLineComment()
+			continue
+		}
+		if ch == '/' && l.peek(1) == '*' {
+			if err := l.skipBlockComment(); err != nil {
+				return nil, err
+			}
+			continue
+		}
+
 		if t, ok := singleCharSymbol(ch); ok {
 			l.tokens = append(l.tokens, Token{Type: t, Value: string(ch), Line: line, Column: col})
 			l.advance()
@@ -291,6 +302,36 @@ func (l *lexer) readString() (Token, error) {
 		}
 
 		sb.WriteByte(ch)
+		l.advance()
+	}
+}
+
+func (l *lexer) skipLineComment() {
+	l.advance()
+	l.advance()
+	for l.pos < len(l.source) && l.source[l.pos] != '\n' {
+		l.advance()
+	}
+}
+
+func (l *lexer) skipBlockComment() error {
+	startLine, startCol := l.line, l.column
+	l.advance()
+	l.advance()
+	for {
+		if l.pos >= len(l.source) {
+			return &LexerError{
+				File:    l.filename,
+				Line:    startLine,
+				Column:  startCol,
+				Message: "Unterminated block comment",
+			}
+		}
+		if l.source[l.pos] == '*' && l.peek(1) == '/' {
+			l.advance()
+			l.advance()
+			return nil
+		}
 		l.advance()
 	}
 }

@@ -345,3 +345,54 @@ func TestStringInvalidEscape(t *testing.T) {
 		t.Errorf("got %v, want invalid escape error", err)
 	}
 }
+
+func TestLineComment(t *testing.T) {
+	tokens, err := lexer.Tokenize("// this is a comment\nmessage", "")
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	if len(tokens) != 2 || tokens[0].Type != lexer.TokenMessage {
+		t.Errorf("got %+v", tokens)
+	}
+}
+
+func TestLineCommentAtEOF(t *testing.T) {
+	tokens, err := lexer.Tokenize("message // comment", "")
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	if len(tokens) != 2 || tokens[0].Type != lexer.TokenMessage {
+		t.Errorf("got %+v", tokens)
+	}
+}
+
+func TestBlockComment(t *testing.T) {
+	tokens, err := lexer.Tokenize("/* comment */ message", "")
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	if len(tokens) != 2 || tokens[0].Type != lexer.TokenMessage {
+		t.Errorf("got %+v", tokens)
+	}
+}
+
+func TestMultilineBlockComment(t *testing.T) {
+	tokens, err := lexer.Tokenize("/* line 1\nline 2\nline 3 */ message", "")
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	if len(tokens) != 2 || tokens[0].Type != lexer.TokenMessage {
+		t.Errorf("got %+v", tokens)
+	}
+	if tokens[0].Line != 3 {
+		t.Errorf("message at line %d, want 3", tokens[0].Line)
+	}
+}
+
+func TestUnterminatedBlockComment(t *testing.T) {
+	_, err := lexer.Tokenize("/* unterminated", "")
+	var le *lexer.LexerError
+	if !errors.As(err, &le) || !strings.Contains(le.Message, "Unterminated block comment") {
+		t.Errorf("got %v, want unterminated block comment error", err)
+	}
+}
