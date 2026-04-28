@@ -107,7 +107,7 @@ func runCompile(cmd *cobra.Command, inputPath, outputPath string) error {
 		return fmt.Errorf("validation failed")
 	}
 
-	cls, err := generator.Generate(file, inputPath)
+	cls, err := generator.Generate(file, filepath.Base(inputPath))
 	if err != nil {
 		return err
 	}
