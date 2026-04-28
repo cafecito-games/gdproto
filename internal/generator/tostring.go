@@ -69,7 +69,7 @@ func (g *generator) toStringFieldStatement(f *ast.Field) gdast.Statement {
 			Op:    ">",
 			Right: gdast.Lit(0),
 		}
-	case f.IsEnum || g.enumTypes[f.FieldType]:
+	case f.IsEnum:
 		condition = gdast.BinaryOp{
 			Left:  gdast.V(fieldVar),
 			Op:    "!=",

@@ -104,7 +104,7 @@ func (g *generator) fieldSerialization(f *ast.Field) []gdast.Statement {
 
 // isEnumField reports whether f's declared type resolves to an enum.
 func (g *generator) isEnumField(f *ast.Field) bool {
-	return f.IsEnum || g.enumTypes[f.FieldType]
+	return f.IsEnum
 }
 
 // fieldWireType returns the wire-type code for a field, treating enum-typed
@@ -121,7 +121,7 @@ func (g *generator) fieldWireType(f *ast.Field) int {
 // mapValueWireType returns the wire-type code for a map value, treating
 // enum-typed values as varint (same fix as fieldWireType).
 func (g *generator) mapValueWireType(mf *ast.MapField) int {
-	if mf.ValueIsEnum || g.enumTypes[mf.ValueType] {
+	if mf.ValueIsEnum {
 		return wireTypeVarint
 	}
 	return wireType(mf.ValueType)
@@ -227,13 +227,13 @@ func (g *generator) mapSerialization(mf *ast.MapField) []gdast.Statement {
 		gdast.Comment{Text: "Entry field 1: key"},
 		rawf("entry.append_array(ProtoCoreUtils.encode_varint(%d))", keyTag),
 	}
-	forBody = append(forBody, mapEntryValueSerialization("key", mf.KeyType)...)
+	forBody = append(forBody, mapEntryValueSerialization("key", mf.KeyType, false)...)
 	forBody = append(forBody,
 		gdast.EmptyLine{},
 		gdast.Comment{Text: "Entry field 2: value"},
 		rawf("entry.append_array(ProtoCoreUtils.encode_varint(%d))", valueTag),
 	)
-	forBody = append(forBody, mapEntryValueSerialization("value", mf.ValueType)...)
+	forBody = append(forBody, mapEntryValueSerialization("value", mf.ValueType, mf.ValueIsEnum)...)
 	forBody = append(forBody,
 		gdast.EmptyLine{},
 		gdast.Comment{Text: "Append entry to result"},
@@ -255,7 +255,10 @@ func (g *generator) mapSerialization(mf *ast.MapField) []gdast.Statement {
 // mapEntryValueSerialization is a parallel of valueSerialization specialized
 // for map entry fields. Its variable names embed the entry-side prefix so
 // that a single entry can carry distinct buffers for the key and value.
-func mapEntryValueSerialization(varName, protoType string) []gdast.Statement {
+func mapEntryValueSerialization(varName, protoType string, isEnum bool) []gdast.Statement {
+	if isEnum {
+		return []gdast.Statement{rawf("entry.append_array(ProtoCoreUtils.encode_varint(%s))", varName)}
+	}
 	switch protoType {
 	case "double":
 		return []gdast.Statement{rawf("entry.append_array(ProtoCoreUtils.encode_double(%s))", varName)}

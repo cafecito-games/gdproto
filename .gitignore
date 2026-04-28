@@ -22,3 +22,6 @@ coverage.html
 
 # Claude Code session-local state
 .claude/
+
+# Local git worktrees
+.worktrees/

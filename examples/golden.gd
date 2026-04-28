@@ -337,6 +337,8 @@ class Player extends RefCounted:
 
 	var _stats: Dictionary[String, int] = {}
 
+	var _status_effects: Dictionary[String, PlayerStatus] = {}
+
 
 
 	# Oneof enums
@@ -439,6 +441,14 @@ class Player extends RefCounted:
 
 	func get_stats() -> Dictionary[String, int]:
 		return _stats
+
+
+
+	func add_status_effects(key: String, value: PlayerStatus) -> void:
+		_status_effects[key] = value
+
+	func get_status_effects() -> Dictionary[String, PlayerStatus]:
+		return _status_effects
 
 
 
@@ -551,6 +561,27 @@ class Player extends RefCounted:
 
 			# Append entry to result
 			result.append_array(ProtoCoreUtils.encode_varint(50))
+			result.append_array(ProtoCoreUtils.encode_varint(entry.size()))
+			result.append_array(entry)
+		# Map field status_effects
+		for key in _status_effects:
+			var value := _status_effects[key]
+
+			# Build map entry
+			var entry: PackedByteArray = PackedByteArray()
+
+			# Entry field 1: key
+			entry.append_array(ProtoCoreUtils.encode_varint(10))
+			var key_data: PackedByteArray = ProtoCoreUtils.encode_string(key)
+			entry.append_array(ProtoCoreUtils.encode_varint(key_data.size()))
+			entry.append_array(key_data)
+
+			# Entry field 2: value
+			entry.append_array(ProtoCoreUtils.encode_varint(16))
+			entry.append_array(ProtoCoreUtils.encode_varint(value))
+
+			# Append entry to result
+			result.append_array(ProtoCoreUtils.encode_varint(82))
 			result.append_array(ProtoCoreUtils.encode_varint(entry.size()))
 			result.append_array(entry)
 		return result
@@ -677,6 +708,52 @@ class Player extends RefCounted:
 
 					_stats[map_key] = map_value
 					offset += length
+				10:
+					# Map field status_effects
+					var length_result := ProtoCoreUtils.decode_varint(data, offset)
+					if length_result.size == -1:
+						return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
+					offset += length_result.size
+					var length: int = length_result.value
+					if offset + length > data.size():
+						return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_MISMATCH
+
+					var entry_data: PackedByteArray = data.slice(offset, offset + length)
+					var entry_offset: int = 0
+
+					var map_key := ""
+					var map_value := 0
+
+					while entry_offset < entry_data.size():
+						var entry_tag_result := ProtoCoreUtils.decode_varint(entry_data, entry_offset)
+						if entry_tag_result.size == -1:
+							return ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND
+						var entry_tag: int = entry_tag_result.value
+						entry_offset += entry_tag_result.size
+						var entry_field_number: int = ProtoCoreUtils.get_field_number(entry_tag)
+
+						match entry_field_number:
+							1:
+								# Entry key
+								var len_result := ProtoCoreUtils.decode_varint(entry_data, entry_offset)
+								if len_result.size == -1:
+									return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
+								entry_offset += len_result.size
+								var str_len: int = len_result.value
+								if entry_offset + str_len > entry_data.size():
+									return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_MISMATCH
+								map_key = ProtoCoreUtils.decode_string(entry_data, entry_offset, str_len)
+								entry_offset += str_len
+							2:
+								# Entry value
+								var result := ProtoCoreUtils.decode_varint(entry_data, entry_offset)
+								if result.size == -1:
+									return ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND
+								map_value = result.value
+								entry_offset += result.size
+
+					_status_effects[map_key] = map_value
+					offset += length
 				8:
 					# Field email
 					var length_result := ProtoCoreUtils.decode_varint(data, offset)
@@ -767,6 +844,17 @@ class Player extends RefCounted:
 		for key in _stats:
 			var value := _stats[key]
 			result += indent + "stats {\n"
+			var inner_indent: String = "\t".repeat(indent_level + 1)
+
+			result += inner_indent + "key: \"" + ProtoCoreUtils.escape_string_text_format(key) + "\"\n"
+			result += inner_indent + "value: " + str(value) + "\n"
+
+			result += indent + "}\n"
+
+		# Map field status_effects
+		for key in _status_effects:
+			var value := _status_effects[key]
+			result += indent + "status_effects {\n"
 			var inner_indent: String = "\t".repeat(indent_level + 1)
 
 			result += inner_indent + "key: \"" + ProtoCoreUtils.escape_string_text_format(key) + "\"\n"
@@ -965,6 +1053,49 @@ class Player extends RefCounted:
 						pos = ProtoCoreUtils.skip_whitespace(text, pos)
 						if pos < text.length() and text[pos] == "}":
 							pos += 1
+				"status_effects":
+					# Parse map entry
+					if pos < text.length() and text[pos] == ":":
+						pos += 1
+					pos = ProtoCoreUtils.skip_whitespace(text, pos)
+					if pos < text.length() and text[pos] == "{":
+						pos += 1
+						pos = ProtoCoreUtils.skip_whitespace(text, pos)
+
+						var map_key = null
+						var map_value = null
+
+						# Parse key and value
+						while pos < text.length() and text[pos] != "}":
+							var entry_name_result := ProtoCoreUtils.parse_identifier(text, pos)
+							if "error" in entry_name_result:
+								break
+							var entry_field: String = entry_name_result["value"]
+							pos = entry_name_result["pos"]
+							pos = ProtoCoreUtils.skip_whitespace(text, pos)
+							if pos < text.length() and text[pos] == ":":
+								pos += 1
+							pos = ProtoCoreUtils.skip_whitespace(text, pos)
+
+							if entry_field == "key":
+								var str_result := ProtoCoreUtils.parse_string_literal(text, pos)
+								if "value" in str_result:
+									map_key = str_result["value"]
+									pos = str_result["pos"]
+							elif entry_field == "value":
+								var num_result := ProtoCoreUtils.parse_number(text, pos)
+								if "value" in num_result:
+									map_value = int(num_result["value"])
+									pos = num_result["pos"]
+
+							pos = ProtoCoreUtils.skip_whitespace(text, pos)
+
+						if map_key != null and map_value != null:
+							_status_effects[map_key] = map_value
+
+						pos = ProtoCoreUtils.skip_whitespace(text, pos)
+						if pos < text.length() and text[pos] == "}":
+							pos += 1
 				_:
 					# Unknown field - skip it
 					push_warning("Unknown field: " + field_name)
@@ -1010,6 +1141,8 @@ class Player extends RefCounted:
 			parts.append("position: " + str(_position))
 		if _stats.size() > 0:
 			parts.append("stats: " + str(_stats))
+		if _status_effects.size() > 0:
+			parts.append("status_effects: " + str(_status_effects))
 		if _email != "":
 			parts.append("email: " + str(_email))
 		if _discord != "":

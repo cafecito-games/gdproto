@@ -33,7 +33,7 @@ func (g *generator) generateAccessors(m *ast.Message) []gdast.Node {
 
 // fieldAccessors emits the accessor functions for a regular (non-oneof) field.
 func (g *generator) fieldAccessors(f *ast.Field) []gdast.Node {
-	gdType := g.typeName(f.FieldType)
+	gdType := g.renderedFieldType(f)
 	fieldVar := "_" + f.Name
 
 	if f.Repeated {
@@ -112,7 +112,7 @@ func (g *generator) fieldAccessors(f *ast.Field) []gdast.Node {
 // oneof field's value before updating the tracking enum and assigning the new
 // value.
 func (g *generator) oneofFieldAccessors(f *ast.Field, oneof *ast.Oneof) []gdast.Node {
-	gdType := g.typeName(f.FieldType)
+	gdType := g.renderedFieldType(f)
 	fieldVar := "_" + f.Name
 	trackingVar := oneofTrackingVar(oneof.Name)
 	enumValue := oneofEnumQualified(oneof.Name, f.Name)
@@ -163,7 +163,7 @@ func (g *generator) oneofFieldAccessors(f *ast.Field, oneof *ast.Oneof) []gdast.
 // dictionary.
 func (g *generator) mapAccessors(mf *ast.MapField) []gdast.Node {
 	keyType := gdscriptScalarType(mf.KeyType)
-	valueType := g.typeName(mf.ValueType)
+	valueType := g.renderedMapValueType(mf)
 	fieldVar := "_" + mf.Name
 
 	add := gdast.Function{
@@ -196,7 +196,7 @@ func (g *generator) isMessageLikeType(f *ast.Field) bool {
 	if _, ok := scalarTypeMap[f.FieldType]; ok {
 		return false
 	}
-	if f.IsEnum || g.enumTypes[f.FieldType] {
+	if f.IsEnum {
 		return false
 	}
 	return true

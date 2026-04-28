@@ -441,6 +441,117 @@ message Hello {
 	}
 }
 
+func TestGenerateImportedMessageUsesWrapperQualification(t *testing.T) {
+	file := &ast.ProtoFile{
+		Syntax: "proto3",
+		Messages: []*ast.Message{{
+			Name: "Uses",
+			Fields: []*ast.Field{{
+				FieldType:    "Shared",
+				FullTypePath: "Shared",
+				SourceFile:   "common.proto",
+				Name:         "shared",
+				Number:       1,
+			}},
+		}},
+	}
+
+	cls, err := generator.Generate(file, "main.proto")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := cls.ToGDScript(0)
+	if !strings.Contains(got, "var _shared: CommonProto.Shared = null") {
+		t.Fatalf("missing imported wrapper qualification:\n%s", got)
+	}
+	if !strings.Contains(got, "_shared = CommonProto.Shared.new()") {
+		t.Fatalf("missing imported wrapper constructor:\n%s", got)
+	}
+}
+
+func TestGenerateMapEnumUsesVarintPaths(t *testing.T) {
+	file := &ast.ProtoFile{
+		Syntax: "proto3",
+		Enums: []*ast.Enum{{
+			Name: "Color",
+			Values: []*ast.EnumValue{
+				{Name: "COLOR_UNSPECIFIED", Number: 0},
+				{Name: "RED", Number: 1},
+			},
+		}},
+		Messages: []*ast.Message{{
+			Name: "Uses",
+			Maps: []*ast.MapField{{
+				Name:        "colors",
+				KeyType:     "string",
+				ValueType:   "Color",
+				ValueIsEnum: true,
+				Number:      1,
+			}},
+		}},
+	}
+
+	cls, err := generator.Generate(file, "map_enum.proto")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := cls.ToGDScript(0)
+	if !strings.Contains(got, "entry.append_array(ProtoCoreUtils.encode_varint(value))") {
+		t.Fatalf("missing enum varint serialization path:\n%s", got)
+	}
+	if strings.Contains(got, "var value_msg_data: PackedByteArray = value.to_bytes()") {
+		t.Fatalf("map enum value incorrectly serialized as message:\n%s", got)
+	}
+	if !strings.Contains(got, "map_value = result.value") {
+		t.Fatalf("missing enum varint deserialization path:\n%s", got)
+	}
+}
+
+func TestGenerateMessageEnumNameCollisionDoesNotUseEnumPaths(t *testing.T) {
+	file := &ast.ProtoFile{
+		Syntax: "proto3",
+		Messages: []*ast.Message{
+			{
+				Name: "A",
+				NestedEnums: []*ast.Enum{{
+					Name: "Status",
+					Values: []*ast.EnumValue{
+						{Name: "STATUS_UNSPECIFIED", Number: 0},
+					},
+				}},
+			},
+			{
+				Name:           "B",
+				NestedMessages: []*ast.Message{{Name: "Status"}},
+				Fields: []*ast.Field{{
+					FieldType:    "Status",
+					FullTypePath: "B.Status",
+					Name:         "status",
+					Number:       1,
+				}},
+			},
+		},
+	}
+
+	cls, err := generator.Generate(file, "collision.proto")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := cls.ToGDScript(0)
+	if !strings.Contains(got, "var _status: Status = null") {
+		t.Fatalf("message field should default to null:\n%s", got)
+	}
+	if !strings.Contains(got, "func new_status() -> Status:") {
+		t.Fatalf("message field should use new_ accessor:\n%s", got)
+	}
+	if strings.Contains(got, "func set_status(value: Status) -> void:") {
+		t.Fatalf("message field incorrectly treated as enum/scalar:\n%s", got)
+	}
+	if strings.Contains(got, "encode_varint(_status)") {
+		t.Fatalf("message field incorrectly serialized as enum varint:\n%s", got)
+	}
+}
+
 func TestGoldenExample(t *testing.T) {
 	src, err := os.ReadFile("../../examples/example.proto")
 	if err != nil {

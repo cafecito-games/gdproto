@@ -116,7 +116,7 @@ func (g *generator) generateFieldDeclarations(m *ast.Message) []gdast.Node {
 
 	for _, mf := range m.Maps {
 		keyType := gdscriptScalarType(mf.KeyType)
-		valueType := g.typeName(mf.ValueType)
+		valueType := g.renderedMapValueType(mf)
 		out = append(out, gdast.VarDeclaration{
 			Name:         "_" + mf.Name,
 			TypeHint:     "Dictionary[" + keyType + ", " + valueType + "]",
@@ -131,30 +131,20 @@ func (g *generator) generateFieldDeclarations(m *ast.Message) []gdast.Node {
 // for a regular or oneof field. Repeated fields use Array[Type] = [].
 func (g *generator) fieldDeclaration(f *ast.Field) gdast.VarDeclaration {
 	if f.Repeated {
-		gdType := g.typeName(f.FieldType)
+		gdType := g.renderedFieldType(f)
 		return gdast.VarDeclaration{
 			Name:         "_" + f.Name,
 			TypeHint:     "Array[" + gdType + "]",
 			InitialValue: gdast.Array{},
 		}
 	}
-	gdType := g.typeName(f.FieldType)
+	gdType := g.renderedFieldType(f)
 	def := g.fieldDefault(f)
 	return gdast.VarDeclaration{
 		Name:         "_" + f.Name,
 		TypeHint:     gdType,
 		InitialValue: gdast.RawExpression{Code: def},
 	}
-}
-
-// typeName returns the GDScript type name for a proto field type. Scalar
-// types are mapped via gdscriptScalarType; everything else (messages, enums,
-// nested types) is returned verbatim and used as the GDScript class name.
-func (g *generator) typeName(protoType string) string {
-	if t, ok := scalarTypeMap[protoType]; ok {
-		return t
-	}
-	return protoType
 }
 
 // fieldDefault returns the default-value expression for a field's declaration.
@@ -164,7 +154,7 @@ func (g *generator) fieldDefault(f *ast.Field) string {
 	if def, ok := scalarDefaultMap[f.FieldType]; ok {
 		return def
 	}
-	if f.IsEnum || g.enumTypes[f.FieldType] {
+	if f.IsEnum {
 		return "0"
 	}
 	return "null"

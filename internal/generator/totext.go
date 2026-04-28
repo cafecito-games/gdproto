@@ -67,7 +67,7 @@ func (g *generator) toTextFieldBlock(f *ast.Field) string {
 	case g.isEnumField(f):
 		return fmt.Sprintf("# Field %s\nif %s != 0:\n\tresult += indent + \"%s: \" + _get_enum_name_%s(%s) + \"\\n\"\n",
 			f.Name, fieldVar, f.Name, f.Name, fieldVar)
-	case isMessageType(g, f.FieldType):
+	case isMessageType(f):
 		return fmt.Sprintf("# Field %s\nif %s != null:\n\tresult += indent + \"%s {\\n\"\n\tresult += %s.to_text(indent_level + 1)\n\tresult += indent + \"}\\n\"\n",
 			f.Name, fieldVar, f.Name, fieldVar)
 	default:
@@ -93,7 +93,7 @@ func (g *generator) toTextRepeatedField(f *ast.Field, fieldVar string) string {
 		b.WriteString(toTextFloatRepeatedItem(f.Name))
 	case g.isEnumField(f):
 		b.WriteString("\tresult += indent + \"" + f.Name + ": \" + _get_enum_name_" + f.Name + "(item) + \"\\n\"\n")
-	case isMessageType(g, f.FieldType):
+	case isMessageType(f):
 		b.WriteString("\tresult += indent + \"" + f.Name + " {\\n\"\n")
 		b.WriteString("\tresult += item.to_text(indent_level + 1)\n")
 		b.WriteString("\tresult += indent + \"}\\n\"\n")
@@ -123,7 +123,7 @@ func (g *generator) toTextOneofBlock(oneof *ast.Oneof) string {
 			b.WriteString(indentLines(toTextFloatField(f.Name, fieldVar), "\t\t"))
 		case g.isEnumField(f):
 			b.WriteString("\t\tresult += indent + \"" + f.Name + ": \" + _get_enum_name_" + f.Name + "(" + fieldVar + ") + \"\\n\"\n")
-		case isMessageType(g, f.FieldType):
+		case isMessageType(f):
 			b.WriteString("\t\tresult += indent + \"" + f.Name + " {\\n\"\n")
 			b.WriteString("\t\tresult += " + fieldVar + ".to_text(indent_level + 1)\n")
 			b.WriteString("\t\tresult += indent + \"}\\n\"\n")

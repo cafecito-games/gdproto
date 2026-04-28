@@ -14,33 +14,14 @@ import (
 // translation of the proto file. The sourceName is the input filename used in
 // the file header comment.
 func Generate(file *ast.ProtoFile, sourceName string) (*gdast.ClassDefinition, error) {
-	g := &generator{file: file, sourceName: sourceName, enumTypes: map[string]bool{}}
-	g.collectEnumTypes()
+	g := &generator{file: file, sourceName: sourceName}
+	g.annotateLocalEnumUsage()
 	return g.generate()
 }
 
 type generator struct {
 	file       *ast.ProtoFile
 	sourceName string
-	enumTypes  map[string]bool
-}
-
-func (g *generator) collectEnumTypes() {
-	for _, e := range g.file.Enums {
-		g.enumTypes[e.Name] = true
-	}
-	for _, m := range g.file.Messages {
-		g.collectMessageEnumTypes(m)
-	}
-}
-
-func (g *generator) collectMessageEnumTypes(m *ast.Message) {
-	for _, e := range m.NestedEnums {
-		g.enumTypes[e.Name] = true
-	}
-	for _, nested := range m.NestedMessages {
-		g.collectMessageEnumTypes(nested)
-	}
 }
 
 func (g *generator) generate() (*gdast.ClassDefinition, error) {
@@ -174,4 +155,104 @@ func capitalizeASCII(s string) string {
 		runes[i] = unicode.ToLower(runes[i])
 	}
 	return string(runes)
+}
+
+func (g *generator) renderedFieldType(f *ast.Field) string {
+	return g.renderedType(f.FieldType, f.SourceFile)
+}
+
+func (g *generator) renderedMapValueType(mf *ast.MapField) string {
+	return g.renderedType(mf.ValueType, mf.ValueSourceFile)
+}
+
+func (g *generator) renderedType(protoType, sourceFile string) string {
+	if t, ok := scalarTypeMap[protoType]; ok {
+		return t
+	}
+	if sourceFile == "" || sourceFile == g.sourceName || sourceFile == filepath.Base(g.sourceName) {
+		return protoType
+	}
+	return wrapperClassName(sourceFile) + "." + protoType
+}
+
+func (g *generator) annotateLocalEnumUsage() {
+	enumPaths := map[string]bool{}
+	prefix := ""
+	if g.file.Package != "" {
+		prefix = g.file.Package + "."
+	}
+	for _, e := range g.file.Enums {
+		enumPaths[prefix+e.Name] = true
+	}
+	for _, m := range g.file.Messages {
+		g.collectLocalEnumPaths(m, prefix+m.Name, enumPaths)
+	}
+	for _, m := range g.file.Messages {
+		g.annotateLocalEnumMessage(m, m.Name, enumPaths)
+	}
+}
+
+func (g *generator) collectLocalEnumPaths(m *ast.Message, scope string, enumPaths map[string]bool) {
+	for _, e := range m.NestedEnums {
+		enumPaths[scope+"."+e.Name] = true
+	}
+	for _, nested := range m.NestedMessages {
+		g.collectLocalEnumPaths(nested, scope+"."+nested.Name, enumPaths)
+	}
+}
+
+func (g *generator) annotateLocalEnumMessage(m *ast.Message, scope string, enumPaths map[string]bool) {
+	for _, f := range m.Fields {
+		if f.SourceFile == "" && isLocalEnumReference(f.FieldType, f.FullTypePath, scope, g.file.Package, enumPaths) {
+			f.IsEnum = true
+		}
+	}
+	for _, mf := range m.Maps {
+		if mf.ValueSourceFile == "" && isLocalEnumReference(mf.ValueType, mf.FullValueTypePath, scope, g.file.Package, enumPaths) {
+			mf.ValueIsEnum = true
+		}
+	}
+	for _, oneof := range m.Oneofs {
+		for _, f := range oneof.Fields {
+			if f.SourceFile == "" && isLocalEnumReference(f.FieldType, f.FullTypePath, scope, g.file.Package, enumPaths) {
+				f.IsEnum = true
+			}
+		}
+	}
+	for _, nested := range m.NestedMessages {
+		g.annotateLocalEnumMessage(nested, scope+"."+nested.Name, enumPaths)
+	}
+}
+
+func isLocalEnumReference(typeName, fullTypePath, currentScope, pkg string, enumPaths map[string]bool) bool {
+	if fullTypePath != "" && enumPaths[strings.TrimPrefix(fullTypePath, ".")] {
+		return true
+	}
+
+	normalizedType := strings.TrimPrefix(typeName, ".")
+	if enumPaths[normalizedType] {
+		return true
+	}
+
+	if pkg != "" {
+		packagePrefix := pkg + "."
+		if strings.HasPrefix(normalizedType, packagePrefix) && enumPaths[normalizedType] {
+			return true
+		}
+	}
+
+	typeParts := strings.Split(normalizedType, ".")
+	scopeParts := strings.Split(currentScope, ".")
+	for i := len(scopeParts); i > 0; i-- {
+		candidate := strings.Join(append(append([]string{}, scopeParts[:i]...), typeParts...), ".")
+		prefix := ""
+		if pkg != "" {
+			prefix = pkg + "."
+		}
+		if enumPaths[candidate] || (prefix != "" && enumPaths[prefix+candidate]) {
+			return true
+		}
+	}
+
+	return false
 }

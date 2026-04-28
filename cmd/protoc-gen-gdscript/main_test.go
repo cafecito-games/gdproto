@@ -12,6 +12,78 @@ import (
 	"google.golang.org/protobuf/types/pluginpb"
 )
 
+func buildRequestFromDescriptorSet(t *testing.T, filesToGenerate []string, srcByName map[string]string) *pluginpb.CodeGeneratorRequest {
+	t.Helper()
+
+	if _, err := exec.LookPath("protoc"); err != nil {
+		t.Skip("protoc not on PATH")
+	}
+
+	tempDir := t.TempDir()
+	for name, src := range srcByName {
+		path := tempDir + "/" + name
+		if err := os.MkdirAll(dirOf(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	args := []string{
+		"--include_imports",
+		"--descriptor_set_out=/dev/stdout",
+		"-I", tempDir,
+	}
+	for name := range srcByName {
+		args = append(args, tempDir+"/"+name)
+	}
+	descriptorBytes, err := exec.Command("protoc", args...).Output()
+	if err != nil {
+		t.Fatalf("protoc invocation failed: %v", err)
+	}
+
+	descriptorSet := &descriptorpb.FileDescriptorSet{}
+	if err := proto.Unmarshal(descriptorBytes, descriptorSet); err != nil {
+		t.Fatalf("unmarshal descriptor set: %v", err)
+	}
+
+	return &pluginpb.CodeGeneratorRequest{
+		FileToGenerate: filesToGenerate,
+		ProtoFile:      descriptorSet.GetFile(),
+	}
+}
+
+func runPluginRequest(t *testing.T, request *pluginpb.CodeGeneratorRequest) *pluginpb.CodeGeneratorResponse {
+	t.Helper()
+
+	requestBytes, err := proto.Marshal(request)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+
+	var output bytes.Buffer
+	if err := run(bytes.NewReader(requestBytes), &output); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	response := &pluginpb.CodeGeneratorResponse{}
+	if err := proto.Unmarshal(output.Bytes(), response); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if response.Error != nil {
+		t.Fatalf("plugin reported error: %s", *response.Error)
+	}
+	return response
+}
+
+func dirOf(path string) string {
+	if idx := strings.LastIndex(path, "/"); idx >= 0 {
+		return path[:idx]
+	}
+	return "."
+}
+
 // TestRunWithExampleProto exercises the full plugin pipeline by shelling out
 // to protoc to build a descriptor set for examples/example.proto, wrapping it
 // in a CodeGeneratorRequest, and asserting the response file matches the
@@ -115,6 +187,26 @@ func TestRunErrorOnInvalidProto(t *testing.T) {
 	}
 	if response.Error == nil {
 		t.Fatal("expected response.Error to be set for a proto2 input")
+	}
+}
+
+func TestRunPreservesNestedTypeQualification(t *testing.T) {
+	request := buildRequestFromDescriptorSet(t, []string{"nested.proto"}, map[string]string{
+		"nested.proto": `syntax = "proto3";
+message Outer { message Inner {} }
+message Uses { Outer.Inner inner = 1; }`,
+	})
+
+	response := runPluginRequest(t, request)
+	if len(response.File) != 1 {
+		t.Fatalf("expected 1 generated file, got %d", len(response.File))
+	}
+	got := response.File[0].GetContent()
+	if !strings.Contains(got, "var _inner: Outer.Inner = null") {
+		t.Fatalf("missing qualified field type:\n%s", got)
+	}
+	if !strings.Contains(got, "_inner = Outer.Inner.new()") {
+		t.Fatalf("missing qualified constructor:\n%s", got)
 	}
 }
 
