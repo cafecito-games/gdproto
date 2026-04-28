@@ -273,6 +273,88 @@ func TestUndefinedTypeError(t *testing.T) {
 	}
 }
 
+func TestReservedRangeStartGreaterThanEnd(t *testing.T) {
+	src := `syntax = "proto3"; message F { reserved 10 to 5; }`
+	errs := validate(t, src)
+	if len(errs) != 1 || !strings.Contains(errs[0].Message, "Invalid reserved range") {
+		t.Errorf("got %+v", errs)
+	}
+}
+
+func TestReservedRangeOutOfBounds(t *testing.T) {
+	src := `syntax = "proto3"; message F { reserved 0 to 5; }`
+	errs := validate(t, src)
+	if len(errs) == 0 {
+		t.Errorf("expected error, got none")
+	}
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e.Message, "out of valid field number range") || strings.Contains(e.Message, "out of valid range") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("got %+v", errs)
+	}
+}
+
+func TestNestedMessageValidation(t *testing.T) {
+	src := `syntax = "proto3";
+message Outer {
+    message Inner {
+        int32 a = 1;
+        int32 b = 1;
+    }
+}`
+	errs := validate(t, src)
+	if len(errs) != 1 || !strings.Contains(errs[0].Message, "Duplicate field number") {
+		t.Errorf("got %+v", errs)
+	}
+}
+
+func TestNestedTypeResolution(t *testing.T) {
+	src := `syntax = "proto3";
+message Outer {
+    message Inner {}
+    Inner ref = 1;
+}`
+	if errs := validate(t, src); len(errs) != 0 {
+		t.Errorf("got %+v", errs)
+	}
+}
+
+func TestMessageNameKeyword(t *testing.T) {
+	src := `syntax = "proto3"; message Message {}`
+	errs := validate(t, src)
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e.Message, "reserved keyword") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("got %+v", errs)
+	}
+}
+
+func TestOneofFieldValidation(t *testing.T) {
+	src := `syntax = "proto3";
+message F {
+    int32 a = 1;
+    oneof o { string b = 1; }
+}`
+	errs := validate(t, src)
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e.Message, "Duplicate field number") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("got %+v", errs)
+	}
+}
+
 func TestImportedFieldSkipsLocalResolution(t *testing.T) {
 	importedAST := &ast.ProtoFile{
 		Position: ast.Position{Line: 1, Column: 1},

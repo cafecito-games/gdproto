@@ -7,20 +7,42 @@ import (
 	"github.com/cafecito-games/gogdproto/internal/ast"
 )
 
-// validateMessage validates the fields and map fields of a single message,
-// along with any conflicts against its reserved declarations. Recursion into
-// nested messages and orchestration of oneofs/reserved-range validation is
-// handled by a later task; this function intentionally does not descend into
-// nested types.
+// validateMessage validates a single message. It checks the message name
+// against the reserved-keyword set, recurses into nested enums and messages
+// (extending the scope to "Outer.Inner" form), then validates oneofs, regular
+// fields, map fields, and reserved declarations. Oneof, regular, and map
+// fields all share the same field-number/name space, so a single pair of
+// tracking maps is threaded through their respective validators.
 func (v *validator) validateMessage(message *ast.Message, scope string) {
+	if reservedKeywords[strings.ToLower(message.Name)] {
+		v.addError(
+			fmt.Sprintf("Message name %q is a reserved keyword", message.Name),
+			message.Line,
+			message.Column,
+		)
+	}
+
+	for _, nestedEnum := range message.NestedEnums {
+		v.validateEnum(nestedEnum)
+	}
+	for _, nestedMessage := range message.NestedMessages {
+		v.validateMessage(nestedMessage, scope+"."+nestedMessage.Name)
+	}
+
 	fieldNumbers := make(map[int]string)
 	fieldNames := make(map[string]bool)
 
+	for _, oneof := range message.Oneofs {
+		v.validateOneof(oneof, message, fieldNumbers, fieldNames, scope)
+	}
 	for _, field := range message.Fields {
 		v.validateField(field, message, fieldNumbers, fieldNames, scope)
 	}
 	for _, mapField := range message.Maps {
 		v.validateMapField(mapField, message, fieldNumbers, fieldNames, scope)
+	}
+	for _, reserved := range message.Reserved {
+		v.validateReserved(reserved)
 	}
 }
 

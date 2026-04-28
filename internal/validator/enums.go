@@ -70,3 +70,39 @@ func (v *validator) validateEnum(enum *ast.Enum) {
 		}
 	}
 }
+
+// validateReserved checks that each reserved range is well-formed and lies
+// within the protobuf field-number bounds. ReservedRange uses Start == End to
+// represent a single reserved number; proper ranges additionally require
+// Start <= End.
+func (v *validator) validateReserved(reserved *ast.Reserved) {
+	for _, rng := range reserved.Numbers {
+		if rng.Start != rng.End {
+			if rng.Start > rng.End {
+				v.addError(
+					fmt.Sprintf("Invalid reserved range: %d to %d (start > end)", rng.Start, rng.End),
+					reserved.Line,
+					reserved.Column,
+				)
+				continue
+			}
+			if rng.Start < minFieldNumber || rng.End > maxFieldNumber {
+				v.addError(
+					fmt.Sprintf("Reserved range %d to %d is out of valid field number range (%d-%d)",
+						rng.Start, rng.End, minFieldNumber, maxFieldNumber),
+					reserved.Line,
+					reserved.Column,
+				)
+			}
+			continue
+		}
+		if rng.Start < minFieldNumber || rng.Start > maxFieldNumber {
+			v.addError(
+				fmt.Sprintf("Reserved field number %d is out of valid range (%d-%d)",
+					rng.Start, minFieldNumber, maxFieldNumber),
+				reserved.Line,
+				reserved.Column,
+			)
+		}
+	}
+}
