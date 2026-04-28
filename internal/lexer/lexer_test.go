@@ -396,3 +396,179 @@ func TestUnterminatedBlockComment(t *testing.T) {
 		t.Errorf("got %v, want unterminated block comment error", err)
 	}
 }
+
+func TestSyntaxDeclaration(t *testing.T) {
+	tokens, err := lexer.Tokenize(`syntax = "proto3";`, "")
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	want := []lexer.TokenType{
+		lexer.TokenSyntax,
+		lexer.TokenEquals,
+		lexer.TokenStringLiteral,
+		lexer.TokenSemicolon,
+		lexer.TokenEOF,
+	}
+	if len(tokens) != len(want) {
+		t.Fatalf("got %d tokens, want %d: %+v", len(tokens), len(want), tokens)
+	}
+	for i, w := range want {
+		if tokens[i].Type != w {
+			t.Errorf("token[%d].Type = %s, want %s", i, tokens[i].Type, w)
+		}
+	}
+	if tokens[2].Value != "proto3" {
+		t.Errorf("syntax string value = %q, want proto3", tokens[2].Value)
+	}
+}
+
+func TestMessageDefinition(t *testing.T) {
+	src := `
+message Person {
+    string name = 1;
+    int32 age = 2;
+}
+`
+	tokens, err := lexer.Tokenize(src, "")
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	want := []lexer.TokenType{
+		lexer.TokenMessage, lexer.TokenIdentifier, lexer.TokenLBrace,
+		lexer.TokenString, lexer.TokenIdentifier, lexer.TokenEquals, lexer.TokenIntLiteral, lexer.TokenSemicolon,
+		lexer.TokenInt32, lexer.TokenIdentifier, lexer.TokenEquals, lexer.TokenIntLiteral, lexer.TokenSemicolon,
+		lexer.TokenRBrace,
+	}
+	got := make([]lexer.TokenType, 0, len(tokens)-1)
+	for _, tok := range tokens[:len(tokens)-1] {
+		got = append(got, tok.Type)
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d tokens, want %d", len(got), len(want))
+	}
+	for i, w := range want {
+		if got[i] != w {
+			t.Errorf("token[%d] = %s, want %s", i, got[i], w)
+		}
+	}
+}
+
+func TestMapField(t *testing.T) {
+	tokens, err := lexer.Tokenize("map<string, int32> my_map = 1;", "")
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	want := []lexer.TokenType{
+		lexer.TokenMap, lexer.TokenLT, lexer.TokenString, lexer.TokenComma,
+		lexer.TokenInt32, lexer.TokenGT, lexer.TokenIdentifier, lexer.TokenEquals,
+		lexer.TokenIntLiteral, lexer.TokenSemicolon,
+	}
+	for i, w := range want {
+		if tokens[i].Type != w {
+			t.Errorf("token[%d] = %s, want %s", i, tokens[i].Type, w)
+		}
+	}
+}
+
+func TestLineTracking(t *testing.T) {
+	tokens, _ := lexer.Tokenize("line1\nline2\nline3", "")
+	if tokens[0].Line != 1 || tokens[1].Line != 2 || tokens[2].Line != 3 {
+		t.Errorf("line numbers = %d, %d, %d; want 1, 2, 3",
+			tokens[0].Line, tokens[1].Line, tokens[2].Line)
+	}
+}
+
+func TestColumnTracking(t *testing.T) {
+	tokens, _ := lexer.Tokenize("abc def", "")
+	if tokens[0].Column != 1 {
+		t.Errorf("token[0].Column = %d, want 1", tokens[0].Column)
+	}
+	if tokens[1].Column != 5 {
+		t.Errorf("token[1].Column = %d, want 5", tokens[1].Column)
+	}
+}
+
+func TestMultilineColumnTracking(t *testing.T) {
+	tokens, _ := lexer.Tokenize("first\n  second\n    third", "")
+	cases := []struct{ line, col int }{
+		{1, 1}, {2, 3}, {3, 5},
+	}
+	for i, c := range cases {
+		if tokens[i].Line != c.line || tokens[i].Column != c.col {
+			t.Errorf("token[%d] at %d:%d, want %d:%d",
+				i, tokens[i].Line, tokens[i].Column, c.line, c.col)
+		}
+	}
+}
+
+func TestErrorMessageFormat(t *testing.T) {
+	_, err := lexer.Tokenize("@", "test.proto")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	msg := err.Error()
+	for _, want := range []string{"test.proto", "1:1", "error"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error message %q missing %q", msg, want)
+		}
+	}
+}
+
+func TestStringRemainingEscapes(t *testing.T) {
+	tokens, err := lexer.Tokenize(`"\r\'\0"`, "")
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	want := "\r'\x00"
+	if tokens[0].Value != want {
+		t.Errorf("got %q, want %q", tokens[0].Value, want)
+	}
+}
+
+func TestStringUnterminatedEscape(t *testing.T) {
+	_, err := lexer.Tokenize(`"abc\`, "")
+	var le *lexer.LexerError
+	if !errors.As(err, &le) {
+		t.Fatalf("got %v, want LexerError", err)
+	}
+	if !strings.Contains(le.Message, "Unterminated") {
+		t.Errorf("got %q, want unterminated escape", le.Message)
+	}
+}
+
+func TestStringInvalidHexEscape(t *testing.T) {
+	_, err := lexer.Tokenize(`"\xZZ"`, "")
+	var le *lexer.LexerError
+	if !errors.As(err, &le) || !strings.Contains(le.Message, "Invalid hex escape") {
+		t.Errorf("got %v, want invalid hex escape", err)
+	}
+}
+
+func TestStringInvalidHexEscapeShort(t *testing.T) {
+	_, err := lexer.Tokenize(`"\x1"`, "")
+	var le *lexer.LexerError
+	if !errors.As(err, &le) || !strings.Contains(le.Message, "Invalid hex escape") {
+		t.Errorf("got %v, want invalid hex escape", err)
+	}
+}
+
+func TestTokenTypeStringOutOfRange(t *testing.T) {
+	tt := lexer.TokenType(-1)
+	if !strings.Contains(tt.String(), "TokenType(-1)") {
+		t.Errorf("got %q, want fallback format", tt.String())
+	}
+	tt2 := lexer.TokenType(99999)
+	if !strings.Contains(tt2.String(), "TokenType(99999)") {
+		t.Errorf("got %q, want fallback format", tt2.String())
+	}
+}
+
+func TestFloatExponentNoSign(t *testing.T) {
+	tokens, err := lexer.Tokenize("1e10", "")
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	if tokens[0].Type != lexer.TokenFloatLiteral || tokens[0].Value != "1e10" {
+		t.Errorf("got %s %q, want TokenFloatLiteral 1e10", tokens[0].Type, tokens[0].Value)
+	}
+}
