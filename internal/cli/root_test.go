@@ -91,6 +91,33 @@ func TestRootCompilesExampleProto(t *testing.T) {
 	}
 }
 
+func TestRootUsesPathAwareWrapperClassName(t *testing.T) {
+	tempDir := t.TempDir()
+	inputDir := filepath.Join(tempDir, "foo")
+	if err := os.MkdirAll(inputDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	inputPath := filepath.Join(inputDir, "bar.proto")
+	if err := os.WriteFile(inputPath, []byte("syntax = \"proto3\"; message A {}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	outPath := filepath.Join(tempDir, "out.gd")
+
+	var out, errOut bytes.Buffer
+	code := cli.Execute([]string{inputPath, "-o", outPath}, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("exit code = %d; stderr=%q", code, errOut.String())
+	}
+
+	data, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "class_name FooBarProto\n") {
+		t.Fatalf("output missing path-aware wrapper class:\n%s", string(data))
+	}
+}
+
 func TestRootMissingOutputFlag(t *testing.T) {
 	var out, errOut bytes.Buffer
 	inputPath := filepath.Join("..", "..", "examples", "example.proto")
