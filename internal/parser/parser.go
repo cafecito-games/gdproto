@@ -110,7 +110,11 @@ func (p *parser) parseFile() (*ast.ProtoFile, error) {
 			}
 			file.Options[opt.Name] = opt.Value
 		case p.match(lexer.TokenMessage):
-			return nil, p.errorf(p.current(), "Message parsing not yet implemented")
+			m, err := p.parseMessage()
+			if err != nil {
+				return nil, err
+			}
+			file.Messages = append(file.Messages, m)
 		case p.match(lexer.TokenEnum):
 			e, err := p.parseEnum()
 			if err != nil {

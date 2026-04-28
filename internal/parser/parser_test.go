@@ -216,3 +216,149 @@ enum X { Y = 0x1F; }`
 		t.Errorf("got %d", file.Enums[0].Values[0].Number)
 	}
 }
+
+func TestEmptyMessage(t *testing.T) {
+	file, err := parseSource(t, `syntax = "proto3"; message Empty {}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(file.Messages) != 1 || file.Messages[0].Name != "Empty" {
+		t.Fatalf("got %+v", file.Messages)
+	}
+	if len(file.Messages[0].Fields) != 0 {
+		t.Errorf("got %d fields, want 0", len(file.Messages[0].Fields))
+	}
+}
+
+func TestMessageScalarFields(t *testing.T) {
+	src := `syntax = "proto3";
+message Person {
+    string name = 1;
+    int32 age = 2;
+    bool active = 3;
+}`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := file.Messages[0]
+	if m.Name != "Person" || len(m.Fields) != 3 {
+		t.Fatalf("got %+v", m)
+	}
+	cases := []struct {
+		name, ftype string
+		number      int
+	}{
+		{"name", "string", 1},
+		{"age", "int32", 2},
+		{"active", "bool", 3},
+	}
+	for i, c := range cases {
+		f := m.Fields[i]
+		if f.Name != c.name || f.FieldType != c.ftype || f.Number != c.number {
+			t.Errorf("field[%d] = %+v, want %+v", i, f, c)
+		}
+	}
+}
+
+func TestAllScalarTypes(t *testing.T) {
+	src := `syntax = "proto3";
+message AllTypes {
+    double f1 = 1;
+    float f2 = 2;
+    int32 f3 = 3;
+    int64 f4 = 4;
+    uint32 f5 = 5;
+    uint64 f6 = 6;
+    sint32 f7 = 7;
+    sint64 f8 = 8;
+    fixed32 f9 = 9;
+    fixed64 f10 = 10;
+    sfixed32 f11 = 11;
+    sfixed64 f12 = 12;
+    bool f13 = 13;
+    string f14 = 14;
+    bytes f15 = 15;
+}`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"double", "float", "int32", "int64", "uint32", "uint64", "sint32", "sint64",
+		"fixed32", "fixed64", "sfixed32", "sfixed64", "bool", "string", "bytes"}
+	got := make([]string, 0, 15)
+	for _, f := range file.Messages[0].Fields {
+		got = append(got, f.FieldType)
+	}
+	if len(got) != 15 {
+		t.Fatalf("got %d fields", len(got))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("field[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestMessageTypedField(t *testing.T) {
+	src := `syntax = "proto3";
+message Inner {}
+message Outer { Inner inner = 1; }`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Messages[1].Fields[0].FieldType != "Inner" {
+		t.Errorf("got %q", file.Messages[1].Fields[0].FieldType)
+	}
+}
+
+func TestNestedMessage(t *testing.T) {
+	src := `syntax = "proto3";
+message Outer {
+    message Inner { string value = 1; }
+    Inner inner = 1;
+}`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outer := file.Messages[0]
+	if len(outer.NestedMessages) != 1 || outer.NestedMessages[0].Name != "Inner" {
+		t.Errorf("got %+v", outer.NestedMessages)
+	}
+}
+
+func TestNestedEnumInMessage(t *testing.T) {
+	src := `syntax = "proto3";
+message Foo { enum Bar { V = 0; } }`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(file.Messages[0].NestedEnums) != 1 || file.Messages[0].NestedEnums[0].Name != "Bar" {
+		t.Errorf("got %+v", file.Messages[0].NestedEnums)
+	}
+}
+
+func TestDecimalFieldNumber(t *testing.T) {
+	src := `syntax = "proto3"; message F { int32 v = 123; }`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Messages[0].Fields[0].Number != 123 {
+		t.Errorf("got %d", file.Messages[0].Fields[0].Number)
+	}
+}
+
+func TestHexFieldNumber(t *testing.T) {
+	src := `syntax = "proto3"; message F { int32 v = 0x1F; }`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Messages[0].Fields[0].Number != 31 {
+		t.Errorf("got %d", file.Messages[0].Fields[0].Number)
+	}
+}
