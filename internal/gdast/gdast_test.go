@@ -478,3 +478,135 @@ func TestMatchCaseWithInlineComment(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+// Compile-time assertions for Task 4 types.
+var (
+	_ Statement = Function{}
+	_ Statement = EnumDefinition{}
+	_ Statement = SignalDefinition{}
+	_ Node      = ClassDefinition{}
+)
+
+func TestFunctionEmptyBodyEmitsPass(t *testing.T) {
+	f := Function{Name: "f"}
+	want := "func f():\n\tpass"
+	if got := f.ToGDScript(0); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestFunctionWithParametersAndReturnType(t *testing.T) {
+	f := Function{
+		Name: "name",
+		Parameters: []Parameter{
+			{Name: "p1", TypeHint: "T1"},
+			{Name: "p2", TypeHint: "T2", Default: Variable{Name: "default"}},
+		},
+		ReturnType: "R",
+		Body:       []Statement{ReturnStatement{Value: Variable{Name: "p1"}}},
+	}
+	want := "func name(p1: T1, p2: T2 = default) -> R:\n\treturn p1"
+	if got := f.ToGDScript(0); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestFunctionStatic(t *testing.T) {
+	f := Function{Name: "go", IsStatic: true}
+	want := "static func go():\n\tpass"
+	if got := f.ToGDScript(0); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestParameterRendering(t *testing.T) {
+	cases := []struct {
+		param Parameter
+		want  string
+	}{
+		{Parameter{Name: "x"}, "x"},
+		{Parameter{Name: "x", TypeHint: "int"}, "x: int"},
+		{Parameter{Name: "x", Default: Literal{Value: 1}}, "x = 1"},
+		{Parameter{Name: "x", TypeHint: "int", Default: Literal{Value: 1}}, "x: int = 1"},
+	}
+	for _, tc := range cases {
+		if got := tc.param.Render(); got != tc.want {
+			t.Errorf("Parameter %+v: got %q, want %q", tc.param, got, tc.want)
+		}
+	}
+}
+
+func TestEnumDefinitionNamed(t *testing.T) {
+	two := 2
+	e := EnumDefinition{
+		Name: "S",
+		Values: []EnumValue{
+			{Name: "A"},
+			{Name: "B", Value: &two},
+			{Name: "C"},
+		},
+	}
+	want := "enum S {\n\tA,\n\tB = 2,\n\tC\n}"
+	if got := e.ToGDScript(0); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestEnumDefinitionAnonymous(t *testing.T) {
+	e := EnumDefinition{
+		Values: []EnumValue{
+			{Name: "X"},
+			{Name: "Y"},
+		},
+	}
+	want := "enum {\n\tX,\n\tY\n}"
+	if got := e.ToGDScript(0); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestSignalDefinitionNoParameters(t *testing.T) {
+	s := SignalDefinition{Name: "ready"}
+	if got := s.ToGDScript(0); got != "signal ready" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestSignalDefinitionWithParameters(t *testing.T) {
+	s := SignalDefinition{
+		Name:       "ping",
+		Parameters: []Parameter{{Name: "a", TypeHint: "int"}},
+	}
+	if got := s.ToGDScript(0); got != "signal ping(a: int)" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestClassDefinitionTopLevel(t *testing.T) {
+	c := ClassDefinition{
+		ClassNameDirective: "Person",
+		Extends:            "RefCounted",
+		Statements: []Node{
+			VarDeclaration{Name: "x", TypeHint: "int"},
+			VarDeclaration{Name: "y", TypeHint: "int"},
+		},
+	}
+	want := "class_name Person\n\nextends RefCounted\n\nvar x: int\n\nvar y: int"
+	if got := c.ToGDScript(0); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestClassDefinitionNested(t *testing.T) {
+	c := ClassDefinition{
+		Name:    "Inner",
+		Extends: "Base",
+		Statements: []Node{
+			VarDeclaration{Name: "x", TypeHint: "int"},
+		},
+	}
+	want := "class Inner extends Base:\n\tvar x: int"
+	if got := c.ToGDScript(0); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
