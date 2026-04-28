@@ -192,8 +192,6 @@ type Token struct {
 
 // keywords maps proto keyword text to its token type. Used by the lexer to
 // classify identifiers as keywords when they match a known reserved word.
-//
-//nolint:unused // consumed by lexer implementation in subsequent task.
 var keywords = map[string]TokenType{
 	"syntax":   TokenSyntax,
 	"message":  TokenMessage,

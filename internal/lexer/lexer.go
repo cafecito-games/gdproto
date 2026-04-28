@@ -35,6 +35,11 @@ func (l *lexer) run() ([]Token, error) {
 			continue
 		}
 
+		if isIdentStart(ch) {
+			l.tokens = append(l.tokens, l.readIdentifier())
+			continue
+		}
+
 		return nil, &LexerError{
 			File:    l.filename,
 			Line:    line,
@@ -70,6 +75,28 @@ func (l *lexer) skipWhitespace() {
 		}
 		return
 	}
+}
+
+func isIdentStart(ch byte) bool {
+	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_'
+}
+
+func isIdentContinue(ch byte) bool {
+	return isIdentStart(ch) || (ch >= '0' && ch <= '9')
+}
+
+func (l *lexer) readIdentifier() Token {
+	startLine, startCol := l.line, l.column
+	start := l.pos
+	for l.pos < len(l.source) && isIdentContinue(l.source[l.pos]) {
+		l.advance()
+	}
+	value := l.source[start:l.pos]
+	tt := TokenIdentifier
+	if kw, ok := keywords[value]; ok {
+		tt = kw
+	}
+	return Token{Type: tt, Value: value, Line: startLine, Column: startCol}
 }
 
 func singleCharSymbol(ch byte) (TokenType, bool) {
