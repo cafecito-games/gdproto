@@ -119,6 +119,81 @@ func TestGenerateMessageClassShell(t *testing.T) {
 	}
 }
 
+func TestGenerateAccessorBodies(t *testing.T) {
+	file := &ast.ProtoFile{
+		Syntax: "proto3",
+		Enums: []*ast.Enum{{
+			Name: "PlayerStatus",
+			Values: []*ast.EnumValue{
+				{Name: "OFFLINE", Number: 0},
+				{Name: "ONLINE", Number: 1},
+			},
+		}},
+		Messages: []*ast.Message{{
+			Name: "Player",
+			Fields: []*ast.Field{
+				{FieldType: "string", Name: "username", Number: 1},
+				{FieldType: "PlayerStatus", Name: "status", Number: 2},
+				{FieldType: "Position", Name: "position", Number: 3},
+				{FieldType: "string", Name: "inventory", Number: 4, Repeated: true},
+			},
+			Maps: []*ast.MapField{{
+				Name:      "stats",
+				KeyType:   "string",
+				ValueType: "int32",
+				Number:    5,
+			}},
+			Oneofs: []*ast.Oneof{{
+				Name: "contact",
+				Fields: []*ast.Field{
+					{FieldType: "string", Name: "email", Number: 6},
+				},
+			}},
+			NestedMessages: []*ast.Message{{
+				Name: "Position",
+				Fields: []*ast.Field{
+					{FieldType: "float", Name: "x", Number: 1},
+				},
+			}},
+		}, {
+			Name: "GameState",
+			Fields: []*ast.Field{
+				{FieldType: "Player", Name: "players", Number: 1, Repeated: true},
+			},
+		}},
+	}
+	cls, err := generator.Generate(file, "example.proto")
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	out := cls.ToGDScript(0)
+	for _, want := range []string{
+		// Scalar setter body
+		"func set_username(value: String) -> void:\n\t\t_username = value",
+		// Scalar getter body
+		"func get_username() -> String:\n\t\treturn _username",
+		// Enum-typed field uses message-like accessors and null default.
+		"var _status: PlayerStatus = null",
+		"func new_status() -> PlayerStatus:\n\t\t_status = PlayerStatus.new()\n\t\treturn _status",
+		// Nested message field uses message-like accessor with new_.
+		"func new_position() -> Position:\n\t\t_position = Position.new()\n\t\treturn _position",
+		// Repeated scalar adds a value.
+		"func add_inventory(value: String) -> void:\n\t\t_inventory.append(value)",
+		// Repeated message adds, returns the new instance.
+		"func add_players() -> Player:\n\t\tvar item: Player = Player.new()\n\t\t_players.append(item)\n\t\treturn item",
+		// Map accessor inserts into dictionary.
+		"func add_stats(key: String, value: int) -> void:\n\t\t_stats[key] = value",
+		"func get_stats() -> Dictionary[String, int]:\n\t\treturn _stats",
+		// Oneof setter updates the tracking variable and emits has_.
+		"func set_email(value: String) -> void:\n\t\tif _oneof_contact != \"email\":\n\t\t\t_oneof_contact = \"email\"\n\t\t_email = value",
+		"func has_email() -> bool:\n\t\treturn _oneof_contact == \"email\"",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing fragment:\n%s\n--- full output ---\n%s", want, out)
+		}
+	}
+}
+
 func minInt(a, b int) int {
 	if a < b {
 		return a

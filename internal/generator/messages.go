@@ -124,12 +124,10 @@ func (g *generator) typeName(protoType string) string {
 }
 
 // fieldDefault returns the default-value expression for a field's declaration.
-// Enum fields default to "0"; scalar fields use their proto3 zero value;
-// message fields default to null.
+// Scalar fields use their proto3 zero value; message and enum fields default
+// to null (the Python reference generator stores enum-typed fields as nullable
+// references, mirroring message field semantics).
 func (g *generator) fieldDefault(f *ast.Field) string {
-	if f.IsEnum || g.enumTypes[f.FieldType] {
-		return "0"
-	}
 	if def, ok := scalarDefaultMap[f.FieldType]; ok {
 		return def
 	}

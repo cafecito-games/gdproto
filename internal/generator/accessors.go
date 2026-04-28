@@ -42,16 +42,36 @@ func (g *generator) fieldAccessors(f *ast.Field, oneofName string) []gdast.Node 
 	fieldVar := "_" + f.Name
 
 	if f.Repeated {
-		add := gdast.Function{
-			Name:       "add_" + f.Name,
-			Parameters: []gdast.Parameter{{Name: "value", TypeHint: gdType}},
-			ReturnType: "void",
-			Body: []gdast.Statement{
-				gdast.ExpressionStatement{Expression: gdast.Call(
-					gdast.Attr(gdast.V(fieldVar), "append"),
-					gdast.V("value"),
-				)},
-			},
+		var add gdast.Function
+		if g.isMessageLikeType(f) {
+			add = gdast.Function{
+				Name:       "add_" + f.Name,
+				ReturnType: gdType,
+				Body: []gdast.Statement{
+					gdast.VarDeclaration{
+						Name:         "item",
+						TypeHint:     gdType,
+						InitialValue: gdast.Call(gdast.V(gdType + ".new")),
+					},
+					gdast.ExpressionStatement{Expression: gdast.Call(
+						gdast.Attr(gdast.V(fieldVar), "append"),
+						gdast.V("item"),
+					)},
+					gdast.Ret(gdast.V("item")),
+				},
+			}
+		} else {
+			add = gdast.Function{
+				Name:       "add_" + f.Name,
+				Parameters: []gdast.Parameter{{Name: "value", TypeHint: gdType}},
+				ReturnType: "void",
+				Body: []gdast.Statement{
+					gdast.ExpressionStatement{Expression: gdast.Call(
+						gdast.Attr(gdast.V(fieldVar), "append"),
+						gdast.V("value"),
+					)},
+				},
+			}
 		}
 		get := gdast.Function{
 			Name:       "get_" + f.Name,
