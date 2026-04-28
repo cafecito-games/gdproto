@@ -1,11 +1,281 @@
 # gogdproto
 
-A Protocol Buffers v3 compiler for GDScript (Godot 4.5), written in Go.
+Protocol Buffers v3 → GDScript (Godot 4.5) compiler. Single-binary, no Python runtime.
 
-Reimplementation of [gdproto](https://github.com/csueiras/gdproto) with byte-identical output for shared fixtures.
+Two entry points:
 
-See [design doc](docs/superpowers/specs/2026-04-27-gogdproto-design.md) for architecture and roadmap.
+- **`gogdproto`** — direct CLI (`gogdproto in.proto -o out.gd`).
+- **`protoc-gen-gdscript`** — `protoc` plugin (`protoc --gdscript_out=…`).
 
-## Status
+Both produce identical output. The compiler emits **two** files per invocation: the message wrapper, plus a sibling `proto_core_utils.gd` (the runtime — varint/zigzag/fixed encoders + decoders, error enum, text-format helpers).
 
-Pre-alpha. See open milestones for current work.
+---
+
+## Install
+
+```bash
+git clone git@github.com:cafecito-games/gogdproto.git
+cd gogdproto
+task install   # installs both binaries to $GOPATH/bin
+```
+
+Or to just build into `./bin`:
+
+```bash
+task build
+```
+
+Requires Go 1.26+.
+
+---
+
+## Usage
+
+### Direct CLI
+
+```bash
+gogdproto path/to/foo.proto -o godot_project/proto/foo.gd
+```
+
+Writes `godot_project/proto/foo.gd` AND `godot_project/proto/proto_core_utils.gd`. Subsequent invocations in the same directory overwrite both.
+
+Flags:
+
+| Flag | Default | Notes |
+|---|---|---|
+| `-o, --output` | _(required)_ | Output `.gd` path. |
+| `--log-level` | `warn` | `debug`/`info`/`warn`/`error`. JSON to stderr. |
+| `--version` | — | Prints `gogdproto 0.1.0`. |
+
+Exit codes: `0` success, `1` error, `130` interrupt.
+
+### protoc plugin
+
+```bash
+protoc \
+  --plugin=protoc-gen-gdscript=$(which protoc-gen-gdscript) \
+  --gdscript_out=godot_project/proto \
+  -I proto \
+  proto/foo.proto
+```
+
+The plugin emits the wrapper as `foo.pb.gd` (snake-cased basename). The sibling `proto_core_utils.gd` is **not** emitted by the plugin — when using `protoc`, copy `examples/proto_core_utils_golden.gd` into your output dir manually, or run `gogdproto` once to drop it there.
+
+---
+
+## Using generated code in Godot
+
+Both files must sit in the same directory in your Godot project. The wrapper preloads `ProtoCoreUtils` from the sibling.
+
+```gdscript
+const FooProto = preload("res://proto/foo.gd")
+
+# Construct
+var msg = FooProto.MyMessage.new()
+msg.set_username("alice")
+msg.set_level(42)
+
+# Append to repeated
+msg.add_inventory("sword")
+
+# Map
+msg.add_stats("strength", 100)
+
+# Nested message
+var pos = msg.new_position()
+pos.set_x(1.0); pos.set_y(2.0); pos.set_z(3.0)
+
+# Oneof — type-safe enum tracking
+msg.set_email("alice@example.com")
+if msg.has_email():
+    print(msg.get_email())
+print(msg.get_contact_case())  # FooProto.MyMessage.ContactOneOf.EMAIL
+
+# Wire (binary) round-trip
+var bytes: PackedByteArray = msg.to_bytes()
+var decoded = FooProto.MyMessage.new()
+var err = decoded.from_bytes(bytes)
+if err != ProtoCoreUtils.ProtobufError.NO_ERRORS:
+    push_error("decode failed: %s" % err)
+
+# Text-format round-trip (debug, hand-editable)
+var text: String = msg.to_text()
+var copy = FooProto.MyMessage.new()
+copy.from_text_format(text)
+
+# Quick debug
+print(msg)   # Calls _to_string()
+```
+
+### Type-safe oneofs
+
+Each `oneof contact { ... }` produces a nested `ContactOneOf` enum (`UNSET`, plus one constant per field). Setters update `_oneof_<group>` automatically; `get_<group>_case()` returns the current discriminant. Switching members clears the previous field's value.
+
+### Enums
+
+Top-level proto enums become top-level GDScript enums. Nested proto enums become nested. Field access uses plain ints under the hood:
+
+```gdscript
+msg.set_status(FooProto.PlayerStatus.ONLINE)
+match msg.get_status():
+    FooProto.PlayerStatus.ONLINE: ...
+```
+
+---
+
+## Supported proto3 features
+
+- All 15 scalar types (`int32/64`, `uint32/64`, `sint32/64`, `fixed32/64`, `sfixed32/64`, `float`, `double`, `bool`, `string`, `bytes`).
+- Messages including arbitrary nesting.
+- Enums (top-level and nested), `allow_alias`, negative values, hex/octal/decimal numbers.
+- Repeated fields (scalars and messages; packed encoding for primitives).
+- Map fields with scalar keys (any integral or string type) and any-typed values.
+- Oneof groups with type-safe enum tracking.
+- `import` statements with package-qualified and absolute (`.pkg.Foo`) type references.
+- `import public` re-exports (transitive, with cycle detection).
+- `reserved` numbers, ranges, and names.
+- File/message/field options (parsed; field-level `packed = false` honored).
+- `optional` keyword (proto3 explicit presence).
+
+### Not supported
+
+- proto2 syntax (rejected by validator).
+- Services / RPCs.
+- Well-known types (`google.protobuf.*`).
+- Custom options.
+- Extensions.
+- JSON mapping (only the binary wire format and a custom text format are emitted).
+
+---
+
+## Generated file layout
+
+The wrapper file:
+
+```
+class_name <Stem>Proto    # e.g. FooProto for foo.proto
+
+extends RefCounted
+
+# Generated by gdproto
+# Source: foo.proto
+# DO NOT EDIT
+
+
+enum <TopLevelEnum> { … }
+
+class <Message> extends RefCounted:
+    enum <NestedEnum> { … }
+    class <NestedMessage> extends RefCounted: …
+    enum <Group>OneOf { UNSET, FIELD_A, FIELD_B }   # per oneof group
+
+    var _<field>: …                                  # private storage
+    var _oneof_<group>: <Group>OneOf = …             # discriminant per oneof
+
+    func set_<field>(...) / get_<field>() / has_<field>() / clear_<field>()
+    func add_<repeated>(…) / get_<repeated>(i) / clear_<repeated>()
+    func new_<message>() …
+    func add_<map>(k, v) / get_<map>(k) / has_<map>(k) …
+
+    func to_bytes() -> PackedByteArray
+    func from_bytes(data: PackedByteArray) -> int   # ProtoCoreUtils.ProtobufError
+    func to_text() -> String                         # round-trippable text format
+    func from_text_format(text: String) -> int      # parser for to_text() output
+    func _to_string() -> String                      # Godot debug repr
+```
+
+The sibling `proto_core_utils.gd`:
+
+```
+class_name ProtoCoreUtils
+
+extends RefCounted
+
+enum ProtobufError { NO_ERRORS = 0, VARINT_NOT_FOUND = -1, … }
+const PROTO_VERSION: int = 3
+
+static func encode_varint / decode_varint
+static func encode_zigzag32 / 64 / decode_zigzag32 / 64
+static func encode_fixed32 / 64 / decode_fixed32 / 64
+static func encode_string / decode_string / encode_bytes / decode_bytes
+static func encode_field_tag / skip_field
+static func parse_string_literal / parse_identifier / parse_integer / parse_float
+static func skip_whitespace / escape_string / escape_bytes
+```
+
+Generated code is self-contained — no godobuf, no external GDScript dependency beyond the sibling.
+
+---
+
+## Wire format compatibility
+
+Output is wire-compatible with canonical protoc decoders (`protoc-gen-go`, `protoc-gen-python`, etc.). One intentional deviation from the upstream Python `gdproto`: enum-typed fields are encoded with wire type 0 (varint) per the proto3 spec, not wire type 2 (length-delimited) as Python emits. See `internal/generator/serialize.go:fieldWireType`.
+
+---
+
+## Development
+
+```bash
+task          # default: full CI pipeline locally (fmt + lint + test + build)
+task test     # unit tests with -race
+task test:cover
+task lint     # golangci-lint v2
+task fmt      # go fmt + goimports
+task build    # writes bin/gogdproto and bin/protoc-gen-gdscript
+```
+
+Pre-commit hooks (via [prek](https://github.com/j178/prek)):
+
+```bash
+prek install
+```
+
+Hooks run `task fmt:check`, `task lint`, and `task test` on every commit (Go-typed files only). Whitespace fixers skip `examples/*.gd` and `internal/generator/*.gd` — golden files have intentional trailing-byte behavior that must not be normalized.
+
+### Updating the golden when the proto reference evolves
+
+Python `gdproto` is the upstream reference. When it regenerates `examples/example.gd`:
+
+```bash
+cd ~/foss/gdproto && uv run gdproto examples/example.proto -o examples/example.gd
+cd $REPO
+cp ~/foss/gdproto/examples/example.gd            examples/golden.gd
+cp ~/foss/gdproto/examples/proto_core_utils.gd   examples/proto_core_utils_golden.gd
+cp examples/proto_core_utils_golden.gd           internal/generator/proto_core_utils_data.gd
+go test ./internal/generator/... -run 'TestGoldenExample|TestProtoCoreUtilsGolden' -v
+```
+
+If the test diffs, fix the generator until byte-identical. Intentional deviations (like the enum wire-type fix) require updating the regression test plus a comment in `serialize.go` explaining why we diverge.
+
+---
+
+## Project structure
+
+```
+cmd/
+  gogdproto/                    CLI entry point (cobra)
+  protoc-gen-gdscript/          protoc plugin entry point
+internal/
+  lexer/                        .proto tokenizer
+  parser/                       tokens → AST
+  ast/                          AST node types
+  validator/                    semantic validation (multi-error)
+  importer/                     import resolution (FS interface, transitive public imports, cycle detection)
+  descriptors/                  CodeGeneratorRequest / FileDescriptorProto → AST (used by the plugin)
+  generator/                    AST → gdast tree, plus embedded proto_core_utils
+  gdast/                        GDScript AST builder
+  applog/                       slog wiring (component-tagged loggers)
+  cli/                          cobra root + pipeline orchestration
+examples/
+  example.proto                 fixture
+  golden.gd                     expected wrapper output (regression-locked)
+  proto_core_utils_golden.gd    expected sibling output
+```
+
+The `examples/example.proto` fixture is the parity contract: `TestGoldenExample` and `TestProtoCoreUtilsGolden` lock byte-identical output. The plugin's `TestRunWithExampleProto` proves the protoc-plugin path produces the same wrapper bytes.
+
+---
+
+## Reference
+
+Upstream Python: [csueiras/gdproto](https://github.com/csueiras/gdproto).
