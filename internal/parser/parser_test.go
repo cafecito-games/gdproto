@@ -151,3 +151,68 @@ func TestFileOptionBool(t *testing.T) {
 		t.Errorf("got %v", file.Options["deprecated"])
 	}
 }
+
+func TestSimpleEnum(t *testing.T) {
+	src := `syntax = "proto3";
+enum ColorEnum {
+    RED = 0;
+    GREEN = 1;
+    BLUE = 2;
+}`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(file.Enums) != 1 {
+		t.Fatalf("got %d enums", len(file.Enums))
+	}
+	e := file.Enums[0]
+	if e.Name != "ColorEnum" || len(e.Values) != 3 {
+		t.Fatalf("got %+v", e)
+	}
+	wantNames := []string{"RED", "GREEN", "BLUE"}
+	for i, n := range wantNames {
+		if e.Values[i].Name != n || e.Values[i].Number != i {
+			t.Errorf("value[%d] = %+v", i, e.Values[i])
+		}
+	}
+}
+
+func TestEnumNegative(t *testing.T) {
+	src := `syntax = "proto3";
+enum Status { ERROR = -1; UNKNOWN = 0; OK = 1; }`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Enums[0].Values[0].Number != -1 {
+		t.Errorf("ERROR number = %d", file.Enums[0].Values[0].Number)
+	}
+}
+
+func TestEnumWithOption(t *testing.T) {
+	src := `syntax = "proto3";
+enum E {
+    option deprecated = true;
+    A = 0;
+}`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Enums[0].Options["deprecated"] != true {
+		t.Errorf("got %v", file.Enums[0].Options)
+	}
+}
+
+func TestEnumHexValue(t *testing.T) {
+	src := `syntax = "proto3";
+enum X { Y = 0x1F; }`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Enums[0].Values[0].Number != 31 {
+		t.Errorf("got %d", file.Enums[0].Values[0].Number)
+	}
+}

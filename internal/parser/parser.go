@@ -112,7 +112,11 @@ func (p *parser) parseFile() (*ast.ProtoFile, error) {
 		case p.match(lexer.TokenMessage):
 			return nil, p.errorf(p.current(), "Message parsing not yet implemented")
 		case p.match(lexer.TokenEnum):
-			return nil, p.errorf(p.current(), "Enum parsing not yet implemented")
+			e, err := p.parseEnum()
+			if err != nil {
+				return nil, err
+			}
+			file.Enums = append(file.Enums, e)
 		default:
 			tok := p.current()
 			return nil, p.errorf(tok, "Unexpected token: %s", tok.Type)
