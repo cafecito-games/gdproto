@@ -72,6 +72,12 @@ func (g *generator) generateMessage(m *ast.Message) *gdast.ClassDefinition {
 		}
 	}
 
+	if helpers := g.generateParseEnumValueHelpers(m); len(helpers) > 0 {
+		blank()
+		statements = append(statements, gdast.Comment{Text: "Enum value parsers"})
+		statements = append(statements, helpers...)
+	}
+
 	blank()
 	blank()
 	statements = append(statements,
@@ -79,6 +85,8 @@ func (g *generator) generateMessage(m *ast.Message) *gdast.ClassDefinition {
 		g.generateToBytes(m),
 		gdast.EmptyLine{},
 		g.generateFromBytes(m),
+		gdast.EmptyLine{},
+		g.generateFromText(m),
 		gdast.EmptyLine{},
 		g.generateToString(m),
 	)
