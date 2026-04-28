@@ -390,6 +390,28 @@ class Player extends RefCounted:
 					if msg_result != PB_ERR.NO_ERRORS:
 						return msg_result
 					offset += length
+				8:
+					# Field email
+					var length_result = PBCore.decode_varint(data, offset)
+					if length_result.size == -1:
+						return PB_ERR.LENGTH_DELIMITED_SIZE_NOT_FOUND
+					offset += length_result.size
+					var length: int = length_result.value
+					if offset + length > data.size():
+						return PB_ERR.LENGTH_DELIMITED_SIZE_MISMATCH
+					_email = PBCore.decode_string(data, offset, length)
+					offset += length
+				9:
+					# Field discord
+					var length_result = PBCore.decode_varint(data, offset)
+					if length_result.size == -1:
+						return PB_ERR.LENGTH_DELIMITED_SIZE_NOT_FOUND
+					offset += length_result.size
+					var length: int = length_result.value
+					if offset + length > data.size():
+						return PB_ERR.LENGTH_DELIMITED_SIZE_MISMATCH
+					_discord = PBCore.decode_string(data, offset, length)
+					offset += length
 				6:
 					# Map field stats
 					var length_result = PBCore.decode_varint(data, offset)

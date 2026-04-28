@@ -34,12 +34,24 @@ func (g *generator) generateFromBytes(m *ast.Message) gdast.Function {
 
 	whileBody := tagReadingStatements()
 
-	cases := make([]gdast.MatchCase, 0, len(m.Fields)+len(m.Maps)+1)
+	totalCases := len(m.Fields) + len(m.Maps) + 1
+	for _, o := range m.Oneofs {
+		totalCases += len(o.Fields)
+	}
+	cases := make([]gdast.MatchCase, 0, totalCases)
 	for _, f := range m.Fields {
 		cases = append(cases, gdast.MatchCase{
 			Pattern: strconv.Itoa(f.Number),
 			Body:    g.fieldDeserialization(f),
 		})
+	}
+	for _, o := range m.Oneofs {
+		for _, f := range o.Fields {
+			cases = append(cases, gdast.MatchCase{
+				Pattern: strconv.Itoa(f.Number),
+				Body:    g.fieldDeserialization(f),
+			})
+		}
 	}
 	for _, mf := range m.Maps {
 		caseBody := []gdast.Statement{

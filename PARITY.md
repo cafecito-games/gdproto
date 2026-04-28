@@ -1,13 +1,17 @@
 # Parity with Python `gdproto`
 
-`gogdproto` aims for byte-identical GDScript output for shared fixtures. This file tracks intentional and unintentional deviations.
+`gogdproto` aims for byte-identical GDScript output for shared fixtures. This file tracks intentional deviations from the Python reference.
 
-## Known Python bugs we faithfully reproduce
+## Intentional deviations (bugs we fix)
 
-### Oneof fields missing from `from_bytes`
+### Oneof fields decoded by `from_bytes`
 
-The Python generator emits oneof field cases in `to_bytes` but not in `from_bytes`. As a result, oneof-encoded data round-trips incorrectly: the `to_bytes` output is correct, but `from_bytes` silently drops oneof field data because there's no matching `case` in the field-number `match`.
+The Python generator emits oneof field cases in `to_bytes` but not in `from_bytes`, which means oneof-encoded data silently drops on the round trip. We emit the cases. As a result, our golden (`examples/golden.gd`) diverges from the Python repo's `examples/example.gd` by ~22 lines covering the missing oneof cases.
 
-We reproduce this bug to maintain byte-identical output with Python's golden. When the Python tool fixes this, regenerate the golden and update our generator to iterate `m.Oneofs` in `generateFromBytes`. The per-field decoder already supports oneof tracking via `OneofParent`.
+_Fixed 2026-04-28._
 
-_Reported by M5-T4 implementer (2026-04-28)._
+## Notes on Python's evolution
+
+Python `gdproto`'s `examples/example.gd` is stale relative to its own generator: regenerating from the current Python tool produces a substantially different file (~1300 lines, with `class_name` directive, sibling `proto_core_utils.gd` runtime file, etc.). We deliberately track the older 746-line format because it's what the Python repo ships as its committed example, and chasing the moving target of Python's current output isn't worth the churn.
+
+If/when Python's repo regenerates `examples/example.gd`, we should re-evaluate.

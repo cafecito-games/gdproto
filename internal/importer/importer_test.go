@@ -353,6 +353,88 @@ func TestOSFSWalkUpBasename(t *testing.T) {
 	}
 }
 
+func TestResolveExternal_PublicReExport(t *testing.T) {
+	// Input imports a barrel file which `public` imports the file
+	// defining the actual type.
+	leaf := `syntax = "proto3";
+enum Status { OK = 0; }`
+	barrel := `syntax = "proto3";
+import public "leaf.proto";`
+	in := `syntax = "proto3";
+import "barrel.proto";
+message M {
+    Status s = 1;
+}`
+	fs := &memFS{files: map[string]string{
+		"leaf.proto":   leaf,
+		"barrel.proto": barrel,
+	}}
+	file := parseFile(t, in)
+	if err := importer.ResolveExternal(file, "in.proto", fs); err != nil {
+		t.Fatal(err)
+	}
+	f := findField(t, file, "M", "s")
+	if f.SourceFile != "leaf.proto" || !f.IsEnum {
+		t.Errorf("expected SourceFile=leaf.proto IsEnum=true, got %+v", f)
+	}
+}
+
+func TestResolveExternal_NonPublicNotFollowed(t *testing.T) {
+	// Non-public re-imports must NOT be transitively visible.
+	leaf := `syntax = "proto3";
+enum Status { OK = 0; }`
+	barrel := `syntax = "proto3";
+import "leaf.proto";`
+	in := `syntax = "proto3";
+import "barrel.proto";
+message M {
+    Status s = 1;
+}`
+	fs := &memFS{files: map[string]string{
+		"leaf.proto":   leaf,
+		"barrel.proto": barrel,
+	}}
+	file := parseFile(t, in)
+	if err := importer.ResolveExternal(file, "in.proto", fs); err != nil {
+		t.Fatal(err)
+	}
+	f := findField(t, file, "M", "s")
+	if f.SourceFile != "" {
+		t.Errorf("non-public import should not propagate; got SourceFile=%q", f.SourceFile)
+	}
+}
+
+func TestResolveExternal_CycleDetected(t *testing.T) {
+	// a.proto and b.proto publicly import each other; resolver must
+	// terminate without infinite recursion.
+	a := `syntax = "proto3";
+import public "b.proto";
+enum A { X = 0; }`
+	b := `syntax = "proto3";
+import public "a.proto";
+enum B { Y = 0; }`
+	in := `syntax = "proto3";
+import "a.proto";
+message M {
+    A a = 1;
+    B b = 2;
+}`
+	fs := &memFS{files: map[string]string{
+		"a.proto": a,
+		"b.proto": b,
+	}}
+	file := parseFile(t, in)
+	if err := importer.ResolveExternal(file, "in.proto", fs); err != nil {
+		t.Fatal(err)
+	}
+	if findField(t, file, "M", "a").SourceFile != "a.proto" {
+		t.Error("A not resolved")
+	}
+	if findField(t, file, "M", "b").SourceFile != "b.proto" {
+		t.Error("B not resolved through cycle")
+	}
+}
+
 func TestResolveExternal_MissingImportSilent(t *testing.T) {
 	in := `syntax = "proto3";
 import "missing.proto";
