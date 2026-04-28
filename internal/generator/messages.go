@@ -43,12 +43,19 @@ func (g *generator) generateMessage(m *ast.Message) *gdast.ClassDefinition {
 
 	if len(m.Oneofs) > 0 {
 		blank()
+		statements = append(statements, gdast.Comment{Text: "Oneof enums"})
+		for _, oneof := range m.Oneofs {
+			statements = append(statements, generateOneofEnum(oneof))
+		}
+
+		blank()
 		statements = append(statements, gdast.Comment{Text: "Oneof tracking"})
 		for _, oneof := range m.Oneofs {
+			enumName := oneofEnumName(oneof.Name)
 			statements = append(statements, gdast.VarDeclaration{
-				Name:         "_oneof_" + oneof.Name,
-				TypeHint:     "String",
-				InitialValue: gdast.Lit(""),
+				Name:         oneofTrackingVar(oneof.Name),
+				TypeHint:     enumName,
+				InitialValue: gdast.RawExpression{Code: enumName + ".UNSET"},
 			})
 		}
 	}
@@ -56,6 +63,14 @@ func (g *generator) generateMessage(m *ast.Message) *gdast.ClassDefinition {
 	blank()
 	statements = append(statements, gdast.Comment{Text: "Accessors"})
 	statements = append(statements, g.generateAccessors(m)...)
+
+	if len(m.Oneofs) > 0 {
+		blank()
+		statements = append(statements, gdast.Comment{Text: "Oneof case getters"})
+		for _, oneof := range m.Oneofs {
+			statements = append(statements, generateOneofCaseGetter(oneof))
+		}
+	}
 
 	blank()
 	blank()

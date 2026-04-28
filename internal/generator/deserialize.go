@@ -47,9 +47,14 @@ func (g *generator) generateFromBytes(m *ast.Message) gdast.Function {
 	}
 	for _, o := range m.Oneofs {
 		for _, f := range o.Fields {
+			body := g.fieldDeserialization(f)
+			body = append(body, rawf("%s = %s",
+				oneofTrackingVar(o.Name),
+				oneofEnumQualified(o.Name, f.Name),
+			))
 			cases = append(cases, gdast.MatchCase{
 				Pattern: strconv.Itoa(f.Number),
-				Body:    g.fieldDeserialization(f),
+				Body:    body,
 			})
 		}
 	}

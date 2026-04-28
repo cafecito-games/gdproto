@@ -188,9 +188,9 @@ func TestGenerateAccessorBodies(t *testing.T) {
 		// Map accessor inserts into dictionary.
 		"func add_stats(key: String, value: int) -> void:\n\t\t_stats[key] = value",
 		"func get_stats() -> Dictionary[String, int]:\n\t\treturn _stats",
-		// Oneof setter updates the tracking variable and emits has_.
-		"func set_email(value: String) -> void:\n\t\tif _oneof_contact != \"email\":\n\t\t\t_oneof_contact = \"email\"\n\t\t_email = value",
-		"func has_email() -> bool:\n\t\treturn _oneof_contact == \"email\"",
+		// Oneof setter updates the tracking enum and emits has_.
+		"func set_email(value: String) -> void:\n\t\tif _oneof_contact != ContactOneOf.EMAIL:\n\t\t\t_oneof_contact = ContactOneOf.EMAIL\n\t\t_email = value",
+		"func has_email() -> bool:\n\t\treturn _oneof_contact == ContactOneOf.EMAIL",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing fragment:\n%s\n--- full output ---\n%s", want, out)

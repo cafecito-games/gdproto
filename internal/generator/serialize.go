@@ -25,10 +25,8 @@ func (g *generator) generateToBytes(m *ast.Message) gdast.Function {
 		body = append(body, gdast.EmptyLine{})
 	}
 	for _, oneof := range m.Oneofs {
-		for _, f := range oneof.Fields {
-			body = append(body, g.fieldSerialization(f)...)
-			body = append(body, gdast.EmptyLine{})
-		}
+		body = append(body, g.oneofSerialization(oneof)...)
+		body = append(body, gdast.EmptyLine{})
 	}
 	for _, mf := range m.Maps {
 		body = append(body, g.mapSerialization(mf)...)
@@ -44,6 +42,33 @@ func (g *generator) generateToBytes(m *ast.Message) gdast.Function {
 		Name:       "to_bytes",
 		ReturnType: "PackedByteArray",
 		Body:       body,
+	}
+}
+
+// oneofSerialization emits the `match _oneof_<group>` block that serializes
+// whichever member of the oneof is currently set; the UNSET case emits no
+// bytes by virtue of being absent from the match.
+func (g *generator) oneofSerialization(oneof *ast.Oneof) []gdast.Statement {
+	cases := make([]gdast.MatchCase, 0, len(oneof.Fields))
+	for _, f := range oneof.Fields {
+		tag := (f.Number << 3) | wireType(f.FieldType)
+		fieldVar := "_" + f.Name
+		caseBody := []gdast.Statement{
+			gdast.Comment{Text: fmt.Sprintf("Field %s", f.Name)},
+			rawf("result.append_array(ProtoCoreUtils.encode_varint(%d))", tag),
+		}
+		caseBody = append(caseBody, valueSerialization("result", fieldVar, f.FieldType)...)
+		cases = append(cases, gdast.MatchCase{
+			Pattern: oneofEnumQualified(oneof.Name, f.Name),
+			Body:    caseBody,
+		})
+	}
+	return []gdast.Statement{
+		gdast.Comment{Text: fmt.Sprintf("Oneof group %s", oneof.Name)},
+		gdast.MatchStatement{
+			Expression: gdast.V(oneofTrackingVar(oneof.Name)),
+			Cases:      cases,
+		},
 	}
 }
 

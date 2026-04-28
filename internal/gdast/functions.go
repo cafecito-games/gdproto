@@ -121,12 +121,14 @@ func (e EnumDefinition) ToGDScript(level int) string {
 
 	lines := []string{header}
 	innerPad := indent(level + 1)
-	for _, v := range e.Values {
+	for i, v := range e.Values {
 		line := innerPad + v.Name
 		if v.Value != nil {
 			line += " = " + strconv.Itoa(*v.Value)
 		}
-		line += ","
+		if i < len(e.Values)-1 {
+			line += ","
+		}
 		lines = append(lines, line)
 	}
 	lines = append(lines, pad+"}")
