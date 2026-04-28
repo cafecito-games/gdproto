@@ -12,11 +12,11 @@ func (g *generator) generateAccessors(m *ast.Message) []gdast.Node {
 	var groups [][]gdast.Node
 
 	for _, f := range m.Fields {
-		groups = append(groups, g.fieldAccessors(f, ""))
+		groups = append(groups, g.fieldAccessors(f))
 	}
 	for _, oneof := range m.Oneofs {
 		for _, f := range oneof.Fields {
-			groups = append(groups, g.fieldAccessors(f, oneof.Name))
+			groups = append(groups, g.oneofFieldAccessors(f, oneof))
 		}
 	}
 	for _, mf := range m.Maps {
@@ -24,20 +24,15 @@ func (g *generator) generateAccessors(m *ast.Message) []gdast.Node {
 	}
 
 	var out []gdast.Node
-	for i, group := range groups {
-		if i > 0 {
-			out = append(out, gdast.EmptyLine{})
-		}
+	for _, group := range groups {
 		out = append(out, group...)
+		out = append(out, gdast.EmptyLine{})
 	}
 	return out
 }
 
-// fieldAccessors emits the accessor functions for a regular or oneof field.
-// When oneofName is non-empty the field is part of a oneof and its setter
-// updates the parent's oneof tracking variable; a presence check is also
-// emitted.
-func (g *generator) fieldAccessors(f *ast.Field, oneofName string) []gdast.Node {
+// fieldAccessors emits the accessor functions for a regular (non-oneof) field.
+func (g *generator) fieldAccessors(f *ast.Field) []gdast.Node {
 	gdType := g.typeName(f.FieldType)
 	fieldVar := "_" + f.Name
 
@@ -98,17 +93,50 @@ func (g *generator) fieldAccessors(f *ast.Field, oneofName string) []gdast.Node 
 		return []gdast.Node{newer, get}
 	}
 
-	var setBody []gdast.Statement
-	if oneofName != "" {
-		oneofVar := "_oneof_" + oneofName
-		setBody = append(setBody, gdast.IfStatement{
-			Condition: gdast.Ne(gdast.V(oneofVar), gdast.Lit(f.Name)),
-			Body: []gdast.Statement{
-				gdast.Assign(oneofVar, gdast.Lit(f.Name)),
-			},
-		})
+	set := gdast.Function{
+		Name:       "set_" + f.Name,
+		Parameters: []gdast.Parameter{{Name: "value", TypeHint: gdType}},
+		ReturnType: "void",
+		Body:       []gdast.Statement{gdast.Assign(fieldVar, gdast.V("value"))},
 	}
-	setBody = append(setBody, gdast.Assign(fieldVar, gdast.V("value")))
+	get := gdast.Function{
+		Name:       "get_" + f.Name,
+		ReturnType: gdType,
+		Body:       []gdast.Statement{gdast.Ret(gdast.V(fieldVar))},
+	}
+	return []gdast.Node{set, get}
+}
+
+// oneofFieldAccessors emits the setter, getter, and `has_<field>` for a field
+// that participates in a oneof group. The setter clears the previously-set
+// oneof field's value before updating the tracking enum and assigning the new
+// value.
+func (g *generator) oneofFieldAccessors(f *ast.Field, oneof *ast.Oneof) []gdast.Node {
+	gdType := g.typeName(f.FieldType)
+	fieldVar := "_" + f.Name
+	trackingVar := oneofTrackingVar(oneof.Name)
+	enumValue := oneofEnumQualified(oneof.Name, f.Name)
+
+	var clearBody []gdast.Statement
+	for _, sibling := range oneof.Fields {
+		if sibling.Name == f.Name {
+			continue
+		}
+		clearBody = append(clearBody, gdast.Assign(
+			"_"+sibling.Name,
+			gdast.RawExpression{Code: g.fieldDefault(sibling)},
+		))
+	}
+	clearBody = append(clearBody, gdast.Assign(trackingVar, gdast.RawExpression{Code: enumValue}))
+
+	setBody := []gdast.Statement{
+		gdast.IfStatement{
+			Condition: gdast.Ne(gdast.V(trackingVar), gdast.RawExpression{Code: enumValue}),
+			Body:      clearBody,
+		},
+		gdast.Assign(fieldVar, gdast.V("value")),
+	}
+
 	set := gdast.Function{
 		Name:       "set_" + f.Name,
 		Parameters: []gdast.Parameter{{Name: "value", TypeHint: gdType}},
@@ -120,18 +148,14 @@ func (g *generator) fieldAccessors(f *ast.Field, oneofName string) []gdast.Node 
 		ReturnType: gdType,
 		Body:       []gdast.Statement{gdast.Ret(gdast.V(fieldVar))},
 	}
-	out := []gdast.Node{set, get}
-	if oneofName != "" {
-		has := gdast.Function{
-			Name:       "has_" + f.Name,
-			ReturnType: "bool",
-			Body: []gdast.Statement{
-				gdast.Ret(gdast.Eq(gdast.V("_oneof_"+oneofName), gdast.Lit(f.Name))),
-			},
-		}
-		out = append(out, has)
+	has := gdast.Function{
+		Name:       "has_" + f.Name,
+		ReturnType: "bool",
+		Body: []gdast.Statement{
+			gdast.Ret(gdast.Eq(gdast.V(trackingVar), gdast.RawExpression{Code: enumValue})),
+		},
 	}
-	return out
+	return []gdast.Node{set, get, has}
 }
 
 // mapAccessors emits the add/get functions for a map field. The add helper
@@ -165,15 +189,14 @@ func (g *generator) mapAccessors(mf *ast.MapField) []gdast.Node {
 }
 
 // isMessageLikeType reports whether the field's type renders with a `new_`
-// constructor accessor. Scalars and enums imported from another proto file
-// use scalar-style accessors. Same-file enums fall through to the
-// message-like branch to preserve compatibility with the reference output,
-// which models locally-defined enums as null-defaulting references.
+// constructor accessor. Scalars and enum-typed fields use scalar-style
+// accessors (set/get with the proto3 zero default); message-typed fields use
+// the message-like accessor pair (new/get).
 func (g *generator) isMessageLikeType(f *ast.Field) bool {
 	if _, ok := scalarTypeMap[f.FieldType]; ok {
 		return false
 	}
-	if f.IsEnum && f.SourceFile != "" && f.SourceFile != g.sourceName {
+	if f.IsEnum || g.enumTypes[f.FieldType] {
 		return false
 	}
 	return true

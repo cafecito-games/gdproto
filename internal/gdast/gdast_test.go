@@ -546,7 +546,7 @@ func TestEnumDefinitionNamed(t *testing.T) {
 			{Name: "C"},
 		},
 	}
-	want := "enum S {\n\tA,\n\tB = 2,\n\tC,\n}"
+	want := "enum S {\n\tA,\n\tB = 2,\n\tC\n}"
 	if got := e.ToGDScript(0); got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -559,7 +559,7 @@ func TestEnumDefinitionAnonymous(t *testing.T) {
 			{Name: "Y"},
 		},
 	}
-	want := "enum {\n\tX,\n\tY,\n}"
+	want := "enum {\n\tX,\n\tY\n}"
 	if got := e.ToGDScript(0); got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}

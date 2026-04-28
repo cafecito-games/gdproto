@@ -121,12 +121,14 @@ func (e EnumDefinition) ToGDScript(level int) string {
 
 	lines := []string{header}
 	innerPad := indent(level + 1)
-	for _, v := range e.Values {
+	for i, v := range e.Values {
 		line := innerPad + v.Name
 		if v.Value != nil {
 			line += " = " + strconv.Itoa(*v.Value)
 		}
-		line += ","
+		if i < len(e.Values)-1 {
+			line += ","
+		}
 		lines = append(lines, line)
 	}
 	lines = append(lines, pad+"}")
@@ -155,10 +157,10 @@ func (SignalDefinition) statement() {}
 
 // ClassDefinition models either a top-level GDScript file (when Name is empty)
 // or a nested `class` block. Top-level definitions emit `class_name` and
-// `extends` directives at the file scope. Statements are interleaved with
-// blank lines. HeaderComment, when non-empty on a top-level class, is rendered
-// as a `#` comment block before any `class_name`/`extends` directive and is
-// followed by an extra blank line.
+// `extends` directives at the file scope, followed by an optional header
+// comment block. Statements within a top-level class are separated by three
+// blank lines to match the gdproto wrapper layout; nested classes use a single
+// blank line between statements.
 type ClassDefinition struct {
 	Name               string
 	Extends            string
@@ -178,14 +180,14 @@ func (c ClassDefinition) ToGDScript(level int) string {
 	bodyIndent := level
 
 	if c.Name == "" {
-		if c.HeaderComment != "" {
-			lines = append(lines, renderCommentBlock(c.HeaderComment, 0, "#"), "", "")
-		}
 		if c.ClassNameDirective != "" {
 			lines = append(lines, "class_name "+c.ClassNameDirective, "")
 		}
 		if c.Extends != "" {
 			lines = append(lines, "extends "+c.Extends, "")
+		}
+		if c.HeaderComment != "" {
+			lines = append(lines, renderCommentBlock(c.HeaderComment, 0, "#"), "", "", "")
 		}
 	} else {
 		header := pad + "class " + c.Name
