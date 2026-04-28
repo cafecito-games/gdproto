@@ -272,3 +272,76 @@ func TestMultipleKeywords(t *testing.T) {
 		}
 	}
 }
+
+func TestStringDoubleQuote(t *testing.T) {
+	tokens, _ := lexer.Tokenize(`"hello world"`, "")
+	if tokens[0].Type != lexer.TokenStringLiteral || tokens[0].Value != "hello world" {
+		t.Errorf("got %+v", tokens[0])
+	}
+}
+
+func TestStringSingleQuote(t *testing.T) {
+	tokens, _ := lexer.Tokenize(`'hello world'`, "")
+	if tokens[0].Type != lexer.TokenStringLiteral || tokens[0].Value != "hello world" {
+		t.Errorf("got %+v", tokens[0])
+	}
+}
+
+func TestStringEmpty(t *testing.T) {
+	tokens, _ := lexer.Tokenize(`""`, "")
+	if tokens[0].Type != lexer.TokenStringLiteral || tokens[0].Value != "" {
+		t.Errorf("got %+v", tokens[0])
+	}
+}
+
+func TestStringEscapes(t *testing.T) {
+	tokens, _ := lexer.Tokenize(`"hello\nworld\t!"`, "")
+	if tokens[0].Value != "hello\nworld\t!" {
+		t.Errorf("got %q, want %q", tokens[0].Value, "hello\nworld\t!")
+	}
+}
+
+func TestStringEscapedQuotes(t *testing.T) {
+	tokens, _ := lexer.Tokenize(`"say \"hello\""`, "")
+	if tokens[0].Value != `say "hello"` {
+		t.Errorf("got %q", tokens[0].Value)
+	}
+}
+
+func TestStringEscapedBackslash(t *testing.T) {
+	tokens, _ := lexer.Tokenize(`"path\\to\\file"`, "")
+	if tokens[0].Value != `path\to\file` {
+		t.Errorf("got %q", tokens[0].Value)
+	}
+}
+
+func TestStringHexEscape(t *testing.T) {
+	tokens, _ := lexer.Tokenize(`"\x41\x42\x43"`, "")
+	if tokens[0].Value != "ABC" {
+		t.Errorf("got %q, want ABC", tokens[0].Value)
+	}
+}
+
+func TestStringUnterminated(t *testing.T) {
+	_, err := lexer.Tokenize(`"hello`, "")
+	var le *lexer.LexerError
+	if !errors.As(err, &le) || !strings.Contains(le.Message, "Unterminated string literal") {
+		t.Errorf("got %v, want unterminated string error", err)
+	}
+}
+
+func TestStringNewline(t *testing.T) {
+	_, err := lexer.Tokenize("\"hello\nworld\"", "")
+	var le *lexer.LexerError
+	if !errors.As(err, &le) || !strings.Contains(le.Message, "Newline in string literal") {
+		t.Errorf("got %v, want newline-in-string error", err)
+	}
+}
+
+func TestStringInvalidEscape(t *testing.T) {
+	_, err := lexer.Tokenize(`"\q"`, "")
+	var le *lexer.LexerError
+	if !errors.As(err, &le) || !strings.Contains(le.Message, "Invalid escape sequence") {
+		t.Errorf("got %v, want invalid escape error", err)
+	}
+}

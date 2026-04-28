@@ -1,6 +1,10 @@
 package lexer
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+	"strings"
+)
 
 // Tokenize converts .proto source code into a stream of tokens.
 // The filename is used only in error messages; pass "" for "<input>".
@@ -42,6 +46,15 @@ func (l *lexer) run() ([]Token, error) {
 
 		if isDigit(ch) || (ch == '-' && isDigit(l.peek(1))) {
 			l.tokens = append(l.tokens, l.readNumber())
+			continue
+		}
+
+		if ch == '"' || ch == '\'' {
+			tok, err := l.readString()
+			if err != nil {
+				return nil, err
+			}
+			l.tokens = append(l.tokens, tok)
 			continue
 		}
 
@@ -177,6 +190,109 @@ func (l *lexer) readNumber() Token {
 		tt = TokenFloatLiteral
 	}
 	return Token{Type: tt, Value: l.source[start:l.pos], Line: startLine, Column: startCol}
+}
+
+func (l *lexer) readString() (Token, error) {
+	startLine, startCol := l.line, l.column
+	quote := l.source[l.pos]
+	l.advance()
+
+	var sb strings.Builder
+	for {
+		if l.pos >= len(l.source) {
+			return Token{}, &LexerError{
+				File:    l.filename,
+				Line:    startLine,
+				Column:  startCol,
+				Message: "Unterminated string literal",
+			}
+		}
+
+		ch := l.source[l.pos]
+
+		if ch == quote {
+			l.advance()
+			return Token{Type: TokenStringLiteral, Value: sb.String(), Line: startLine, Column: startCol}, nil
+		}
+
+		if ch == '\n' {
+			return Token{}, &LexerError{
+				File:    l.filename,
+				Line:    l.line,
+				Column:  l.column,
+				Message: "Newline in string literal",
+			}
+		}
+
+		if ch == '\\' {
+			l.advance()
+			if l.pos >= len(l.source) {
+				return Token{}, &LexerError{
+					File:    l.filename,
+					Line:    l.line,
+					Column:  l.column,
+					Message: "Unterminated escape sequence",
+				}
+			}
+			escaped := l.source[l.pos]
+			switch escaped {
+			case 'n':
+				sb.WriteByte('\n')
+				l.advance()
+			case 'r':
+				sb.WriteByte('\r')
+				l.advance()
+			case 't':
+				sb.WriteByte('\t')
+				l.advance()
+			case '\\':
+				sb.WriteByte('\\')
+				l.advance()
+			case '\'':
+				sb.WriteByte('\'')
+				l.advance()
+			case '"':
+				sb.WriteByte('"')
+				l.advance()
+			case '0':
+				sb.WriteByte(0)
+				l.advance()
+			case 'x':
+				l.advance()
+				if l.pos+1 >= len(l.source) || !isHexDigit(l.source[l.pos]) || !isHexDigit(l.source[l.pos+1]) {
+					return Token{}, &LexerError{
+						File:    l.filename,
+						Line:    l.line,
+						Column:  l.column,
+						Message: "Invalid hex escape sequence",
+					}
+				}
+				v, err := strconv.ParseUint(l.source[l.pos:l.pos+2], 16, 8)
+				if err != nil {
+					return Token{}, &LexerError{
+						File:    l.filename,
+						Line:    l.line,
+						Column:  l.column,
+						Message: "Invalid hex escape sequence",
+					}
+				}
+				sb.WriteByte(byte(v))
+				l.advance()
+				l.advance()
+			default:
+				return Token{}, &LexerError{
+					File:    l.filename,
+					Line:    l.line,
+					Column:  l.column,
+					Message: fmt.Sprintf("Invalid escape sequence: \\%c", escaped),
+				}
+			}
+			continue
+		}
+
+		sb.WriteByte(ch)
+		l.advance()
+	}
 }
 
 func singleCharSymbol(ch byte) (TokenType, bool) {
