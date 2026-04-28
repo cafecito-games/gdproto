@@ -50,6 +50,47 @@ func (p *parser) parseOptionName() (string, error) {
 	return p.parseDottedIdent()
 }
 
+func (p *parser) parseOneof() (*ast.Oneof, error) {
+	oneofTok := p.current()
+	if _, err := p.expect(lexer.TokenOneof); err != nil {
+		return nil, err
+	}
+	nameTok, err := p.expect(lexer.TokenIdentifier)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.expect(lexer.TokenLBrace); err != nil {
+		return nil, err
+	}
+
+	o := &ast.Oneof{
+		Position: ast.Position{Line: oneofTok.Line, Column: oneofTok.Column},
+		Name:     nameTok.Value,
+	}
+
+	for !p.match(lexer.TokenRBrace) {
+		if p.match(lexer.TokenOption) {
+			if _, err := p.parseOption(); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		f, err := p.parseField(nameTok.Value)
+		if err != nil {
+			return nil, err
+		}
+		if f.Repeated {
+			return nil, p.errorf(oneofTok, "Oneof fields cannot be repeated")
+		}
+		o.Fields = append(o.Fields, f)
+	}
+
+	if _, err := p.expect(lexer.TokenRBrace); err != nil {
+		return nil, err
+	}
+	return o, nil
+}
+
 // parseOptionValue accepts string, int, float, bool, or identifier.
 func (p *parser) parseOptionValue() (any, error) {
 	tok := p.current()

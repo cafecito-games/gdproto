@@ -66,6 +66,13 @@ func (p *parser) parseEnumValue() (*ast.EnumValue, error) {
 	if err != nil {
 		return nil, p.errorf(numTok, "invalid enum value number %q: %v", numTok.Value, err)
 	}
+	var options map[string]any
+	if p.match(lexer.TokenLBracket) {
+		options, err = p.parseFieldOptions()
+		if err != nil {
+			return nil, err
+		}
+	}
 	if _, err := p.expect(lexer.TokenSemicolon); err != nil {
 		return nil, err
 	}
@@ -73,5 +80,67 @@ func (p *parser) parseEnumValue() (*ast.EnumValue, error) {
 		Position: ast.Position{Line: nameTok.Line, Column: nameTok.Column},
 		Name:     nameTok.Value,
 		Number:   int(number),
+		Options:  options,
 	}, nil
+}
+
+func (p *parser) parseReserved() (*ast.Reserved, error) {
+	resTok := p.current()
+	if _, err := p.expect(lexer.TokenReserved); err != nil {
+		return nil, err
+	}
+
+	r := &ast.Reserved{
+		Position: ast.Position{Line: resTok.Line, Column: resTok.Column},
+	}
+
+	if p.match(lexer.TokenStringLiteral) {
+		for {
+			nameTok, err := p.expect(lexer.TokenStringLiteral)
+			if err != nil {
+				return nil, err
+			}
+			r.Names = append(r.Names, nameTok.Value)
+			if !p.match(lexer.TokenComma) {
+				break
+			}
+			p.advance()
+		}
+	} else {
+		for {
+			startTok, err := p.expect(lexer.TokenIntLiteral)
+			if err != nil {
+				return nil, err
+			}
+			start, err := strconv.ParseInt(startTok.Value, 0, 32)
+			if err != nil {
+				return nil, p.errorf(startTok, "invalid reserved number %q: %v", startTok.Value, err)
+			}
+
+			rng := ast.ReservedRange{Start: int(start), End: int(start)}
+			if p.match(lexer.TokenIdentifier) && p.current().Value == "to" {
+				p.advance()
+				endTok, err := p.expect(lexer.TokenIntLiteral)
+				if err != nil {
+					return nil, err
+				}
+				end, err := strconv.ParseInt(endTok.Value, 0, 32)
+				if err != nil {
+					return nil, p.errorf(endTok, "invalid reserved range end %q: %v", endTok.Value, err)
+				}
+				rng.End = int(end)
+			}
+			r.Numbers = append(r.Numbers, rng)
+
+			if !p.match(lexer.TokenComma) {
+				break
+			}
+			p.advance()
+		}
+	}
+
+	if _, err := p.expect(lexer.TokenSemicolon); err != nil {
+		return nil, err
+	}
+	return r, nil
 }

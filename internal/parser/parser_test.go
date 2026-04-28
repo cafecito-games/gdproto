@@ -468,3 +468,119 @@ func TestAbsoluteMapValueType(t *testing.T) {
 		t.Errorf("got %q", file.Messages[0].Maps[0].ValueType)
 	}
 }
+
+func TestSimpleOneof(t *testing.T) {
+	src := `syntax = "proto3";
+message F {
+    oneof test {
+        string name = 1;
+        int32 value = 2;
+    }
+}`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := file.Messages[0].Oneofs[0]
+	if o.Name != "test" || len(o.Fields) != 2 {
+		t.Fatalf("got %+v", o)
+	}
+	if o.Fields[0].Name != "name" || o.Fields[0].OneofParent != "test" {
+		t.Errorf("got %+v", o.Fields[0])
+	}
+}
+
+func TestOneofRepeatedError(t *testing.T) {
+	src := `syntax = "proto3";
+message F { oneof t { repeated string ns = 1; } }`
+	_, err := parseSource(t, src)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "Oneof fields cannot be repeated") {
+		t.Errorf("got %v", err)
+	}
+}
+
+func TestReservedNumbers(t *testing.T) {
+	src := `syntax = "proto3"; message F { reserved 2, 15, 9; }`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := file.Messages[0].Reserved[0]
+	want := []ast.ReservedRange{{Start: 2, End: 2}, {Start: 15, End: 15}, {Start: 9, End: 9}}
+	if len(r.Numbers) != len(want) {
+		t.Fatalf("got %d numbers", len(r.Numbers))
+	}
+	for i, w := range want {
+		if r.Numbers[i] != w {
+			t.Errorf("number[%d] = %+v, want %+v", i, r.Numbers[i], w)
+		}
+	}
+	if len(r.Names) != 0 {
+		t.Errorf("names not empty: %v", r.Names)
+	}
+}
+
+func TestReservedRanges(t *testing.T) {
+	src := `syntax = "proto3"; message F { reserved 2, 9 to 11, 15; }`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := file.Messages[0].Reserved[0]
+	want := []ast.ReservedRange{{Start: 2, End: 2}, {Start: 9, End: 11}, {Start: 15, End: 15}}
+	for i, w := range want {
+		if r.Numbers[i] != w {
+			t.Errorf("range[%d] = %+v, want %+v", i, r.Numbers[i], w)
+		}
+	}
+}
+
+func TestReservedNames(t *testing.T) {
+	src := `syntax = "proto3"; message F { reserved "foo", "bar"; }`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := file.Messages[0].Reserved[0]
+	if len(r.Numbers) != 0 || len(r.Names) != 2 || r.Names[0] != "foo" || r.Names[1] != "bar" {
+		t.Errorf("got %+v", r)
+	}
+}
+
+func TestFieldPackedOption(t *testing.T) {
+	src := `syntax = "proto3"; message F { repeated int32 numbers = 1 [packed = false]; }`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := file.Messages[0].Fields[0]
+	if f.Options["packed"] != false {
+		t.Errorf("got %v", f.Options)
+	}
+}
+
+func TestFieldMultipleOptions(t *testing.T) {
+	src := `syntax = "proto3"; message F { int32 v = 1 [packed = true, deprecated = true]; }`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts := file.Messages[0].Fields[0].Options
+	if opts["packed"] != true || opts["deprecated"] != true {
+		t.Errorf("got %v", opts)
+	}
+}
+
+func TestMessageOption(t *testing.T) {
+	src := `syntax = "proto3"; message F { option deprecated = true; }`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Messages[0].Options["deprecated"] != true {
+		t.Errorf("got %v", file.Messages[0].Options)
+	}
+}

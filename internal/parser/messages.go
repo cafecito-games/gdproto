@@ -40,7 +40,11 @@ func (p *parser) parseMessage() (*ast.Message, error) {
 			}
 			m.NestedEnums = append(m.NestedEnums, child)
 		case p.match(lexer.TokenOneof):
-			return nil, p.errorf(p.current(), "Oneof parsing not yet implemented")
+			o, err := p.parseOneof()
+			if err != nil {
+				return nil, err
+			}
+			m.Oneofs = append(m.Oneofs, o)
 		case p.match(lexer.TokenMap):
 			mp, err := p.parseMapField()
 			if err != nil {
@@ -48,7 +52,11 @@ func (p *parser) parseMessage() (*ast.Message, error) {
 			}
 			m.Maps = append(m.Maps, mp)
 		case p.match(lexer.TokenReserved):
-			return nil, p.errorf(p.current(), "Reserved parsing not yet implemented")
+			r, err := p.parseReserved()
+			if err != nil {
+				return nil, err
+			}
+			m.Reserved = append(m.Reserved, r)
 		case p.match(lexer.TokenOption):
 			opt, err := p.parseOption()
 			if err != nil {
@@ -108,8 +116,12 @@ func (p *parser) parseField(oneofParent string) (*ast.Field, error) {
 		return nil, p.errorf(numTok, "invalid field number %q: %v", numTok.Value, err)
 	}
 
+	var fieldOptions map[string]any
 	if p.match(lexer.TokenLBracket) {
-		return nil, p.errorf(p.current(), "Field options parsing not yet implemented")
+		fieldOptions, err = p.parseFieldOptions()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if _, err := p.expect(lexer.TokenSemicolon); err != nil {
@@ -124,6 +136,7 @@ func (p *parser) parseField(oneofParent string) (*ast.Field, error) {
 		Repeated:    repeated,
 		Optional:    optional,
 		OneofParent: oneofParent,
+		Options:     fieldOptions,
 	}, nil
 }
 
@@ -165,8 +178,12 @@ func (p *parser) parseMapField() (*ast.MapField, error) {
 		return nil, p.errorf(numTok, "invalid map field number %q: %v", numTok.Value, err)
 	}
 
+	var fieldOptions map[string]any
 	if p.match(lexer.TokenLBracket) {
-		return nil, p.errorf(p.current(), "Field options parsing not yet implemented")
+		fieldOptions, err = p.parseFieldOptions()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if _, err := p.expect(lexer.TokenSemicolon); err != nil {
@@ -179,5 +196,50 @@ func (p *parser) parseMapField() (*ast.MapField, error) {
 		ValueType: valueType,
 		Name:      nameTok.Value,
 		Number:    int(num),
+		Options:   fieldOptions,
 	}, nil
+}
+
+// parseFieldOptions parses [opt1 = val1, opt2 = val2, ...]. PACKED is a
+// keyword and must be accepted as an option name (Python special-cases it).
+func (p *parser) parseFieldOptions() (map[string]any, error) {
+	if _, err := p.expect(lexer.TokenLBracket); err != nil {
+		return nil, err
+	}
+	options := map[string]any{}
+	for !p.match(lexer.TokenRBracket) {
+		var name string
+		tok := p.current()
+		switch tok.Type {
+		case lexer.TokenPacked, lexer.TokenIdentifier:
+			name = tok.Value
+			p.advance()
+		case lexer.TokenLParen:
+			n, err := p.parseOptionName()
+			if err != nil {
+				return nil, err
+			}
+			name = n
+		default:
+			name = tok.Value
+			p.advance()
+		}
+
+		if _, err := p.expect(lexer.TokenEquals); err != nil {
+			return nil, err
+		}
+		val, err := p.parseOptionValue()
+		if err != nil {
+			return nil, err
+		}
+		options[name] = val
+
+		if p.match(lexer.TokenComma) {
+			p.advance()
+		}
+	}
+	if _, err := p.expect(lexer.TokenRBracket); err != nil {
+		return nil, err
+	}
+	return options, nil
 }
