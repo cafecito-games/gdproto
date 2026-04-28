@@ -42,7 +42,11 @@ func (p *parser) parseMessage() (*ast.Message, error) {
 		case p.match(lexer.TokenOneof):
 			return nil, p.errorf(p.current(), "Oneof parsing not yet implemented")
 		case p.match(lexer.TokenMap):
-			return nil, p.errorf(p.current(), "Map field parsing not yet implemented")
+			mp, err := p.parseMapField()
+			if err != nil {
+				return nil, err
+			}
+			m.Maps = append(m.Maps, mp)
 		case p.match(lexer.TokenReserved):
 			return nil, p.errorf(p.current(), "Reserved parsing not yet implemented")
 		case p.match(lexer.TokenOption):
@@ -120,5 +124,60 @@ func (p *parser) parseField(oneofParent string) (*ast.Field, error) {
 		Repeated:    repeated,
 		Optional:    optional,
 		OneofParent: oneofParent,
+	}, nil
+}
+
+func (p *parser) parseMapField() (*ast.MapField, error) {
+	mapTok := p.current()
+	if _, err := p.expect(lexer.TokenMap); err != nil {
+		return nil, err
+	}
+	if _, err := p.expect(lexer.TokenLT); err != nil {
+		return nil, err
+	}
+	keyType, err := p.parseType()
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.expect(lexer.TokenComma); err != nil {
+		return nil, err
+	}
+	valueType, err := p.parseType()
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.expect(lexer.TokenGT); err != nil {
+		return nil, err
+	}
+	nameTok, err := p.expect(lexer.TokenIdentifier)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.expect(lexer.TokenEquals); err != nil {
+		return nil, err
+	}
+	numTok, err := p.expect(lexer.TokenIntLiteral)
+	if err != nil {
+		return nil, err
+	}
+	num, err := strconv.ParseInt(numTok.Value, 0, 32)
+	if err != nil {
+		return nil, p.errorf(numTok, "invalid map field number %q: %v", numTok.Value, err)
+	}
+
+	if p.match(lexer.TokenLBracket) {
+		return nil, p.errorf(p.current(), "Field options parsing not yet implemented")
+	}
+
+	if _, err := p.expect(lexer.TokenSemicolon); err != nil {
+		return nil, err
+	}
+
+	return &ast.MapField{
+		Position:  ast.Position{Line: mapTok.Line, Column: mapTok.Column},
+		KeyType:   keyType,
+		ValueType: valueType,
+		Name:      nameTok.Value,
+		Number:    int(num),
 	}, nil
 }

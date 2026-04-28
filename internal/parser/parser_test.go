@@ -362,3 +362,109 @@ func TestHexFieldNumber(t *testing.T) {
 		t.Errorf("got %d", file.Messages[0].Fields[0].Number)
 	}
 }
+
+func TestRepeatedScalar(t *testing.T) {
+	src := `syntax = "proto3"; message F { repeated int32 numbers = 1; }`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := file.Messages[0].Fields[0]
+	if !f.Repeated || f.FieldType != "int32" {
+		t.Errorf("got %+v", f)
+	}
+}
+
+func TestRepeatedMessage(t *testing.T) {
+	src := `syntax = "proto3"; message Item {} message C { repeated Item items = 1; }`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := file.Messages[1].Fields[0]
+	if !f.Repeated || f.FieldType != "Item" {
+		t.Errorf("got %+v", f)
+	}
+}
+
+func TestOptionalScalar(t *testing.T) {
+	src := `syntax = "proto3"; message F { optional int32 v = 1; }`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !file.Messages[0].Fields[0].Optional {
+		t.Errorf("Optional should be true")
+	}
+}
+
+func TestOptionalMessage(t *testing.T) {
+	src := `syntax = "proto3"; message Item {} message C { optional Item item = 1; }`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := file.Messages[1].Fields[0]
+	if !f.Optional || f.FieldType != "Item" {
+		t.Errorf("got %+v", f)
+	}
+}
+
+func TestMapScalarToScalar(t *testing.T) {
+	src := `syntax = "proto3"; message F { map<string, int32> my_map = 1; }`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mp := file.Messages[0].Maps[0]
+	if mp.KeyType != "string" || mp.ValueType != "int32" || mp.Name != "my_map" || mp.Number != 1 {
+		t.Errorf("got %+v", mp)
+	}
+}
+
+func TestMapScalarToMessage(t *testing.T) {
+	src := `syntax = "proto3"; message Value {} message F { map<int32, Value> my_map = 1; }`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mp := file.Messages[1].Maps[0]
+	if mp.KeyType != "int32" || mp.ValueType != "Value" {
+		t.Errorf("got %+v", mp)
+	}
+}
+
+func TestDottedMessageType(t *testing.T) {
+	src := `syntax = "proto3";
+message Outer { message Inner {} }
+message F { Outer.Inner v = 1; }`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Messages[1].Fields[0].FieldType != "Outer.Inner" {
+		t.Errorf("got %q", file.Messages[1].Fields[0].FieldType)
+	}
+}
+
+func TestAbsoluteMessageType(t *testing.T) {
+	src := `syntax = "proto3"; message F { .pkg.Bar v = 1; }`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Messages[0].Fields[0].FieldType != ".pkg.Bar" {
+		t.Errorf("got %q", file.Messages[0].Fields[0].FieldType)
+	}
+}
+
+func TestAbsoluteMapValueType(t *testing.T) {
+	src := `syntax = "proto3"; message F { map<string, .pkg.Bar> values = 1; }`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Messages[0].Maps[0].ValueType != ".pkg.Bar" {
+		t.Errorf("got %q", file.Messages[0].Maps[0].ValueType)
+	}
+}
