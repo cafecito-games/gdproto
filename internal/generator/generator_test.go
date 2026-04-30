@@ -467,6 +467,11 @@ func TestGenerateImportedMessageUsesWrapperQualification(t *testing.T) {
 	if !strings.Contains(got, "_shared = CommonProto.Shared.new()") {
 		t.Fatalf("missing imported wrapper constructor:\n%s", got)
 	}
+	// from_text used to instantiate the bare short name, which fails to load
+	// in Godot because the type is not in scope.
+	if strings.Contains(got, "_shared = Shared.new()") {
+		t.Fatalf("from_text uses unqualified Shared.new():\n%s", got)
+	}
 }
 
 func TestGenerateImportedEnumFieldEmitsHelpers(t *testing.T) {

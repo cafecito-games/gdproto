@@ -101,7 +101,7 @@ func (g *generator) fromTextFieldCase(f *ast.Field, oneofGroup string) string {
 
 	switch {
 	case f.Repeated && isMessageType(f):
-		b.WriteString(fromTextRepeatedMessageBody(f))
+		b.WriteString(g.fromTextRepeatedMessageBody(f))
 	case f.Repeated && f.FieldType == "string":
 		b.WriteString(fromTextStringBody(f, oneofGroup, true))
 	case f.Repeated:
@@ -116,7 +116,7 @@ func (g *generator) fromTextFieldCase(f *ast.Field, oneofGroup string) string {
 	case isEnumType(f):
 		b.WriteString(fromTextEnumBody(f, oneofGroup))
 	case isMessageType(f):
-		b.WriteString(fromTextMessageBody(f, oneofGroup))
+		b.WriteString(g.fromTextMessageBody(f, oneofGroup))
 	default:
 		// Integer-like scalars: int32, int64, uint*, sint*, fixed*.
 		b.WriteString(fromTextScalarBody(f, oneofGroup, false))
@@ -240,7 +240,8 @@ func oneofAssignmentExtraIndent(oneofGroup, fieldName, indent string) string {
 	return indent + oneofTrackingVar(oneofGroup) + " = " + oneofEnumQualified(oneofGroup, fieldName) + "\n"
 }
 
-func fromTextMessageBody(f *ast.Field, oneofGroup string) string {
+func (g *generator) fromTextMessageBody(f *ast.Field, oneofGroup string) string {
+	messageType := g.renderedFieldType(f)
 	var b strings.Builder
 	b.WriteString("\t\t\t# Parse message\n")
 	b.WriteString("\t\t\tif pos < text.length() and text[pos] == \"{\":\n")
@@ -262,7 +263,7 @@ func fromTextMessageBody(f *ast.Field, oneofGroup string) string {
 	b.WriteString("\t\t\t\tvar msg_text := text.substr(msg_start, pos - msg_start)\n")
 	b.WriteString("\t\t\t\tpos = pos + 1  # Skip closing brace\n")
 	b.WriteString("\n")
-	b.WriteString("\t\t\t\t_" + f.Name + " = " + f.FieldType + ".new()\n")
+	b.WriteString("\t\t\t\t_" + f.Name + " = " + messageType + ".new()\n")
 	b.WriteString("\t\t\t\tvar parse_result := _" + f.Name + ".from_text(msg_text)\n")
 	b.WriteString("\t\t\t\tif parse_result != ProtoCoreUtils.ProtobufError.NO_ERRORS:\n")
 	b.WriteString("\t\t\t\t\treturn parse_result\n")
@@ -270,8 +271,8 @@ func fromTextMessageBody(f *ast.Field, oneofGroup string) string {
 	return b.String()
 }
 
-func fromTextRepeatedMessageBody(f *ast.Field) string {
-	messageType := f.FieldType
+func (g *generator) fromTextRepeatedMessageBody(f *ast.Field) string {
+	messageType := g.renderedFieldType(f)
 	var b strings.Builder
 	b.WriteString("\t\t\t# Parse message\n")
 	b.WriteString("\t\t\tif pos < text.length() and text[pos] == \"{\":\n")

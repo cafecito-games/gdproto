@@ -19,6 +19,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/pluginpb"
 
+	"github.com/cafecito-games/gogdproto/internal/ast"
 	"github.com/cafecito-games/gogdproto/internal/descriptors"
 	"github.com/cafecito-games/gogdproto/internal/generator"
 	"github.com/cafecito-games/gogdproto/internal/validator"
@@ -65,7 +66,9 @@ func run(in io.Reader, out io.Writer) error {
 		fileIndex[descriptor.GetName()] = i
 	}
 
-	for _, name := range request.GetFileToGenerate() {
+	generationOrder := transitiveGenerationOrder(request.GetFileToGenerate(), files, fileIndex)
+
+	for _, name := range generationOrder {
 		index, ok := fileIndex[name]
 		if !ok {
 			continue
@@ -111,6 +114,46 @@ func run(in io.Reader, out io.Writer) error {
 	}
 
 	return writeResponse(out, response)
+}
+
+// transitiveGenerationOrder returns the explicit file_to_generate list followed
+// by every file transitively imported through them that the request also
+// supplied a descriptor for. Generated wrappers reference imported messages by
+// their wrapper class (e.g. GoogleProtobufTimestampProto.Timestamp), so those
+// classes have to exist on disk for Godot to resolve the type. Order is
+// deterministic: BFS over the original file_to_generate sequence.
+func transitiveGenerationOrder(seeds []string, files []*ast.ProtoFile, fileIndex map[string]int) []string {
+	seen := make(map[string]bool, len(seeds))
+	order := make([]string, 0, len(seeds))
+	queue := make([]string, 0, len(seeds))
+	for _, name := range seeds {
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		order = append(order, name)
+		queue = append(queue, name)
+	}
+	for len(queue) > 0 {
+		name := queue[0]
+		queue = queue[1:]
+		index, ok := fileIndex[name]
+		if !ok {
+			continue
+		}
+		for _, imp := range files[index].Imports {
+			if seen[imp.Path] {
+				continue
+			}
+			if _, ok := fileIndex[imp.Path]; !ok {
+				continue
+			}
+			seen[imp.Path] = true
+			order = append(order, imp.Path)
+			queue = append(queue, imp.Path)
+		}
+	}
+	return order
 }
 
 func writeResponse(out io.Writer, response *pluginpb.CodeGeneratorResponse) error {
