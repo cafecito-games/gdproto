@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package fixture;
+
+message EmptyMessage {}
+
+message NestedHost {
+  message Outer {
+    message Middle {
+      message Inner {
+        int32 value = 1;
+      }
+      Inner inner = 1;
+    }
+    Middle middle = 1;
+  }
+  Outer outer = 1;
+  EmptyMessage empty = 2;
+}
+
+// Self-reference: a singly linked list. Round-tripping requires
+// the wrapper to handle recursive types via lazy instantiation.
+// Avoid `Node` as a name to dodge Godot's built-in.
+message LinkedListNode {
+  int32 value = 1;
+  LinkedListNode next = 2;
+}

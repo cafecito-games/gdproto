@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package fixture;
+
+enum TopLevelMode {
+  TOP_LEVEL_MODE_UNSPECIFIED = 0;
+  TOP_LEVEL_MODE_ALPHA = 1;
+  TOP_LEVEL_MODE_BETA = 2;
+}
+
+// allow_alias permits multiple names mapping to the same integer.
+enum AliasedRank {
+  option allow_alias = true;
+  ALIASED_RANK_UNSPECIFIED = 0;
+  ALIASED_RANK_GOLD = 1;
+  ALIASED_RANK_PRIMARY = 1;
+  ALIASED_RANK_SILVER = 2;
+}
+
+message EnumHost {
+  enum Nested {
+    NESTED_UNSPECIFIED = 0;
+    NESTED_ONE = 1;
+    NESTED_TWO = 2;
+  }
+
+  TopLevelMode mode = 1;
+  Nested nested = 2;
+  AliasedRank rank = 3;
+  repeated TopLevelMode mode_history = 4;
+  map<int32, TopLevelMode> mode_by_id = 5;
+}

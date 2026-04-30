@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package fixture;
+
+// Proto3 explicit presence: an unset optional is distinguishable from
+// one set to its default value, and the wire form does not emit unset
+// fields.
+message OptionalScalars {
+  optional int32 int_value = 1;
+  optional string string_value = 2;
+  optional bool bool_value = 3;
+}

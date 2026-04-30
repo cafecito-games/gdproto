@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package fixture;
+
+message ItemEntry {
+  int32 id = 1;
+  string name = 2;
+}
+
+message Bag {
+  repeated int32 numbers = 1;
+  repeated string labels = 2;
+  repeated ItemEntry items = 3;
+
+  // A representative cross section of map key/value combinations the
+  // generator emits accessors for.
+  map<string, int32> string_to_int = 4;
+  map<int32, string> int_to_string = 5;
+  map<int64, double> int64_to_double = 6;
+  map<bool, string> bool_to_string = 7;
+  map<string, ItemEntry> string_to_message = 8;
+}
