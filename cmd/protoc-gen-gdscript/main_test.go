@@ -129,11 +129,14 @@ func TestRunWithExampleProto(t *testing.T) {
 	if response.Error != nil {
 		t.Fatalf("plugin reported error: %s", *response.Error)
 	}
-	if len(response.File) != 1 {
-		t.Fatalf("expected 1 generated file, got %d", len(response.File))
+	if len(response.File) != 2 {
+		t.Fatalf("expected 2 generated files (wrapper + proto_core_utils), got %d", len(response.File))
 	}
 	if got, want := response.File[0].GetName(), "example.pb.gd"; got != want {
 		t.Errorf("output filename = %q, want %q", got, want)
+	}
+	if got, want := response.File[1].GetName(), "proto_core_utils.gd"; got != want {
+		t.Errorf("sibling filename = %q, want %q", got, want)
 	}
 
 	got := response.File[0].GetContent()
@@ -198,8 +201,8 @@ message Uses { Outer.Inner inner = 1; }`,
 	})
 
 	response := runPluginRequest(t, request)
-	if len(response.File) != 1 {
-		t.Fatalf("expected 1 generated file, got %d", len(response.File))
+	if len(response.File) != 2 {
+		t.Fatalf("expected 2 generated files (wrapper + proto_core_utils), got %d", len(response.File))
 	}
 	got := response.File[0].GetContent()
 	if !strings.Contains(got, "var _inner: Outer.Inner = null") {
@@ -207,6 +210,45 @@ message Uses { Outer.Inner inner = 1; }`,
 	}
 	if !strings.Contains(got, "_inner = Outer.Inner.new()") {
 		t.Fatalf("missing qualified constructor:\n%s", got)
+	}
+}
+
+func TestRunGeneratesTransitivelyImportedFiles(t *testing.T) {
+	request := buildRequestFromDescriptorSet(t, []string{"main.proto"}, map[string]string{
+		"shared.proto": `syntax = "proto3";
+message Shared {}`,
+		"main.proto": `syntax = "proto3";
+import "shared.proto";
+message Uses { Shared shared = 1; }`,
+	})
+
+	response := runPluginRequest(t, request)
+	names := make([]string, 0, len(response.File))
+	for _, f := range response.File {
+		names = append(names, f.GetName())
+	}
+
+	hasMain := false
+	hasShared := false
+	hasCore := false
+	for _, name := range names {
+		switch name {
+		case "main.pb.gd":
+			hasMain = true
+		case "shared.pb.gd":
+			hasShared = true
+		case "proto_core_utils.gd":
+			hasCore = true
+		}
+	}
+	if !hasMain {
+		t.Fatalf("missing main.pb.gd in %v", names)
+	}
+	if !hasShared {
+		t.Fatalf("imported shared.pb.gd was not generated; got %v", names)
+	}
+	if !hasCore {
+		t.Fatalf("missing proto_core_utils.gd in %v", names)
 	}
 }
 

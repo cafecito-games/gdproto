@@ -467,6 +467,11 @@ func TestGenerateImportedMessageUsesWrapperQualification(t *testing.T) {
 	if !strings.Contains(got, "_shared = CommonProto.Shared.new()") {
 		t.Fatalf("missing imported wrapper constructor:\n%s", got)
 	}
+	// from_text used to instantiate the bare short name, which fails to load
+	// in Godot because the type is not in scope.
+	if strings.Contains(got, "_shared = Shared.new()") {
+		t.Fatalf("from_text uses unqualified Shared.new():\n%s", got)
+	}
 }
 
 func TestGenerateImportedEnumFieldEmitsHelpers(t *testing.T) {
@@ -503,6 +508,12 @@ func TestGenerateImportedEnumFieldEmitsHelpers(t *testing.T) {
 	}
 	if !strings.Contains(got, `"RED"`) || !strings.Contains(got, `"BLUE"`) {
 		t.Fatalf("imported enum values missing from helpers:\n%s", got)
+	}
+	if !strings.Contains(got, "SharedProto.Color.RED") {
+		t.Fatalf("imported enum match patterns are not qualified by their wrapper class:\n%s", got)
+	}
+	if strings.Contains(got, "\tColor.RED") || strings.Contains(got, " Color.RED") {
+		t.Fatalf("unqualified Color.RED reference would not parse in GDScript:\n%s", got)
 	}
 }
 
