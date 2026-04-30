@@ -248,6 +248,13 @@ func (g *generator) repeatedFieldDeserialization(f *ast.Field) []gdast.Statement
 			// Numeric scalar - covers varint, zigzag, fixed widths.
 			return repeatedNumericPackedOrUnpacked(fieldVar, f.FieldType)
 		}
+		if f.IsEnum {
+			// Repeated enum is wire-compatible with repeated int32, so it
+			// shares the packed-or-unpacked varint path. Without this, the
+			// generator falls through to the message branch and emits
+			// EnumName.new() / from_bytes(), which Godot rejects.
+			return repeatedNumericPackedOrUnpacked(fieldVar, "int32")
+		}
 		typeName := g.renderedFieldType(f)
 		return repeatedMessageAppend(fieldVar, typeName)
 	}
@@ -566,7 +573,7 @@ func mapFieldDeserialization(mf *ast.MapField) []gdast.Statement {
 		},
 		gdast.EmptyLine{},
 		inferredVar("map_key", mapDefault(mf.KeyType, false)),
-		inferredVar("map_value", mapDefault(mf.ValueType, mf.ValueIsEnum)),
+		mapValueDecl(mf),
 		gdast.EmptyLine{},
 		gdast.WhileStatement{
 			Condition: gdast.Lt(gdast.V("entry_offset"), gdast.RawExpression{Code: "entry_data.size()"}),
@@ -804,6 +811,24 @@ func mapMessageAssign(target, typeName string) []gdast.Statement {
 		},
 		rawf("entry_offset += msg_len"),
 	}
+}
+
+// mapValueDecl declares the running `map_value` for the entry-loop. Scalar
+// and enum values use type inference because their default literal carries a
+// usable type. Message values default to null, which Godot's parser cannot
+// infer a type for, so we emit a typed declaration to keep the script
+// compiling on Godot 4.6+.
+func mapValueDecl(mf *ast.MapField) gdast.Statement {
+	if !mf.ValueIsEnum {
+		if _, ok := scalarTypeMap[mf.ValueType]; !ok {
+			return gdast.VarDeclaration{
+				Name:         "map_value",
+				TypeHint:     gRenderedMapType(mf),
+				InitialValue: gdast.RawExpression{Code: "null"},
+			}
+		}
+	}
+	return inferredVar("map_value", mapDefault(mf.ValueType, mf.ValueIsEnum))
 }
 
 // mapDefault returns the literal zero value used to initialize the running

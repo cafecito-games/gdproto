@@ -38,13 +38,13 @@ func test_repeated_messages_round_trip():
 
 func test_scalar_keyed_maps_round_trip():
 	var bag := CollectionsProto.Bag.new()
-	bag.set_string_to_int("a", 1)
-	bag.set_string_to_int("b", 2)
-	bag.set_int_to_string(7, "seven")
-	bag.set_int64_to_double(10, 1.5)
-	bag.set_int64_to_double(20, 2.5)
-	bag.set_bool_to_string(true, "yes")
-	bag.set_bool_to_string(false, "no")
+	bag.add_string_to_int("a", 1)
+	bag.add_string_to_int("b", 2)
+	bag.add_int_to_string(7, "seven")
+	bag.add_int64_to_double(10, 1.5)
+	bag.add_int64_to_double(20, 2.5)
+	bag.add_bool_to_string(true, "yes")
+	bag.add_bool_to_string(false, "no")
 
 	var bytes := bag.to_bytes()
 	var decoded := CollectionsProto.Bag.new()
@@ -70,7 +70,7 @@ func test_message_valued_map_round_trip():
 	var item := CollectionsProto.ItemEntry.new()
 	item.set_id(99)
 	item.set_name("named")
-	bag.set_string_to_message("k", item)
+	bag.add_string_to_message("k", item)
 
 	var bytes := bag.to_bytes()
 	var decoded := CollectionsProto.Bag.new()

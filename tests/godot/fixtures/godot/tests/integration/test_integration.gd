@@ -16,8 +16,8 @@ func _populate(msg: IntegrationProto.KitchenSink) -> void:
 	s2.set_key("mp")
 	s2.set_value(50)
 
-	msg.set_counters("a", 1)
-	msg.set_counters("b", 2)
+	msg.add_counters("a", 1)
+	msg.add_counters("b", 2)
 
 	msg.set_accent(SharedProto.Hue.BLUE)
 

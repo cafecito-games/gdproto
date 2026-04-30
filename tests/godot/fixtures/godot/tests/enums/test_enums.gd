@@ -42,8 +42,8 @@ func test_repeated_enum_round_trip():
 
 func test_enum_valued_map_round_trip():
 	var msg := EnumsProto.EnumHost.new()
-	msg.set_mode_by_id(1, EnumsProto.TopLevelMode.TOP_LEVEL_MODE_ALPHA)
-	msg.set_mode_by_id(2, EnumsProto.TopLevelMode.TOP_LEVEL_MODE_BETA)
+	msg.add_mode_by_id(1, EnumsProto.TopLevelMode.TOP_LEVEL_MODE_ALPHA)
+	msg.add_mode_by_id(2, EnumsProto.TopLevelMode.TOP_LEVEL_MODE_BETA)
 	var bytes := msg.to_bytes()
 
 	var decoded := EnumsProto.EnumHost.new()
