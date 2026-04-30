@@ -504,6 +504,12 @@ func TestGenerateImportedEnumFieldEmitsHelpers(t *testing.T) {
 	if !strings.Contains(got, `"RED"`) || !strings.Contains(got, `"BLUE"`) {
 		t.Fatalf("imported enum values missing from helpers:\n%s", got)
 	}
+	if !strings.Contains(got, "SharedProto.Color.RED") {
+		t.Fatalf("imported enum match patterns are not qualified by their wrapper class:\n%s", got)
+	}
+	if strings.Contains(got, "\tColor.RED") || strings.Contains(got, " Color.RED") {
+		t.Fatalf("unqualified Color.RED reference would not parse in GDScript:\n%s", got)
+	}
 }
 
 func TestGenerateMapEnumUsesVarintPaths(t *testing.T) {

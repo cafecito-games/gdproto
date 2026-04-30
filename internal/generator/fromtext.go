@@ -414,7 +414,7 @@ func (g *generator) generateGetEnumNameHelper(f *ast.Field) gdast.Function {
 	cases := make([]gdast.MatchCase, 0, len(values)+1)
 	for _, v := range values {
 		cases = append(cases, gdast.MatchCase{
-			Pattern: f.FieldType + "." + v.Name,
+			Pattern: g.renderedFieldType(f) + "." + v.Name,
 			Body:    []gdast.Statement{gdast.Ret(gdast.Lit(v.Name))},
 		})
 	}
@@ -443,7 +443,7 @@ func (g *generator) generateParseEnumValueHelper(f *ast.Field) gdast.Function {
 	for _, v := range values {
 		cases = append(cases, gdast.MatchCase{
 			Pattern: `"` + v.Name + `"`,
-			Body:    []gdast.Statement{gdast.Ret(gdast.RawExpression{Code: f.FieldType + "." + v.Name})},
+			Body:    []gdast.Statement{gdast.Ret(gdast.RawExpression{Code: g.renderedFieldType(f) + "." + v.Name})},
 		})
 	}
 	cases = append(cases, gdast.MatchCase{
