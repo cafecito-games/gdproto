@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package fixture;
+
+import "shared.proto";
+import "google/protobuf/timestamp.proto";
+
+// Kitchen-sink message that combines several features in one round-trip:
+// nested messages, repeated, maps, oneofs, optional, cross-file message
+// (well-known type), cross-file enum, and a oneof carrying a cross-file
+// type. If any single feature regresses, this test surfaces it through
+// a shape mismatch on decode.
+message KitchenSink {
+  message Stat {
+    string key = 1;
+    int32 value = 2;
+  }
+
+  string name = 1;
+  optional int32 score = 2;
+  repeated Stat stats = 3;
+  map<string, int32> counters = 4;
+  fixture.Hue accent = 5;
+  google.protobuf.Timestamp created_at = 6;
+  fixture.Payload extra = 7;
+
+  oneof source {
+    fixture.SourceKind kind = 8;
+    string label = 9;
+    Stat origin = 10;
+  }
+}

@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package fixture.edge;
+
+// Field numbers near the wire-format boundaries:
+//   * < 16 → tag fits in one varint byte
+//   * 16  → first field number that needs a 2-byte tag
+//   * 2046 → still 2-byte tag territory, exercises mid-range
+//   * 536870911 → max user-assignable field number (2^29 - 1)
+message LargeFieldNumbers {
+  int32 small = 1;
+  int32 boundary = 16;
+  int32 mid_range = 2046;
+  int32 maximum = 536870911;
+}
+
+// Mixing reserved numbers, ranges, and reserved names. The generator
+// should emit valid GDScript and ignore the reserved declarations.
+message Reservations {
+  reserved 2, 4 to 6, 9 to max;
+  reserved "old_name", "deprecated";
+  int32 active = 1;
+  string label = 3;
+}
+
+// Package-qualified type references — the field uses the fully
+// qualified path even though the type is in the same package, so the
+// resolver has to canonicalize it.
+message PackageQualifiedReferences {
+  fixture.edge.LargeFieldNumbers absolute_ref = 1;
+}
