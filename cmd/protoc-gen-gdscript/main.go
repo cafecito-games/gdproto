@@ -103,6 +103,13 @@ func run(in io.Reader, out io.Writer) error {
 		})
 	}
 
+	if len(response.File) > 0 {
+		response.File = append(response.File, &pluginpb.CodeGeneratorResponse_File{
+			Name:    proto.String("proto_core_utils.gd"),
+			Content: proto.String(generator.GenerateProtoCoreUtilsRaw()),
+		})
+	}
+
 	return writeResponse(out, response)
 }
 

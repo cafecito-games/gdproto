@@ -129,11 +129,14 @@ func TestRunWithExampleProto(t *testing.T) {
 	if response.Error != nil {
 		t.Fatalf("plugin reported error: %s", *response.Error)
 	}
-	if len(response.File) != 1 {
-		t.Fatalf("expected 1 generated file, got %d", len(response.File))
+	if len(response.File) != 2 {
+		t.Fatalf("expected 2 generated files (wrapper + proto_core_utils), got %d", len(response.File))
 	}
 	if got, want := response.File[0].GetName(), "example.pb.gd"; got != want {
 		t.Errorf("output filename = %q, want %q", got, want)
+	}
+	if got, want := response.File[1].GetName(), "proto_core_utils.gd"; got != want {
+		t.Errorf("sibling filename = %q, want %q", got, want)
 	}
 
 	got := response.File[0].GetContent()
@@ -198,8 +201,8 @@ message Uses { Outer.Inner inner = 1; }`,
 	})
 
 	response := runPluginRequest(t, request)
-	if len(response.File) != 1 {
-		t.Fatalf("expected 1 generated file, got %d", len(response.File))
+	if len(response.File) != 2 {
+		t.Fatalf("expected 2 generated files (wrapper + proto_core_utils), got %d", len(response.File))
 	}
 	got := response.File[0].GetContent()
 	if !strings.Contains(got, "var _inner: Outer.Inner = null") {
