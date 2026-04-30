@@ -109,6 +109,8 @@ func (g *generator) fromTextFieldCase(f *ast.Field, oneofGroup string) string {
 		b.WriteString(fromTextScalarBody(f, oneofGroup, true))
 	case f.FieldType == "string":
 		b.WriteString(fromTextStringBody(f, oneofGroup, false))
+	case f.FieldType == "bytes":
+		b.WriteString(fromTextBytesBody(f, oneofGroup))
 	case f.FieldType == "float" || f.FieldType == "double":
 		b.WriteString(fromTextFloatBody(f, oneofGroup))
 	case f.FieldType == "bool":
@@ -152,6 +154,23 @@ func fromTextStringBody(f *ast.Field, oneofGroup string, repeated bool) string {
 	} else {
 		b.WriteString("\t\t\t_" + f.Name + " = str_result[\"value\"]\n")
 	}
+	b.WriteString(oneofAssignment(oneofGroup, f.Name))
+	b.WriteString("\t\t\tpos = str_result[\"pos\"]\n")
+	return b.String()
+}
+
+// fromTextBytesBody parses a quoted string literal and stores it as the field's
+// PackedByteArray via to_utf8_buffer(). to_text writes bytes as a quoted string
+// (with escape_bytes_text_format), so this is a best-effort round-trip for
+// ASCII/UTF-8 payloads; non-UTF-8 byte sequences won't survive intact, but the
+// generated script still compiles, which is what kept us from generating it as
+// a scalar number assignment.
+func fromTextBytesBody(f *ast.Field, oneofGroup string) string {
+	var b strings.Builder
+	b.WriteString("\t\t\tvar str_result := ProtoCoreUtils.parse_string_literal(text, pos)\n")
+	b.WriteString("\t\t\tif \"error\" in str_result:\n")
+	b.WriteString("\t\t\t\treturn ProtoCoreUtils.ProtobufError.UNDEFINED_STATE\n")
+	b.WriteString("\t\t\t_" + f.Name + " = (str_result[\"value\"] as String).to_utf8_buffer()\n")
 	b.WriteString(oneofAssignment(oneofGroup, f.Name))
 	b.WriteString("\t\t\tpos = str_result[\"pos\"]\n")
 	return b.String()
