@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package fixture;
+
+enum Hue {
+  HUE_UNSPECIFIED = 0;
+  RED = 1;
+  BLUE = 2;
+}
+
+enum SourceKind {
+  SOURCE_KIND_UNSPECIFIED = 0;
+  SYSTEM = 1;
+  USER = 2;
+}
+
+message Payload {
+  string data = 1;
+}
