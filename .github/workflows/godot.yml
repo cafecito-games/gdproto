@@ -1,0 +1,45 @@
+name: Godot Integration
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  vest:
+    name: Vest tests (Godot ${{ matrix.godot-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        godot-version: ['4.6.2-stable']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.x'
+          cache: true
+
+      - name: Install protoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+          protoc --version
+
+      - name: Set up Godot
+        uses: chickensoft-games/setup-godot@v1
+        with:
+          version: ${{ matrix.godot-version }}
+          use-dotnet: false
+          include-templates: false
+
+      - name: Verify Godot installation
+        run: godot --version
+
+      - name: Run Godot integration tests
+        run: bash tests/godot/run.sh

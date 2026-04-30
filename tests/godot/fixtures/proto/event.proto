@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package fixture;
+
+import "google/protobuf/timestamp.proto";
+import "shared.proto";
+
+// Exercises the regressions that motivated this fixture:
+//   - cross-file message field via a well-known type (Timestamp)
+//   - cross-file message field via a sibling .proto (Payload)
+//   - cross-file enum field that emits text-format helpers (Hue)
+//   - oneof carrying a cross-file enum (SourceKind)
+message Event {
+  google.protobuf.Timestamp occurred_at = 1;
+  fixture.Hue color = 2;
+  fixture.Payload payload = 3;
+  oneof source {
+    fixture.SourceKind kind = 4;
+    string label = 5;
+  }
+}
