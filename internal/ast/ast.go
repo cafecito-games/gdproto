@@ -50,6 +50,10 @@ type Field struct {
 	FullTypePath string
 	SourceFile   string
 	IsEnum       bool
+	// EnumValues mirrors the resolved enum's values when this field references
+	// an enum defined in another file. The local-file generator already has
+	// access to the AST node, so this is left empty for same-file enums.
+	EnumValues []*EnumValue
 }
 
 // MapField represents a map<K,V> field.

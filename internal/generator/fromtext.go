@@ -410,9 +410,9 @@ func (g *generator) collectEnumFields(m *ast.Message) []*ast.Field {
 // maps an enum integer value back to its declared symbolic name. Unknown
 // values fall through to `str(value)` so the text output remains stable.
 func (g *generator) generateGetEnumNameHelper(f *ast.Field) gdast.Function {
-	enum := g.findEnum(f.FieldType)
-	cases := make([]gdast.MatchCase, 0, len(enum.Values)+1)
-	for _, v := range enum.Values {
+	values := g.enumValuesFor(f)
+	cases := make([]gdast.MatchCase, 0, len(values)+1)
+	for _, v := range values {
 		cases = append(cases, gdast.MatchCase{
 			Pattern: f.FieldType + "." + v.Name,
 			Body:    []gdast.Statement{gdast.Ret(gdast.Lit(v.Name))},
@@ -438,9 +438,9 @@ func (g *generator) generateGetEnumNameHelper(f *ast.Field) gdast.Function {
 }
 
 func (g *generator) generateParseEnumValueHelper(f *ast.Field) gdast.Function {
-	enum := g.findEnum(f.FieldType)
-	cases := make([]gdast.MatchCase, 0, len(enum.Values)+1)
-	for _, v := range enum.Values {
+	values := g.enumValuesFor(f)
+	cases := make([]gdast.MatchCase, 0, len(values)+1)
+	for _, v := range values {
 		cases = append(cases, gdast.MatchCase{
 			Pattern: `"` + v.Name + `"`,
 			Body:    []gdast.Statement{gdast.Ret(gdast.RawExpression{Code: f.FieldType + "." + v.Name})},
@@ -463,6 +463,17 @@ func (g *generator) generateParseEnumValueHelper(f *ast.Field) gdast.Function {
 			},
 		},
 	}
+}
+
+// enumValuesFor returns the enum values associated with an enum-typed field.
+// Same-file references resolve through the in-file enum AST; cross-file
+// references rely on the EnumValues snapshot attached during descriptor or
+// import resolution.
+func (g *generator) enumValuesFor(f *ast.Field) []*ast.EnumValue {
+	if enum := g.findEnum(f.FieldType); enum != nil {
+		return enum.Values
+	}
+	return f.EnumValues
 }
 
 // findEnum locates an enum AST node by name, searching top-level enums then

@@ -469,6 +469,43 @@ func TestGenerateImportedMessageUsesWrapperQualification(t *testing.T) {
 	}
 }
 
+func TestGenerateImportedEnumFieldEmitsHelpers(t *testing.T) {
+	file := &ast.ProtoFile{
+		Syntax: "proto3",
+		Messages: []*ast.Message{{
+			Name: "Uses",
+			Fields: []*ast.Field{{
+				FieldType:    "Color",
+				FullTypePath: "shared.Color",
+				SourceFile:   "shared.proto",
+				IsEnum:       true,
+				Name:         "color",
+				Number:       1,
+				EnumValues: []*ast.EnumValue{
+					{Name: "COLOR_UNSPECIFIED", Number: 0},
+					{Name: "RED", Number: 1},
+					{Name: "BLUE", Number: 2},
+				},
+			}},
+		}},
+	}
+
+	cls, err := generator.Generate(file, "main.proto")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := cls.ToGDScript(0)
+	if !strings.Contains(got, "_get_enum_name_color") {
+		t.Fatalf("missing _get_enum_name_color helper:\n%s", got)
+	}
+	if !strings.Contains(got, "_parse_enum_value_color") {
+		t.Fatalf("missing _parse_enum_value_color helper:\n%s", got)
+	}
+	if !strings.Contains(got, `"RED"`) || !strings.Contains(got, `"BLUE"`) {
+		t.Fatalf("imported enum values missing from helpers:\n%s", got)
+	}
+}
+
 func TestGenerateMapEnumUsesVarintPaths(t *testing.T) {
 	file := &ast.ProtoFile{
 		Syntax: "proto3",

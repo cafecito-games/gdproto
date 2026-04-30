@@ -15,6 +15,7 @@ type importedType struct {
 	IsEnum     bool
 	FullName   string
 	ShortName  string
+	EnumValues []*ast.EnumValue
 }
 
 // ResolveExternal walks file's imports, parses them via fs, builds a
@@ -88,6 +89,7 @@ func collectImportedTypes(out map[string]importedType, visited map[string]bool, 
 			IsEnum:     true,
 			FullName:   fullName,
 			ShortName:  e.Name,
+			EnumValues: e.Values,
 		}
 	}
 	for _, nested := range impFile.Imports {
@@ -123,6 +125,7 @@ func collectFromMessage(out map[string]importedType, m *ast.Message, prefix, rel
 			IsEnum:     true,
 			FullName:   inner,
 			ShortName:  innerRelativePrefix + e.Name,
+			EnumValues: e.Values,
 		}
 	}
 }
@@ -167,12 +170,15 @@ func resolveOne(typeName, fullPath string, lookup map[string]importedType) (impo
 // messages, marking any references that resolve to an imported type.
 func annotateMessage(m *ast.Message, lookup map[string]importedType) {
 	for _, f := range m.Fields {
-		if t, ok := resolveOne(f.FieldType, f.FullTypePath, lookup); ok {
-			f.FieldType = t.ShortName
-			f.SourceFile = t.SourceFile
-			f.FullTypePath = t.FullName
-			f.IsEnum = t.IsEnum
+		t, ok := resolveOne(f.FieldType, f.FullTypePath, lookup)
+		if !ok {
+			continue
 		}
+		f.FieldType = t.ShortName
+		f.SourceFile = t.SourceFile
+		f.FullTypePath = t.FullName
+		f.IsEnum = t.IsEnum
+		f.EnumValues = t.EnumValues
 	}
 	for _, mp := range m.Maps {
 		if t, ok := resolveOne(mp.ValueType, mp.FullValueTypePath, lookup); ok {
@@ -184,12 +190,15 @@ func annotateMessage(m *ast.Message, lookup map[string]importedType) {
 	}
 	for _, o := range m.Oneofs {
 		for _, f := range o.Fields {
-			if t, ok := resolveOne(f.FieldType, f.FullTypePath, lookup); ok {
-				f.FieldType = t.ShortName
-				f.SourceFile = t.SourceFile
-				f.FullTypePath = t.FullName
-				f.IsEnum = t.IsEnum
+			t, ok := resolveOne(f.FieldType, f.FullTypePath, lookup)
+			if !ok {
+				continue
 			}
+			f.FieldType = t.ShortName
+			f.SourceFile = t.SourceFile
+			f.FullTypePath = t.FullName
+			f.IsEnum = t.IsEnum
+			f.EnumValues = t.EnumValues
 		}
 	}
 	for _, n := range m.NestedMessages {

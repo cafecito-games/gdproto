@@ -53,6 +53,7 @@ func FromCodeGeneratorRequest(req *pluginpb.CodeGeneratorRequest) ([]*ast.ProtoF
 		}
 		out = append(out, file)
 	}
+	resolveCrossFileEnumValues(out)
 	return out, nil
 }
 
@@ -61,7 +62,12 @@ func FromCodeGeneratorRequest(req *pluginpb.CodeGeneratorRequest) ([]*ast.ProtoF
 // within the given descriptor.
 func FromFileDescriptorProto(fdp *descriptorpb.FileDescriptorProto) (*ast.ProtoFile, error) {
 	c := newConverter([]*descriptorpb.FileDescriptorProto{fdp})
-	return c.convertFile(fdp)
+	file, err := c.convertFile(fdp)
+	if err != nil {
+		return nil, err
+	}
+	resolveCrossFileEnumValues([]*ast.ProtoFile{file})
+	return file, nil
 }
 
 func newConverter(allFiles []*descriptorpb.FileDescriptorProto) *converter {
@@ -387,6 +393,63 @@ func lastSegment(name string) string {
 		return name[idx+1:]
 	}
 	return name
+}
+
+// resolveCrossFileEnumValues walks every file's enums (including those nested
+// inside messages) to build a fully-qualified-name index, then attaches the
+// resolved enum's values to fields that reference an enum from another file.
+// Same-file references are skipped because the generator can locate the enum
+// AST node directly.
+func resolveCrossFileEnumValues(files []*ast.ProtoFile) {
+	index := map[string]*ast.Enum{}
+	for _, file := range files {
+		prefix := ""
+		if file.Package != "" {
+			prefix = file.Package + "."
+		}
+		for _, e := range file.Enums {
+			index[prefix+e.Name] = e
+		}
+		for _, m := range file.Messages {
+			indexNestedEnums(m, prefix+m.Name, index)
+		}
+	}
+	for _, file := range files {
+		for _, m := range file.Messages {
+			attachEnumValues(m, file, index)
+		}
+	}
+}
+
+func indexNestedEnums(m *ast.Message, scope string, index map[string]*ast.Enum) {
+	for _, e := range m.NestedEnums {
+		index[scope+"."+e.Name] = e
+	}
+	for _, nested := range m.NestedMessages {
+		indexNestedEnums(nested, scope+"."+nested.Name, index)
+	}
+}
+
+func attachEnumValues(m *ast.Message, file *ast.ProtoFile, index map[string]*ast.Enum) {
+	resolve := func(f *ast.Field) {
+		if !f.IsEnum || f.FullTypePath == "" {
+			return
+		}
+		if e, ok := index[f.FullTypePath]; ok {
+			f.EnumValues = e.Values
+		}
+	}
+	for _, f := range m.Fields {
+		resolve(f)
+	}
+	for _, oneof := range m.Oneofs {
+		for _, f := range oneof.Fields {
+			resolve(f)
+		}
+	}
+	for _, nested := range m.NestedMessages {
+		attachEnumValues(nested, file, index)
+	}
 }
 
 func localReferenceName(typeName, relativeScope string) string {
