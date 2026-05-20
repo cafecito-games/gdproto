@@ -25,3 +25,8 @@ coverage.html
 
 # Local git worktrees
 .worktrees/
+
+# Docusaurus
+website/.docusaurus/
+website/build/
+website/node_modules/
