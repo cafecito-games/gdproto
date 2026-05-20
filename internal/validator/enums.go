@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cafecito-games/gogdproto/internal/ast"
+	"github.com/cafecito-games/gdproto/internal/ast"
 )
 
 // validateEnum enforces proto3 enum rules: duplicate value numbers (unless

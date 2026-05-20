@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cafecito-games/gogdproto/internal/ast"
-	"github.com/cafecito-games/gogdproto/internal/lexer"
+	"github.com/cafecito-games/gdproto/internal/ast"
+	"github.com/cafecito-games/gdproto/internal/lexer"
 )
 
 // Parse consumes a token stream from the lexer and produces a *ast.ProtoFile.

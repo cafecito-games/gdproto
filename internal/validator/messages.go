@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cafecito-games/gogdproto/internal/ast"
+	"github.com/cafecito-games/gdproto/internal/ast"
 )
 
 // validateMessage validates a single message. It checks the message name

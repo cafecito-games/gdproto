@@ -1,7 +1,7 @@
 package validator
 
 import (
-	"github.com/cafecito-games/gogdproto/internal/ast"
+	"github.com/cafecito-games/gdproto/internal/ast"
 )
 
 // validateOneof validates each field within a oneof. Oneof fields share the

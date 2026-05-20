@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cafecito-games/gogdproto/internal/ast"
-	"github.com/cafecito-games/gogdproto/internal/gdast"
+	"github.com/cafecito-games/gdproto/internal/ast"
+	"github.com/cafecito-games/gdproto/internal/gdast"
 )
 
 // generateToText emits the `to_text` method that serializes a message instance

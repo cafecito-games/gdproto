@@ -3,8 +3,8 @@ package generator
 import (
 	"fmt"
 
-	"github.com/cafecito-games/gogdproto/internal/ast"
-	"github.com/cafecito-games/gogdproto/internal/gdast"
+	"github.com/cafecito-games/gdproto/internal/ast"
+	"github.com/cafecito-games/gdproto/internal/gdast"
 )
 
 // generateToBytes builds the `to_bytes` method that serializes a message

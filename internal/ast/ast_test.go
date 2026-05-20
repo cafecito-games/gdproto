@@ -3,7 +3,7 @@ package ast_test
 import (
 	"testing"
 
-	"github.com/cafecito-games/gogdproto/internal/ast"
+	"github.com/cafecito-games/gdproto/internal/ast"
 )
 
 func TestProtoFileZero(t *testing.T) {

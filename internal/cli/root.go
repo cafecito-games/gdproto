@@ -10,12 +10,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/cafecito-games/gogdproto/internal/applog"
-	"github.com/cafecito-games/gogdproto/internal/generator"
-	"github.com/cafecito-games/gogdproto/internal/importer"
-	"github.com/cafecito-games/gogdproto/internal/lexer"
-	"github.com/cafecito-games/gogdproto/internal/parser"
-	"github.com/cafecito-games/gogdproto/internal/validator"
+	"github.com/cafecito-games/gdproto/internal/applog"
+	"github.com/cafecito-games/gdproto/internal/generator"
+	"github.com/cafecito-games/gdproto/internal/importer"
+	"github.com/cafecito-games/gdproto/internal/lexer"
+	"github.com/cafecito-games/gdproto/internal/parser"
+	"github.com/cafecito-games/gdproto/internal/validator"
 )
 
 // Execute runs the root command with the given args and IO streams.
@@ -35,9 +35,9 @@ func newRootCommand(out, errOut io.Writer) *cobra.Command {
 	var rootLogger *slog.Logger
 
 	cmd := &cobra.Command{
-		Use:           "gogdproto [flags] INPUT",
+		Use:           "gdproto [flags] INPUT",
 		Short:         "Protocol Buffers compiler for GDScript (Godot 4.5)",
-		Long:          "gogdproto compiles .proto files to GDScript for use in Godot 4.5.",
+		Long:          "gdproto compiles .proto files to GDScript for use in Godot 4.5.",
 		Args:          cobra.MaximumNArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: false,
@@ -64,7 +64,7 @@ func newRootCommand(out, errOut io.Writer) *cobra.Command {
 
 	cmd.SetOut(out)
 	cmd.SetErr(errOut)
-	cmd.SetVersionTemplate(fmt.Sprintf("gogdproto %s\n", Version))
+	cmd.SetVersionTemplate(fmt.Sprintf("gdproto %s\n", Version))
 
 	cmd.PersistentFlags().StringVar(
 		&logLevelFlag, "log-level", "warn",

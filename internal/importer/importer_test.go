@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/cafecito-games/gogdproto/internal/ast"
-	"github.com/cafecito-games/gogdproto/internal/importer"
-	"github.com/cafecito-games/gogdproto/internal/lexer"
-	"github.com/cafecito-games/gogdproto/internal/parser"
+	"github.com/cafecito-games/gdproto/internal/ast"
+	"github.com/cafecito-games/gdproto/internal/importer"
+	"github.com/cafecito-games/gdproto/internal/lexer"
+	"github.com/cafecito-games/gdproto/internal/parser"
 )
 
 // memFS is a test-only in-memory FS.

@@ -1,7 +1,7 @@
 version: '3'
 
 vars:
-  BIN: bin/gogdproto
+  BIN: bin/gdproto
   PKG: ./...
 
 tasks:
@@ -14,13 +14,13 @@ tasks:
     desc: Build all binaries into ./bin.
     cmds:
       - mkdir -p bin
-      - go build -o {{.BIN}} ./cmd/gogdproto
+      - go build -o {{.BIN}} ./cmd/gdproto
       - go build -o bin/protoc-gen-gdscript ./cmd/protoc-gen-gdscript
 
   install:
-    desc: Install gogdproto and protoc-gen-gdscript into $GOPATH/bin.
+    desc: Install gdproto and protoc-gen-gdscript into $GOPATH/bin.
     cmds:
-      - go install ./cmd/gogdproto
+      - go install ./cmd/gdproto
       - go install ./cmd/protoc-gen-gdscript
 
   test:

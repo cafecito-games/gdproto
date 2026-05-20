@@ -3,9 +3,9 @@ package importer
 import (
 	"strings"
 
-	"github.com/cafecito-games/gogdproto/internal/ast"
-	"github.com/cafecito-games/gogdproto/internal/lexer"
-	"github.com/cafecito-games/gogdproto/internal/parser"
+	"github.com/cafecito-games/gdproto/internal/ast"
+	"github.com/cafecito-games/gdproto/internal/lexer"
+	"github.com/cafecito-games/gdproto/internal/parser"
 )
 
 // importedType holds resolution metadata for a type sourced from an

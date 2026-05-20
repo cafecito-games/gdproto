@@ -1,2 +1,2 @@
-// Package cli implements the gogdproto cobra CLI.
+// Package cli implements the gdproto cobra CLI.
 package cli

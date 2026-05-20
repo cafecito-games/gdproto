@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cafecito-games/gogdproto/internal/applog"
+	"github.com/cafecito-games/gdproto/internal/applog"
 )
 
 func TestParseLevel(t *testing.T) {

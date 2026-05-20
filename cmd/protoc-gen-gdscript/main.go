@@ -19,10 +19,10 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/pluginpb"
 
-	"github.com/cafecito-games/gogdproto/internal/ast"
-	"github.com/cafecito-games/gogdproto/internal/descriptors"
-	"github.com/cafecito-games/gogdproto/internal/generator"
-	"github.com/cafecito-games/gogdproto/internal/validator"
+	"github.com/cafecito-games/gdproto/internal/ast"
+	"github.com/cafecito-games/gdproto/internal/descriptors"
+	"github.com/cafecito-games/gdproto/internal/generator"
+	"github.com/cafecito-games/gdproto/internal/validator"
 )
 
 func main() {
