@@ -1,8 +1,8 @@
 package generator
 
 import (
-	"github.com/cafecito-games/gogdproto/internal/ast"
-	"github.com/cafecito-games/gogdproto/internal/gdast"
+	"github.com/cafecito-games/gdproto/internal/ast"
+	"github.com/cafecito-games/gdproto/internal/gdast"
 )
 
 // generateAccessors produces setter, getter, and oneof presence-check methods

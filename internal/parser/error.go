@@ -3,7 +3,7 @@ package parser
 import (
 	"fmt"
 
-	"github.com/cafecito-games/gogdproto/internal/lexer"
+	"github.com/cafecito-games/gdproto/internal/lexer"
 )
 
 // ParserError describes a parse failure.

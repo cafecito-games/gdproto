@@ -1,4 +1,4 @@
-module github.com/cafecito-games/gogdproto
+module github.com/cafecito-games/gdproto
 
 go 1.26
 

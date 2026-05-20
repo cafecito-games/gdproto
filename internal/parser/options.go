@@ -3,8 +3,8 @@ package parser
 import (
 	"strconv"
 
-	"github.com/cafecito-games/gogdproto/internal/ast"
-	"github.com/cafecito-games/gogdproto/internal/lexer"
+	"github.com/cafecito-games/gdproto/internal/ast"
+	"github.com/cafecito-games/gdproto/internal/lexer"
 )
 
 func (p *parser) parseOption() (*ast.Option, error) {

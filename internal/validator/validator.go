@@ -3,7 +3,7 @@ package validator
 import (
 	"fmt"
 
-	"github.com/cafecito-games/gogdproto/internal/ast"
+	"github.com/cafecito-games/gdproto/internal/ast"
 )
 
 // validator carries state across a single validation pass over a ProtoFile.

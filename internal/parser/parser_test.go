@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cafecito-games/gogdproto/internal/ast"
-	"github.com/cafecito-games/gogdproto/internal/lexer"
-	"github.com/cafecito-games/gogdproto/internal/parser"
+	"github.com/cafecito-games/gdproto/internal/ast"
+	"github.com/cafecito-games/gdproto/internal/lexer"
+	"github.com/cafecito-games/gdproto/internal/parser"
 )
 
 // parseSource is a helper that lexes and parses a proto source.

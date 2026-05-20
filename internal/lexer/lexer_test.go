@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cafecito-games/gogdproto/internal/lexer"
+	"github.com/cafecito-games/gdproto/internal/lexer"
 )
 
 func TestTokenTypeString(t *testing.T) {

@@ -1,7 +1,7 @@
 package parser
 
 import (
-	"github.com/cafecito-games/gogdproto/internal/lexer"
+	"github.com/cafecito-games/gdproto/internal/lexer"
 )
 
 // scalarTypeTokens is the set of token types that name a built-in scalar.
