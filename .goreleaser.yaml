@@ -1,0 +1,74 @@
+version: 2
+
+project_name: gogdproto
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: gogdproto
+    main: ./cmd/gogdproto
+    binary: gogdproto
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X github.com/cafecito-games/gogdproto/internal/cli.Version={{ .Version }}
+
+  - id: protoc-gen-gdscript
+    main: ./cmd/protoc-gen-gdscript
+    binary: protoc-gen-gdscript
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X github.com/cafecito-games/gogdproto/internal/cli.Version={{ .Version }}
+
+archives:
+  - id: gogdproto
+    ids:
+      - gogdproto
+      - protoc-gen-gdscript
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+homebrew_casks:
+  - name: gogdproto
+    repository:
+      owner: cafecito-games
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: "https://github.com/cafecito-games/gogdproto"
+    description: "Protocol Buffers v3 to GDScript (Godot 4.6+) compiler"
+    # The release binaries are not code-signed, so strip the quarantine
+    # attribute on install to avoid Gatekeeper blocking the executables.
+    hooks:
+      post:
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/gogdproto"]
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/protoc-gen-gdscript"]
+          end
