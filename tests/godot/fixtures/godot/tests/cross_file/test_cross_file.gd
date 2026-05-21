@@ -6,11 +6,6 @@ extends VestTest
 #   - well-known type import (transitive imports must be generated)
 #   - oneof carrying a cross-file enum
 
-const SharedProto = preload("res://generated/shared.pb.gd")
-const EventProto = preload("res://generated/event.pb.gd")
-const TimestampProto = preload("res://generated/google/protobuf/timestamp.pb.gd")
-const Core = preload("res://generated/proto_core_utils.gd")
-
 func test_cross_file_enum_round_trip_binary():
 	var event := EventProto.Event.new()
 	event.set_color(SharedProto.Hue.RED)
@@ -18,7 +13,7 @@ func test_cross_file_enum_round_trip_binary():
 
 	var decoded := EventProto.Event.new()
 	var err := decoded.from_bytes(bytes)
-	expect_equal(err, Core.ProtobufError.NO_ERRORS)
+	expect_equal(err, ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	expect_equal(decoded.get_color(), SharedProto.Hue.RED)
 
 func test_cross_file_message_round_trip_binary():
@@ -29,7 +24,7 @@ func test_cross_file_message_round_trip_binary():
 
 	var decoded := EventProto.Event.new()
 	var err := decoded.from_bytes(bytes)
-	expect_equal(err, Core.ProtobufError.NO_ERRORS)
+	expect_equal(err, ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	expect_equal(decoded.get_payload().get_data(), "hello")
 
 func test_well_known_type_round_trip_binary():
@@ -41,7 +36,7 @@ func test_well_known_type_round_trip_binary():
 
 	var decoded := EventProto.Event.new()
 	var err := decoded.from_bytes(bytes)
-	expect_equal(err, Core.ProtobufError.NO_ERRORS)
+	expect_equal(err, ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	expect_equal(decoded.get_occurred_at().get_seconds(), 1700000000)
 	expect_equal(decoded.get_occurred_at().get_nanos(), 123)
 
@@ -52,7 +47,7 @@ func test_oneof_with_cross_file_enum_round_trip_binary():
 
 	var decoded := EventProto.Event.new()
 	var err := decoded.from_bytes(bytes)
-	expect_equal(err, Core.ProtobufError.NO_ERRORS)
+	expect_equal(err, ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	expect_equal(decoded.get_kind(), SharedProto.SourceKind.USER)
 
 func test_text_format_round_trip_with_cross_file_types():
@@ -69,7 +64,7 @@ func test_text_format_round_trip_with_cross_file_types():
 	var text := event.to_text()
 	var decoded := EventProto.Event.new()
 	var err := decoded.from_text(text)
-	expect_equal(err, Core.ProtobufError.NO_ERRORS)
+	expect_equal(err, ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	expect_equal(decoded.get_color(), SharedProto.Hue.BLUE)
 	expect_equal(decoded.get_occurred_at().get_seconds(), 42)
 	expect_equal(decoded.get_payload().get_data(), "text")

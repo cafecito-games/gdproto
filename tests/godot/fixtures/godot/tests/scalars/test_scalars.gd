@@ -1,8 +1,5 @@
 extends VestTest
 
-const ScalarsProto = preload("res://generated/scalars.pb.gd")
-const Core = preload("res://generated/proto_core_utils.gd")
-
 func _populate(msg: ScalarsProto.AllScalars) -> void:
 	msg.set_v_int32(-2147483648)
 	msg.set_v_int64(-9223372036854775808)
@@ -48,7 +45,7 @@ func test_default_values_round_trip_binary():
 	expect_equal(bytes.size(), 0)
 
 	var decoded := ScalarsProto.AllScalars.new()
-	expect_equal(decoded.from_bytes(bytes), Core.ProtobufError.NO_ERRORS)
+	expect_equal(decoded.from_bytes(bytes), ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	expect_equal(decoded.get_v_int32(), 0)
 	expect_equal(decoded.get_v_string(), "")
 	expect_equal(decoded.get_v_bool(), false)
@@ -60,7 +57,7 @@ func test_extreme_values_round_trip_binary():
 	var bytes := msg.to_bytes()
 
 	var decoded := ScalarsProto.AllScalars.new()
-	expect_equal(decoded.from_bytes(bytes), Core.ProtobufError.NO_ERRORS)
+	expect_equal(decoded.from_bytes(bytes), ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	_expect_populated(decoded)
 
 func test_extreme_values_round_trip_text():
@@ -72,7 +69,7 @@ func test_extreme_values_round_trip_text():
 	var text := msg.to_text()
 
 	var decoded := ScalarsProto.AllScalars.new()
-	expect_equal(decoded.from_text(text), Core.ProtobufError.NO_ERRORS)
+	expect_equal(decoded.from_text(text), ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	expect_equal(decoded.get_v_int32(), -2147483648)
 	expect_equal(decoded.get_v_string(), "héllo, 世界")
 	expect_equal(decoded.get_v_bool(), true)

@@ -5,22 +5,17 @@ description: Use generated message wrappers in Godot.
 
 # Generated GDScript
 
-Generated wrappers are plain GDScript classes. They extend `RefCounted` and can
-be preloaded from your Godot project like any other script.
+Generated wrappers are plain GDScript classes that extend `RefCounted`. Each
+file declares a `class_name`, so the wrapper (e.g. `PlayerProto` from
+`player.pb.gd`) is registered as a global identifier and can be used directly.
 
-## Preload A Wrapper
-
-```gdscript
-const PlayerProto = preload("res://generated/player.pb.gd")
-```
-
-The wrapper preloads `proto_core_utils.gd`, so the runtime file must stay in the
-generated output tree.
+The wrapper depends on the sibling `proto_core_utils.gd` (registered globally as
+`ProtoCoreUtils`), so the runtime file must stay in the generated output tree.
 
 ## Construct A Message
 
 ```gdscript
-var msg = PlayerProto.Player.new()
+var msg := PlayerProto.Player.new()
 msg.set_username("alice")
 msg.set_level(42)
 ```
@@ -54,7 +49,7 @@ Map fields use Godot dictionaries internally and expose key-based helpers.
 ## Nested Messages
 
 ```gdscript
-var pos = msg.new_position()
+var pos := msg.new_position()
 pos.set_x(1.0)
 pos.set_y(2.0)
 pos.set_z(3.0)
@@ -106,8 +101,8 @@ Enum fields are stored as integers at runtime.
 ```gdscript
 var bytes: PackedByteArray = msg.to_bytes()
 
-var decoded = PlayerProto.Player.new()
-var err = decoded.from_bytes(bytes)
+var decoded := PlayerProto.Player.new()
+var err := decoded.from_bytes(bytes)
 if err != ProtoCoreUtils.ProtobufError.NO_ERRORS:
     push_error("decode failed: %s" % err)
 ```
@@ -120,8 +115,8 @@ feature set. `from_bytes()` returns a `ProtoCoreUtils.ProtobufError` value.
 ```gdscript
 var text: String = msg.to_text()
 
-var copy = PlayerProto.Player.new()
-var err = copy.from_text(text)
+var copy := PlayerProto.Player.new()
+var err := copy.from_text(text)
 if err != ProtoCoreUtils.ProtobufError.NO_ERRORS:
     push_error("text decode failed: %s" % err)
 ```

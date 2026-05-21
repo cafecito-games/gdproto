@@ -72,23 +72,23 @@ With Buf, the same generation can be kept in `buf.gen.yaml`. See
 
 ## 4. Use The Generated Code
 
-Copy or generate the output into your Godot project, then preload the wrapper:
+Copy or generate the output into your Godot project. Each generated file declares
+a `class_name`, so the wrapper (e.g. `PlayerProto`) is available as a global
+identifier — no `preload` needed:
 
 ```gdscript
-const PlayerProto = preload("res://generated/player.pb.gd")
-
-var player = PlayerProto.Player.new()
+var player := PlayerProto.Player.new()
 player.set_username("alice")
 player.set_level(42)
 player.add_inventory("sword")
 
 var bytes: PackedByteArray = player.to_bytes()
 
-var decoded = PlayerProto.Player.new()
-var err = decoded.from_bytes(bytes)
+var decoded := PlayerProto.Player.new()
+var err := decoded.from_bytes(bytes)
 if err != ProtoCoreUtils.ProtobufError.NO_ERRORS:
     push_error("decode failed: %s" % err)
 ```
 
-`player.pb.gd` preloads the sibling `proto_core_utils.gd`, so keep both files
+`player.pb.gd` depends on the sibling `proto_core_utils.gd`, so keep both files
 in the generated output directory.

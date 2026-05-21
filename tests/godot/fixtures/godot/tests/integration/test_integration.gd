@@ -1,10 +1,5 @@
 extends VestTest
 
-const IntegrationProto = preload("res://generated/integration.pb.gd")
-const SharedProto = preload("res://generated/shared.pb.gd")
-const TimestampProto = preload("res://generated/google/protobuf/timestamp.pb.gd")
-const Core = preload("res://generated/proto_core_utils.gd")
-
 func _populate(msg: IntegrationProto.KitchenSink) -> void:
 	msg.set_name("kitchen")
 	msg.set_score(42)
@@ -60,7 +55,7 @@ func test_kitchen_sink_round_trip_binary():
 
 	var bytes := original.to_bytes()
 	var decoded := IntegrationProto.KitchenSink.new()
-	expect_equal(decoded.from_bytes(bytes), Core.ProtobufError.NO_ERRORS)
+	expect_equal(decoded.from_bytes(bytes), ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	_expect_populated(decoded)
 
 func test_kitchen_sink_round_trip_text():
@@ -69,7 +64,7 @@ func test_kitchen_sink_round_trip_text():
 
 	var text := original.to_text()
 	var decoded := IntegrationProto.KitchenSink.new()
-	expect_equal(decoded.from_text(text), Core.ProtobufError.NO_ERRORS)
+	expect_equal(decoded.from_text(text), ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	_expect_populated(decoded)
 
 func test_kitchen_sink_oneof_message_branch_round_trip():
@@ -82,7 +77,7 @@ func test_kitchen_sink_oneof_message_branch_round_trip():
 	expect_equal(msg.get_source_case(), IntegrationProto.KitchenSink.SourceOneOf.ORIGIN)
 
 	var decoded := IntegrationProto.KitchenSink.new()
-	expect_equal(decoded.from_bytes(msg.to_bytes()), Core.ProtobufError.NO_ERRORS)
+	expect_equal(decoded.from_bytes(msg.to_bytes()), ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	expect_equal(decoded.get_source_case(), IntegrationProto.KitchenSink.SourceOneOf.ORIGIN)
 	expect_equal(decoded.get_origin().get_key(), "source")
 	expect_equal(decoded.get_origin().get_value(), 123)
