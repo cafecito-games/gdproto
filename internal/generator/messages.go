@@ -17,10 +17,10 @@ func generateEnum(e *ast.Enum) gdast.EnumDefinition {
 
 // generateMessage produces the class block for a proto message including
 // nested enums, nested messages, field declarations, oneof tracking variables,
-// accessors, enum-name helpers, and serialization methods. The output spacing
-// mirrors Python's reference generator: ClassDefinition auto-adds one blank
-// line between adjacent statements, and explicit gdast.EmptyLine entries each
-// add one additional blank line on top.
+// accessors, enum-name helpers, and serialization methods. ClassDefinition
+// inserts a single blank line between adjacent statements automatically, and
+// suppresses that blank between section comments and the field declarations
+// that follow them, so the layout below is what the reader sees.
 func (g *generator) generateMessage(m *ast.Message) *gdast.ClassDefinition {
 	var statements []gdast.Node
 
@@ -28,7 +28,6 @@ func (g *generator) generateMessage(m *ast.Message) *gdast.ClassDefinition {
 		statements = append(statements,
 			gdast.Comment{Text: "Nested enum"},
 			generateEnum(e),
-			gdast.EmptyLine{},
 		)
 	}
 
@@ -36,20 +35,18 @@ func (g *generator) generateMessage(m *ast.Message) *gdast.ClassDefinition {
 		statements = append(statements,
 			gdast.Comment{Text: "Nested message"},
 			g.generateMessage(nested),
-			gdast.EmptyLine{},
 		)
 	}
 
 	statements = append(statements, gdast.Comment{Text: "Fields"})
 	statements = append(statements, g.generateFieldDeclarations(m)...)
-	statements = append(statements, gdast.EmptyLine{})
 
 	if len(m.Oneofs) > 0 {
 		statements = append(statements, gdast.Comment{Text: "Oneof enums"})
 		for _, oneof := range m.Oneofs {
 			statements = append(statements, generateOneofEnum(oneof))
 		}
-		statements = append(statements, gdast.EmptyLine{}, gdast.Comment{Text: "Oneof tracking"})
+		statements = append(statements, gdast.Comment{Text: "Oneof tracking"})
 		for _, oneof := range m.Oneofs {
 			enumName := oneofEnumName(oneof.Name)
 			statements = append(statements, gdast.VarDeclaration{
@@ -58,37 +55,29 @@ func (g *generator) generateMessage(m *ast.Message) *gdast.ClassDefinition {
 				InitialValue: gdast.RawExpression{Code: enumName + ".UNSET"},
 			})
 		}
-		statements = append(statements, gdast.EmptyLine{})
 	}
 
 	statements = append(statements, gdast.Comment{Text: "Accessors"})
 	statements = append(statements, g.generateAccessors(m)...)
-	statements = append(statements, gdast.EmptyLine{})
 
 	if len(m.Oneofs) > 0 {
 		statements = append(statements, gdast.Comment{Text: "Oneof case getters"})
 		for _, oneof := range m.Oneofs {
 			statements = append(statements, generateOneofCaseGetter(oneof))
 		}
-		statements = append(statements, gdast.EmptyLine{})
 	}
 
 	if helpers := g.generateEnumNameAndParserHelpers(m); len(helpers) > 0 {
 		statements = append(statements, gdast.Comment{Text: "Enum name lookup helpers"})
 		statements = append(statements, helpers...)
-		statements = append(statements, gdast.EmptyLine{})
 	}
 
 	statements = append(statements,
 		gdast.Comment{Text: "Serialization"},
 		g.generateToBytes(m),
-		gdast.EmptyLine{},
 		g.generateFromBytes(m),
-		gdast.EmptyLine{},
 		g.generateToText(m),
-		gdast.EmptyLine{},
 		g.generateFromText(m),
-		gdast.EmptyLine{},
 		g.generateToString(m),
 	)
 

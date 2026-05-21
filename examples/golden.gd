@@ -6,8 +6,6 @@ extends RefCounted
 # Source: example.proto
 # DO NOT EDIT
 
-
-
 enum PlayerStatus {
 	OFFLINE = 0,
 	ONLINE = 1,
@@ -15,21 +13,14 @@ enum PlayerStatus {
 	IN_GAME = 3
 }
 
-
-
 class Player extends RefCounted:
 	# Nested message
 
 	class Position extends RefCounted:
 		# Fields
-
 		var _x: float = 0.0
-
 		var _y: float = 0.0
-
 		var _z: float = 0.0
-
-
 
 		# Accessors
 
@@ -39,25 +30,17 @@ class Player extends RefCounted:
 		func get_x() -> float:
 			return _x
 
-
-
 		func set_y(value: float) -> void:
 			_y = value
 
 		func get_y() -> float:
 			return _y
 
-
-
 		func set_z(value: float) -> void:
 			_z = value
 
 		func get_z() -> float:
 			return _z
-
-
-
-
 
 		# Serialization
 
@@ -77,8 +60,6 @@ class Player extends RefCounted:
 				result.append_array(ProtoCoreUtils.encode_varint(29))
 				result.append_array(ProtoCoreUtils.encode_float(_z))
 			return result
-
-
 
 		func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 			"""Deserialize message from bytes."""
@@ -136,8 +117,6 @@ class Player extends RefCounted:
 
 			return ProtoCoreUtils.ProtobufError.NO_ERRORS
 
-
-
 		func to_text(indent_level: int = 0) -> String:
 			"""Serialize message to protobuf text format."""
 			var result: String = ""
@@ -171,8 +150,6 @@ class Player extends RefCounted:
 					result += indent + "z: " + str(_z) + "\n"
 
 			return result
-
-
 
 		func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 			"""Deserialize message from protobuf text format."""
@@ -300,8 +277,6 @@ class Player extends RefCounted:
 
 			return ProtoCoreUtils.ProtobufError.NO_ERRORS
 
-
-
 		func _to_string() -> String:
 			"""Generate debug string representation."""
 			var parts: Array[String] = []
@@ -315,31 +290,17 @@ class Player extends RefCounted:
 
 			return "Position { " + ", ".join(parts) + " }"
 
-
-
 	# Fields
-
 	var _username: String = ""
-
 	var _level: int = 0
-
 	var _experience: int = 0
-
 	var _status: PlayerStatus = 0
-
 	var _inventory: Array[String] = []
-
 	var _position: Position = null
-
 	var _email: String = ""
-
 	var _discord: String = ""
-
 	var _stats: Dictionary[String, int] = {}
-
 	var _status_effects: Dictionary[String, PlayerStatus] = {}
-
-
 
 	# Oneof enums
 
@@ -349,13 +310,8 @@ class Player extends RefCounted:
 		DISCORD = 2
 	}
 
-
-
 	# Oneof tracking
-
 	var _oneof_contact: ContactOneOf = ContactOneOf.UNSET
-
-
 
 	# Accessors
 
@@ -365,15 +321,11 @@ class Player extends RefCounted:
 	func get_username() -> String:
 		return _username
 
-
-
 	func set_level(value: int) -> void:
 		_level = value
 
 	func get_level() -> int:
 		return _level
-
-
 
 	func set_experience(value: int) -> void:
 		_experience = value
@@ -381,15 +333,11 @@ class Player extends RefCounted:
 	func get_experience() -> int:
 		return _experience
 
-
-
 	func set_status(value: PlayerStatus) -> void:
 		_status = value
 
 	func get_status() -> PlayerStatus:
 		return _status
-
-
 
 	func add_inventory(value: String) -> void:
 		_inventory.append(value)
@@ -397,16 +345,12 @@ class Player extends RefCounted:
 	func get_inventory() -> Array[String]:
 		return _inventory
 
-
-
 	func new_position() -> Position:
 		_position = Position.new()
 		return _position
 
 	func get_position() -> Position:
 		return _position
-
-
 
 	func set_email(value: String) -> void:
 		if _oneof_contact != ContactOneOf.EMAIL:
@@ -420,8 +364,6 @@ class Player extends RefCounted:
 	func has_email() -> bool:
 		return _oneof_contact == ContactOneOf.EMAIL
 
-
-
 	func set_discord(value: String) -> void:
 		if _oneof_contact != ContactOneOf.DISCORD:
 			_email = ""
@@ -434,15 +376,11 @@ class Player extends RefCounted:
 	func has_discord() -> bool:
 		return _oneof_contact == ContactOneOf.DISCORD
 
-
-
 	func add_stats(key: String, value: int) -> void:
 		_stats[key] = value
 
 	func get_stats() -> Dictionary[String, int]:
 		return _stats
-
-
 
 	func add_status_effects(key: String, value: PlayerStatus) -> void:
 		_status_effects[key] = value
@@ -450,16 +388,10 @@ class Player extends RefCounted:
 	func get_status_effects() -> Dictionary[String, PlayerStatus]:
 		return _status_effects
 
-
-
-
-
 	# Oneof case getters
 
 	func get_contact_case() -> ContactOneOf:
 		return _oneof_contact
-
-
 
 	# Enum name lookup helpers
 
@@ -490,8 +422,6 @@ class Player extends RefCounted:
 				return PlayerStatus.IN_GAME
 			_:
 				return 0
-
-
 
 	# Serialization
 
@@ -585,8 +515,6 @@ class Player extends RefCounted:
 			result.append_array(ProtoCoreUtils.encode_varint(entry.size()))
 			result.append_array(entry)
 		return result
-
-
 
 	func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 		"""Deserialize message from bytes."""
@@ -800,8 +728,6 @@ class Player extends RefCounted:
 
 		return ProtoCoreUtils.ProtobufError.NO_ERRORS
 
-
-
 	func to_text(indent_level: int = 0) -> String:
 		"""Serialize message to protobuf text format."""
 		var result: String = ""
@@ -863,8 +789,6 @@ class Player extends RefCounted:
 			result += indent + "}\n"
 
 		return result
-
-
 
 	func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 		"""Deserialize message from protobuf text format."""
@@ -1121,8 +1045,6 @@ class Player extends RefCounted:
 
 		return ProtoCoreUtils.ProtobufError.NO_ERRORS
 
-
-
 	func _to_string() -> String:
 		"""Generate debug string representation."""
 		var parts: Array[String] = []
@@ -1150,18 +1072,11 @@ class Player extends RefCounted:
 
 		return "Player { " + ", ".join(parts) + " }"
 
-
-
 class GameState extends RefCounted:
 	# Fields
-
 	var _players: Array[Player] = []
-
 	var _timestamp: int = 0
-
 	var _map_name: String = ""
-
-
 
 	# Accessors
 
@@ -1173,25 +1088,17 @@ class GameState extends RefCounted:
 	func get_players() -> Array[Player]:
 		return _players
 
-
-
 	func set_timestamp(value: int) -> void:
 		_timestamp = value
 
 	func get_timestamp() -> int:
 		return _timestamp
 
-
-
 	func set_map_name(value: String) -> void:
 		_map_name = value
 
 	func get_map_name() -> String:
 		return _map_name
-
-
-
-
 
 	# Serialization
 
@@ -1215,8 +1122,6 @@ class GameState extends RefCounted:
 			result.append_array(ProtoCoreUtils.encode_varint(str_data.size()))
 			result.append_array(str_data)
 		return result
-
-
 
 	func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 		"""Deserialize message from bytes."""
@@ -1290,8 +1195,6 @@ class GameState extends RefCounted:
 
 		return ProtoCoreUtils.ProtobufError.NO_ERRORS
 
-
-
 	func to_text(indent_level: int = 0) -> String:
 		"""Serialize message to protobuf text format."""
 		var result: String = ""
@@ -1312,8 +1215,6 @@ class GameState extends RefCounted:
 			result += indent + "map_name: \"" + ProtoCoreUtils.escape_string_text_format(_map_name) + "\"\n"
 
 		return result
-
-
 
 	func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 		"""Deserialize message from protobuf text format."""
@@ -1416,8 +1317,6 @@ class GameState extends RefCounted:
 
 		return ProtoCoreUtils.ProtobufError.NO_ERRORS
 
-
-
 	func _to_string() -> String:
 		"""Generate debug string representation."""
 		var parts: Array[String] = []
@@ -1430,4 +1329,3 @@ class GameState extends RefCounted:
 			parts.append("map_name: " + str(_map_name))
 
 		return "GameState { " + ", ".join(parts) + " }"
-

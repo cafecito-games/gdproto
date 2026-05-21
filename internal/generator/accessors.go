@@ -26,7 +26,6 @@ func (g *generator) generateAccessors(m *ast.Message) []gdast.Node {
 	var out []gdast.Node
 	for _, group := range groups {
 		out = append(out, group...)
-		out = append(out, gdast.EmptyLine{})
 	}
 	return out
 }

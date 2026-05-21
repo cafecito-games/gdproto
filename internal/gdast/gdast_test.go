@@ -591,7 +591,7 @@ func TestClassDefinitionTopLevel(t *testing.T) {
 			VarDeclaration{Name: "y", TypeHint: "int"},
 		},
 	}
-	want := "class_name Person\n\nextends RefCounted\n\nvar x: int\n\nvar y: int"
+	want := "class_name Person\n\nextends RefCounted\n\nvar x: int\nvar y: int"
 	if got := c.ToGDScript(0); got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -822,7 +822,6 @@ func TestPersonExample(t *testing.T) {
 		"extends RefCounted\n" +
 		"\n" +
 		"var _name: String = \"\"\n" +
-		"\n" +
 		"var _age: int = 0\n" +
 		"\n" +
 		"func get_name() -> String:\n" +

@@ -173,6 +173,21 @@ type ClassDefinition struct {
 	TightStatements bool
 }
 
+// suppressAutoBlank reports whether the automatic blank line between two
+// adjacent statements should be omitted. Field declarations group tightly with
+// each other and with their immediately preceding section comment.
+func suppressAutoBlank(prev, next Node) bool {
+	_, nextIsVar := next.(VarDeclaration)
+	if !nextIsVar {
+		return false
+	}
+	switch prev.(type) {
+	case VarDeclaration, Comment:
+		return true
+	}
+	return false
+}
+
 // ToGDScript renders the class header (if any) followed by the body.
 func (c ClassDefinition) ToGDScript(level int) string {
 	var lines []string
@@ -187,7 +202,7 @@ func (c ClassDefinition) ToGDScript(level int) string {
 			lines = append(lines, "extends "+c.Extends, "")
 		}
 		if c.HeaderComment != "" {
-			lines = append(lines, renderCommentBlock(c.HeaderComment, 0, "#"), "", "", "")
+			lines = append(lines, renderCommentBlock(c.HeaderComment, 0, "#"), "")
 		}
 	} else {
 		header := pad + "class " + c.Name
@@ -201,7 +216,7 @@ func (c ClassDefinition) ToGDScript(level int) string {
 
 	for i, stmt := range c.Statements {
 		lines = append(lines, stmt.ToGDScript(bodyIndent))
-		if !c.TightStatements && i < len(c.Statements)-1 {
+		if !c.TightStatements && i < len(c.Statements)-1 && !suppressAutoBlank(stmt, c.Statements[i+1]) {
 			lines = append(lines, "")
 		}
 	}

@@ -28,7 +28,7 @@ func (g *generator) generate() (*gdast.ClassDefinition, error) {
 	var statements []gdast.Node
 	appendItem := func(node gdast.Node) {
 		if len(statements) > 0 {
-			statements = append(statements, gdast.EmptyLine{}, gdast.EmptyLine{}, gdast.EmptyLine{})
+			statements = append(statements, gdast.EmptyLine{})
 		}
 		statements = append(statements, node)
 	}
@@ -40,7 +40,7 @@ func (g *generator) generate() (*gdast.ClassDefinition, error) {
 		appendItem(g.generateMessage(m))
 	}
 	if len(statements) > 0 {
-		statements = append(statements, gdast.EmptyLine{}, gdast.EmptyLine{})
+		statements = append(statements, gdast.EmptyLine{})
 	}
 
 	return &gdast.ClassDefinition{
