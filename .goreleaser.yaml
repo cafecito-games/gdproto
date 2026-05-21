@@ -57,6 +57,12 @@ changelog:
 
 homebrew_casks:
   - name: gdproto
+    # The archive ships two executables; without an explicit list GoReleaser
+    # only generates a `binary` stanza for the cask name, leaving
+    # protoc-gen-gdscript unlinked from PATH.
+    binaries:
+      - gdproto
+      - protoc-gen-gdscript
     repository:
       owner: cafecito-games
       name: homebrew-tap
