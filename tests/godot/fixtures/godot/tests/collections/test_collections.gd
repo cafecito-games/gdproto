@@ -1,8 +1,5 @@
 extends VestTest
 
-const CollectionsProto = preload("res://generated/collections.pb.gd")
-const Core = preload("res://generated/proto_core_utils.gd")
-
 func test_repeated_scalars_round_trip():
 	var bag := CollectionsProto.Bag.new()
 	bag.add_numbers(10)
@@ -13,7 +10,7 @@ func test_repeated_scalars_round_trip():
 
 	var bytes := bag.to_bytes()
 	var decoded := CollectionsProto.Bag.new()
-	expect_equal(decoded.from_bytes(bytes), Core.ProtobufError.NO_ERRORS)
+	expect_equal(decoded.from_bytes(bytes), ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	expect_equal(decoded.get_numbers(), [10, 20, 30] as Array[int])
 	expect_equal(decoded.get_labels(), ["one", "two"] as Array[String])
 
@@ -28,7 +25,7 @@ func test_repeated_messages_round_trip():
 
 	var bytes := bag.to_bytes()
 	var decoded := CollectionsProto.Bag.new()
-	expect_equal(decoded.from_bytes(bytes), Core.ProtobufError.NO_ERRORS)
+	expect_equal(decoded.from_bytes(bytes), ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	var got := decoded.get_items()
 	expect_equal(got.size(), 2)
 	expect_equal(got[0].get_id(), 1)
@@ -48,7 +45,7 @@ func test_scalar_keyed_maps_round_trip():
 
 	var bytes := bag.to_bytes()
 	var decoded := CollectionsProto.Bag.new()
-	expect_equal(decoded.from_bytes(bytes), Core.ProtobufError.NO_ERRORS)
+	expect_equal(decoded.from_bytes(bytes), ProtoCoreUtils.ProtobufError.NO_ERRORS)
 
 	var s2i := decoded.get_string_to_int()
 	expect_equal(s2i["a"], 1)
@@ -74,7 +71,7 @@ func test_message_valued_map_round_trip():
 
 	var bytes := bag.to_bytes()
 	var decoded := CollectionsProto.Bag.new()
-	expect_equal(decoded.from_bytes(bytes), Core.ProtobufError.NO_ERRORS)
+	expect_equal(decoded.from_bytes(bytes), ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	var m := decoded.get_string_to_message()
 	expect_equal(m["k"].get_id(), 99)
 	expect_equal(m["k"].get_name(), "named")

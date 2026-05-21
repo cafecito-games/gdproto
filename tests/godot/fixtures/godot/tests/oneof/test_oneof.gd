@@ -1,8 +1,5 @@
 extends VestTest
 
-const OneofProto = preload("res://generated/oneof.pb.gd")
-const Core = preload("res://generated/proto_core_utils.gd")
-
 func test_unset_default_case():
 	var msg := OneofProto.OneofHost.new()
 	expect_equal(msg.get_choice_case(), OneofProto.OneofHost.ChoiceOneOf.UNSET)
@@ -10,7 +7,7 @@ func test_unset_default_case():
 	var bytes := msg.to_bytes()
 	expect_equal(bytes.size(), 0)
 	var decoded := OneofProto.OneofHost.new()
-	expect_equal(decoded.from_bytes(bytes), Core.ProtobufError.NO_ERRORS)
+	expect_equal(decoded.from_bytes(bytes), ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	expect_equal(decoded.get_choice_case(), OneofProto.OneofHost.ChoiceOneOf.UNSET)
 
 func test_scalar_variant_round_trip():
@@ -19,7 +16,7 @@ func test_scalar_variant_round_trip():
 	expect_equal(msg.get_choice_case(), OneofProto.OneofHost.ChoiceOneOf.NUMBER)
 
 	var decoded := OneofProto.OneofHost.new()
-	expect_equal(decoded.from_bytes(msg.to_bytes()), Core.ProtobufError.NO_ERRORS)
+	expect_equal(decoded.from_bytes(msg.to_bytes()), ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	expect_equal(decoded.get_choice_case(), OneofProto.OneofHost.ChoiceOneOf.NUMBER)
 	expect_equal(decoded.get_number(), 42)
 
@@ -29,7 +26,7 @@ func test_string_variant_round_trip():
 	expect_equal(msg.get_choice_case(), OneofProto.OneofHost.ChoiceOneOf.TEXT)
 
 	var decoded := OneofProto.OneofHost.new()
-	expect_equal(decoded.from_bytes(msg.to_bytes()), Core.ProtobufError.NO_ERRORS)
+	expect_equal(decoded.from_bytes(msg.to_bytes()), ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	expect_equal(decoded.get_choice_case(), OneofProto.OneofHost.ChoiceOneOf.TEXT)
 	expect_equal(decoded.get_text(), "oneof-string")
 
@@ -41,7 +38,7 @@ func test_message_variant_round_trip():
 	expect_equal(msg.get_choice_case(), OneofProto.OneofHost.ChoiceOneOf.PAYLOAD)
 
 	var decoded := OneofProto.OneofHost.new()
-	expect_equal(decoded.from_bytes(msg.to_bytes()), Core.ProtobufError.NO_ERRORS)
+	expect_equal(decoded.from_bytes(msg.to_bytes()), ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	expect_equal(decoded.get_choice_case(), OneofProto.OneofHost.ChoiceOneOf.PAYLOAD)
 	expect_equal(decoded.get_payload().get_note(), "inside")
 
@@ -51,7 +48,7 @@ func test_enum_variant_round_trip():
 	expect_equal(msg.get_choice_case(), OneofProto.OneofHost.ChoiceOneOf.OUTCOME)
 
 	var decoded := OneofProto.OneofHost.new()
-	expect_equal(decoded.from_bytes(msg.to_bytes()), Core.ProtobufError.NO_ERRORS)
+	expect_equal(decoded.from_bytes(msg.to_bytes()), ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	expect_equal(decoded.get_choice_case(), OneofProto.OneofHost.ChoiceOneOf.OUTCOME)
 	expect_equal(decoded.get_outcome(), OneofProto.Outcome.OUTCOME_WIN)
 
@@ -67,6 +64,6 @@ func test_switching_variants_updates_case():
 	expect_equal(msg.get_choice_case(), OneofProto.OneofHost.ChoiceOneOf.OUTCOME)
 
 	var decoded := OneofProto.OneofHost.new()
-	expect_equal(decoded.from_bytes(msg.to_bytes()), Core.ProtobufError.NO_ERRORS)
+	expect_equal(decoded.from_bytes(msg.to_bytes()), ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	expect_equal(decoded.get_choice_case(), OneofProto.OneofHost.ChoiceOneOf.OUTCOME)
 	expect_equal(decoded.get_outcome(), OneofProto.Outcome.OUTCOME_LOSS)
