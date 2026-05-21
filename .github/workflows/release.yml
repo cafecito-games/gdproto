@@ -130,7 +130,8 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         env:
           NEW_TAG: ${{ steps.release-version.outputs.tag }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+	  # Token must have PR read/write permissions, contents read/write permissions
+          GH_TOKEN: ${{ secrets.RELEASE_PR_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -145,8 +146,9 @@ jobs:
           fi
           git commit -m "docs: snapshot ${NEW_TAG}"
           git push origin "$branch"
-          gh pr create \
+          pr_url=$(gh pr create \
             --base main \
             --head "$branch" \
             --title "docs: snapshot ${NEW_TAG}" \
-            --body "Automated Docusaurus version snapshot for release ${NEW_TAG}. Merge to publish the versioned docs site."
+            --body "Automated Docusaurus version snapshot for release ${NEW_TAG}. Merge to publish the versioned docs site.")
+          gh pr merge --auto --squash --delete-branch "$pr_url"
