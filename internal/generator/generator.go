@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -16,6 +17,12 @@ type GeneratedFile struct {
 	Filename  string
 	ClassName string
 	Class     *gdast.ClassDefinition
+	// protoFQN is the dotted proto type path (without the package prefix)
+	// that this file was generated from — e.g. "FooBar" for a top-level
+	// message or "Foo.Bar" for a nested one. Used internally to produce
+	// actionable error messages when two protos collapse to the same
+	// generated filename.
+	protoFQN string
 }
 
 // Source renders the class to GDScript, ensuring a trailing newline.
@@ -82,6 +89,17 @@ func (g *generator) generate() ([]GeneratedFile, error) {
 	for _, m := range g.file.Messages {
 		files = append(files, g.generateMessageFiles(m, "", "")...)
 	}
+
+	seen := make(map[string]string, len(files))
+	for _, gf := range files {
+		if first, dup := seen[gf.Filename]; dup {
+			return nil, fmt.Errorf(
+				"class name collision in %s: %q and %q both generate %s; rename one of them",
+				g.sourceName, first, gf.protoFQN, gf.Filename,
+			)
+		}
+		seen[gf.Filename] = gf.protoFQN
+	}
 	return files, nil
 }
 
@@ -100,6 +118,7 @@ func (g *generator) generateTopLevelEnumFile(e *ast.Enum) GeneratedFile {
 		Filename:  className + ".pb.gd",
 		ClassName: className,
 		Class:     class,
+		protoFQN:  e.Name,
 	}
 }
 

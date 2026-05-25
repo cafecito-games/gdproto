@@ -774,3 +774,52 @@ func TestProtoCoreUtilsGolden(t *testing.T) {
 		t.Errorf("line counts: got %d, want %d", len(gotLines), len(wantLines))
 	}
 }
+
+func TestGenerateDetectsWithinFileClassNameCollision(t *testing.T) {
+	src := `syntax = "proto3";
+message FooBar { int32 a = 1; }
+message Foo { message Bar { int32 b = 1; } }
+`
+	tokens, err := lexer.Tokenize(src, "collide.proto")
+	if err != nil {
+		t.Fatal(err)
+	}
+	file, err := parser.Parse(tokens, "collide.proto")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = generator.Generate(file, "collide.proto", nil)
+	if err == nil {
+		t.Fatal("expected collision error")
+	}
+	msg := err.Error()
+	for _, want := range []string{"class name collision", "FooBar", "Foo.Bar", "CollideFooBar.pb.gd"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error missing %q: %s", want, msg)
+		}
+	}
+}
+
+func TestGenerateDetectsEnumMessageClassNameCollision(t *testing.T) {
+	src := `syntax = "proto3";
+enum Status { OK = 0; }
+message Status { int32 a = 1; }
+`
+	tokens, err := lexer.Tokenize(src, "collide_enum.proto")
+	if err != nil {
+		t.Fatal(err)
+	}
+	file, err := parser.Parse(tokens, "collide_enum.proto")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = generator.Generate(file, "collide_enum.proto", nil)
+	if err == nil {
+		t.Fatal("expected collision error")
+	}
+	if !strings.Contains(err.Error(), "class name collision") {
+		t.Errorf("missing collision marker: %s", err.Error())
+	}
+}

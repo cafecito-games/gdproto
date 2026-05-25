@@ -33,6 +33,7 @@ func (g *generator) generateMessageFiles(m *ast.Message, classChain, protoChain 
 		Filename:  className + ".pb.gd",
 		ClassName: className,
 		Class:     class,
+		protoFQN:  scope,
 	}}
 	childClassChain := classChain + m.Name
 	for _, nested := range m.NestedMessages {
