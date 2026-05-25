@@ -114,9 +114,6 @@ func NewNameResolver(entries []FileEntry) (*NameResolver, error) {
 }
 
 func (r *NameResolver) indexMessage(m *ast.Message, packageScope, prefix, parentChain string) {
-	// TODO: when ast.Message tracks map-entry status, skip synthetic
-	// map-entry messages here. For now they will be filtered at emission
-	// time in Task 3.
 	name := parentChain + m.Name
 	r.classByFQN[packageScope+name] = prefix + strings.ReplaceAll(name, ".", "")
 	for _, nm := range m.NestedMessages {

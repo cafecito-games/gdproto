@@ -78,6 +78,19 @@ type generator struct {
 	// renderedType to resolve same-file type references through the
 	// NameResolver. Empty when rendering top-level constructs.
 	currentScope string
+	// firstErr captures the first error recorded during the generation walk
+	// from contexts (like renderedType) that cannot return an error through
+	// their signature. Generate consults it before returning files.
+	firstErr error
+}
+
+// recordError stores err as the generator's first error, if none is set yet.
+// Subsequent errors are discarded — the first failure is the most actionable
+// and later ones are usually cascading.
+func (g *generator) recordError(err error) {
+	if g.firstErr == nil {
+		g.firstErr = err
+	}
 }
 
 func (g *generator) generate() ([]GeneratedFile, error) {
@@ -99,6 +112,9 @@ func (g *generator) generate() ([]GeneratedFile, error) {
 			)
 		}
 		seen[gf.Filename] = gf.protoFQN
+	}
+	if g.firstErr != nil {
+		return nil, g.firstErr
 	}
 	return files, nil
 }
@@ -123,32 +139,38 @@ func (g *generator) generateTopLevelEnumFile(e *ast.Enum) GeneratedFile {
 }
 
 func (g *generator) renderedFieldType(f *ast.Field) string {
-	return g.renderedType(f.FieldType, f.SourceFile, f.IsEnum)
+	return g.renderedType(f.FieldType, f.FullTypePath, f.SourceFile, f.IsEnum)
 }
 
 func (g *generator) renderedMapValueType(mf *ast.MapField) string {
-	return g.renderedType(mf.ValueType, mf.ValueSourceFile, mf.ValueIsEnum)
+	return g.renderedType(mf.ValueType, mf.FullValueTypePath, mf.ValueSourceFile, mf.ValueIsEnum)
 }
 
 // renderedType returns the GDScript type to use for a proto type reference,
 // resolving same-file message/enum references to their generated prefixed
-// class names. Cross-file references are first looked up in the resolver
-// (which indexes both the input file and any imports threaded through
-// Generate); when the resolver has no entry — e.g. an unknown well-known
-// type — the prefix is derived from the source filename so behavior degrades
-// gracefully.
+// class names. Cross-file references are looked up in the resolver, which
+// indexes both the input file and every import threaded through Generate.
 //
-// isEnumHint is consulted only for the filename-derived fallback path. When
-// set, the cross-file wrapper class name is qualified with the inner enum
-// name derived from the last segment of protoType so the emitted type is
-// `<Wrapper>.<EnumName>`. For resolver-backed references (same-file or
-// imported) the resolver provides the authoritative answer.
-func (g *generator) renderedType(protoType, sourceFile string, isEnumHint bool) string {
+// Reaching the cross-file fallback indicates an internal inconsistency: the
+// AST recorded a SourceFile for the reference, but the resolver has no entry
+// for any of the candidate FQNs in that file. This should not happen for
+// inputs that pass through the plugin or CLI paths (both thread the full
+// import closure). When it does, an error is recorded on the generator so
+// Generate surfaces the failure instead of emitting a malformed .pb.gd; a
+// best-effort placeholder is returned to allow the walk to finish.
+//
+// isEnumHint biases the placeholder toward a qualified `<Wrapper>.<EnumName>`
+// shape when the reference is known to be an enum.
+func (g *generator) renderedType(protoType, fullTypePath, sourceFile string, isEnumHint bool) string {
 	if t, ok := scalarTypeMap[protoType]; ok {
 		return t
 	}
 	if sourceFile != "" && sourceFile != g.sourceName && sourceFile != filepath.Base(g.sourceName) {
-		for _, candidate := range buildLookupCandidates(protoType, "", g.file.Package) {
+		candidates := buildLookupCandidates(protoType, "", g.file.Package)
+		if fullTypePath != "" && fullTypePath != protoType {
+			candidates = append([]string{strings.TrimPrefix(fullTypePath, ".")}, candidates...)
+		}
+		for _, candidate := range candidates {
 			if wrapper, inner, ok := g.resolver.LookupEnum(candidate); ok {
 				return wrapper + "." + inner
 			}
@@ -156,15 +178,19 @@ func (g *generator) renderedType(protoType, sourceFile string, isEnumHint bool) 
 				return name
 			}
 		}
+		g.recordError(fmt.Errorf(
+			"internal: no resolver entry for cross-file type %q from %q (import not threaded into Generate?)",
+			protoType, sourceFile,
+		))
 		otherPrefix, err := ResolvePrefix(&ast.ProtoFile{}, sourceFile)
-		if err == nil {
-			wrapper := otherPrefix + concatProtoPath(protoType)
-			if isEnumHint {
-				return wrapper + "." + lastProtoSegment(protoType)
-			}
-			return wrapper
+		if err != nil {
+			return strings.TrimPrefix(protoType, ".")
 		}
-		return strings.TrimPrefix(protoType, ".")
+		wrapper := otherPrefix + concatProtoPath(protoType)
+		if isEnumHint {
+			return wrapper + "." + lastProtoSegment(protoType)
+		}
+		return wrapper
 	}
 	for _, candidate := range buildLookupCandidates(protoType, g.currentScope, g.file.Package) {
 		if wrapper, inner, ok := g.resolver.LookupEnum(candidate); ok {

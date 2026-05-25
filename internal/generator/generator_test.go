@@ -525,8 +525,14 @@ func TestGenerateImportedMessageUsesPrefixedClassName(t *testing.T) {
 			}},
 		}},
 	}
+	imported := &ast.ProtoFile{
+		Syntax:   "proto3",
+		Messages: []*ast.Message{{Name: "Shared"}},
+	}
 
-	files, err := generator.Generate(file, "main.proto", nil)
+	files, err := generator.Generate(file, "main.proto", []generator.FileEntry{
+		{File: imported, Filename: "common.proto"},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -566,8 +572,22 @@ func TestGenerateImportedEnumFieldEmitsHelpers(t *testing.T) {
 			}},
 		}},
 	}
+	imported := &ast.ProtoFile{
+		Syntax:  "proto3",
+		Package: "shared",
+		Enums: []*ast.Enum{{
+			Name: "Color",
+			Values: []*ast.EnumValue{
+				{Name: "COLOR_UNSPECIFIED", Number: 0},
+				{Name: "RED", Number: 1},
+				{Name: "BLUE", Number: 2},
+			},
+		}},
+	}
 
-	files, err := generator.Generate(file, "main.proto", nil)
+	files, err := generator.Generate(file, "main.proto", []generator.FileEntry{
+		{File: imported, Filename: "shared.proto"},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -821,5 +841,36 @@ message Status { int32 a = 1; }
 	}
 	if !strings.Contains(err.Error(), "class name collision") {
 		t.Errorf("missing collision marker: %s", err.Error())
+	}
+}
+
+// TestGenerateUnresolvedCrossFileTypeIsError covers the defensive path in
+// renderedType: a field with SourceFile set to a file that was never threaded
+// through Generate's imports must surface an explicit error rather than
+// silently emitting a guessed class name.
+func TestGenerateUnresolvedCrossFileTypeIsError(t *testing.T) {
+	file := &ast.ProtoFile{
+		Syntax: "proto3",
+		Messages: []*ast.Message{{
+			Name: "Uses",
+			Fields: []*ast.Field{{
+				FieldType:    "Stranger",
+				FullTypePath: "Stranger",
+				SourceFile:   "unknown.proto",
+				Name:         "x",
+				Number:       1,
+			}},
+		}},
+	}
+
+	_, err := generator.Generate(file, "main.proto", nil)
+	if err == nil {
+		t.Fatal("expected error from unresolved cross-file reference")
+	}
+	if !strings.Contains(err.Error(), "no resolver entry") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "unknown.proto") {
+		t.Fatalf("error missing source filename: %v", err)
 	}
 }
