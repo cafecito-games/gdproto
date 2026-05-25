@@ -150,6 +150,68 @@ func TestCLIPrintOptionsProto(t *testing.T) {
 	}
 }
 
+func TestCLIResolvesImportFromIncludePath(t *testing.T) {
+	work := t.TempDir()
+	inc := filepath.Join(work, "include")
+	src := filepath.Join(work, "src")
+	if err := os.MkdirAll(filepath.Join(inc, "shared"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	sharedProto := `syntax = "proto3"; package shared; message Foo { string name = 1; }`
+	if err := os.WriteFile(filepath.Join(inc, "shared", "foo.proto"), []byte(sharedProto), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	appProto := `syntax = "proto3"; import "shared/foo.proto"; message Use { shared.Foo f = 1; }`
+	if err := os.WriteFile(filepath.Join(src, "app.proto"), []byte(appProto), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	outDir := filepath.Join(work, "out")
+	var out, errOut bytes.Buffer
+	code := cli.Execute([]string{"-I", inc, "-o", outDir, filepath.Join(src, "app.proto")}, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("exit %d: stderr=%s stdout=%s", code, errOut.String(), out.String())
+	}
+	if _, err := os.Stat(filepath.Join(outDir, "AppUse.pb.gd")); err != nil {
+		t.Fatalf("missing AppUse.pb.gd: %v", err)
+	}
+}
+
+func TestCLILongFormProtoPathFlag(t *testing.T) {
+	work := t.TempDir()
+	inc := filepath.Join(work, "include")
+	src := filepath.Join(work, "src")
+	if err := os.MkdirAll(filepath.Join(inc, "shared"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	sharedProto := `syntax = "proto3"; package shared; message Foo { string name = 1; }`
+	if err := os.WriteFile(filepath.Join(inc, "shared", "foo.proto"), []byte(sharedProto), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	appProto := `syntax = "proto3"; import "shared/foo.proto"; message Use { shared.Foo f = 1; }`
+	if err := os.WriteFile(filepath.Join(src, "app.proto"), []byte(appProto), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	outDir := filepath.Join(work, "out")
+	var out, errOut bytes.Buffer
+	code := cli.Execute([]string{"--proto_path", inc, "-o", outDir, filepath.Join(src, "app.proto")}, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("exit %d: stderr=%s", code, errOut.String())
+	}
+	if _, err := os.Stat(filepath.Join(outDir, "AppUse.pb.gd")); err != nil {
+		t.Fatalf("missing AppUse.pb.gd: %v", err)
+	}
+}
+
 func TestCLINoArgsShowsHelp(t *testing.T) {
 	var out, errOut bytes.Buffer
 	code := cli.Execute([]string{}, &out, &errOut)

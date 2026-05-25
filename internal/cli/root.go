@@ -33,6 +33,7 @@ func Execute(args []string, out, errOut io.Writer) int {
 func newRootCommand(out, errOut io.Writer) *cobra.Command {
 	var logLevelFlag string
 	var outputPath string
+	var includePaths []string
 	var printOptionsProto bool
 	var rootLogger *slog.Logger
 
@@ -61,7 +62,7 @@ func newRootCommand(out, errOut io.Writer) *cobra.Command {
 			if len(args) == 0 {
 				return cmd.Help()
 			}
-			return runCompile(cmd, args[0], outputPath)
+			return runCompile(cmd, args[0], outputPath, includePaths)
 		},
 	}
 
@@ -82,11 +83,15 @@ func newRootCommand(out, errOut io.Writer) *cobra.Command {
 		&printOptionsProto, "print-options-proto", false,
 		"print the embedded gdproto/options.proto to stdout and exit",
 	)
+	cmd.Flags().StringSliceVarP(
+		&includePaths, "proto_path", "I", nil,
+		"directories to search for imported .proto files (repeatable, like protoc)",
+	)
 
 	return cmd
 }
 
-func runCompile(cmd *cobra.Command, inputPath, outputPath string) error {
+func runCompile(cmd *cobra.Command, inputPath, outputPath string, includePaths []string) error {
 	data, err := os.ReadFile(inputPath) //nolint:gosec // user-supplied path; CLI tool reads files by design.
 	if err != nil {
 		return fmt.Errorf("read input: %w", err)
@@ -102,7 +107,10 @@ func runCompile(cmd *cobra.Command, inputPath, outputPath string) error {
 		return err
 	}
 
-	fs := &importer.OSFS{BaseDir: filepath.Dir(inputPath)}
+	fs := &importer.OSFS{
+		BaseDir:      filepath.Dir(inputPath),
+		IncludePaths: includePaths,
+	}
 	if err := importer.ResolveExternal(file, inputPath, fs); err != nil {
 		return err
 	}

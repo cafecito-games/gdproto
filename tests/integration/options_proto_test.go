@@ -14,16 +14,17 @@ func TestCLIWithOptionsProto(t *testing.T) {
 	gdproto, _ := buildBinaries(t)
 	root := repoRoot(t)
 	work := t.TempDir()
+	incRoot := filepath.Join(work, "proto-include")
 	must(t, copyFile(
 		filepath.Join(root, "proto/gdproto/options.proto"),
-		filepath.Join(work, "gdproto/options.proto"),
+		filepath.Join(incRoot, "gdproto/options.proto"),
 	))
 	must(t, copyFile(
 		filepath.Join(root, "tests/integration/fixtures/options/sample.proto"),
 		filepath.Join(work, "sample.proto"),
 	))
 	outDir := filepath.Join(work, "out")
-	cmd := exec.Command(gdproto, "-o", outDir, filepath.Join(work, "sample.proto"))
+	cmd := exec.Command(gdproto, "-I", incRoot, "-o", outDir, filepath.Join(work, "sample.proto"))
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("gdproto: %v", err)

@@ -85,16 +85,39 @@ This writes one `.pb.gd` per top-level message or enum (for example
 Both `protoc` and `buf` require the `gdproto/options.proto` extension
 descriptor to be reachable from your proto sources. The schema must
 `import "gdproto/options.proto";` and the descriptor must live on an `-I`
-import root (raw `protoc`) or inside the buf module (Buf). Vendor it with:
+import root (raw `protoc` or the direct `gdproto` CLI) or inside the buf
+module (Buf). Vendor it with:
 
 ```bash
-mkdir -p proto/gdproto
-gdproto --print-options-proto > proto/gdproto/options.proto
+mkdir -p proto-include/gdproto
+gdproto --print-options-proto > proto-include/gdproto/options.proto
+```
+
+Then pass the include root when invoking the direct CLI (the flag is
+repeatable and matches `protoc`'s convention):
+
+```bash
+gdproto -I proto-include -o godot/generated proto/example.proto
 ```
 
 The direct `gdproto` CLI tolerates a missing import, but importing it
 everywhere keeps a single schema portable. See
 [Generated GDScript](./generated-code.md#class-prefix).
+
+## `import "X" not found from Y`
+
+The direct CLI prints this when an import cannot be resolved. Add the
+directory that contains the imported `.proto` as an `-I/--proto_path`
+include root. For vendored extension protos like
+`gdproto/options.proto`, that means the directory whose child
+`gdproto/options.proto` exists:
+
+```bash
+gdproto -I proto-include -o godot/generated proto/example.proto
+```
+
+The flag is repeatable; each include root is searched in order before the
+input file's own directory is consulted.
 
 ## Validation Fails For A Schema Feature
 

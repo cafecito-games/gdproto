@@ -12,11 +12,13 @@ type FS interface {
 	Exists(path string) bool
 }
 
-// OSFS reads files from the real filesystem. Tries the import path
-// relative to BaseDir first, then walks up parent directories looking
-// for the file (matching the Python CLI's lookup strategies).
+// OSFS reads files from the real filesystem. Tries each entry in
+// IncludePaths first (mirroring protoc's `-I` semantics), then the
+// import path relative to BaseDir, then walks up parent directories
+// looking for the file.
 type OSFS struct {
-	BaseDir string
+	BaseDir      string
+	IncludePaths []string
 }
 
 // Read locates the file using the resolution strategies and returns
@@ -34,13 +36,19 @@ func (f *OSFS) Exists(path string) bool {
 	return ok
 }
 
-// locate applies three strategies in order:
-//  1. BaseDir + path.
-//  2. Walk up parent directories, trying each as the prefix.
-//  3. Walk up parent directories, trying just the basename.
+// locate applies the following strategies in order:
+//  1. For each IncludePaths entry, IncludePath + path.
+//  2. BaseDir + path.
+//  3. Walk up parent directories, trying each as the prefix.
+//  4. Walk up parent directories, trying just the basename.
 func (f *OSFS) locate(path string) (string, bool) {
+	for _, inc := range f.IncludePaths {
+		if c := filepath.Join(inc, path); statOK(c) {
+			return c, true
+		}
+	}
 	candidate := filepath.Join(f.BaseDir, path)
-	if _, err := os.Stat(candidate); err == nil {
+	if statOK(candidate) {
 		return candidate, true
 	}
 	dir := f.BaseDir

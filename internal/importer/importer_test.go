@@ -353,6 +353,79 @@ func TestOSFSWalkUpBasename(t *testing.T) {
 	}
 }
 
+func TestOSFSIncludePathsTakePriority(t *testing.T) {
+	base := t.TempDir()
+	inc := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(base, "x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(inc, "x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "x", "y.proto"), []byte("BASE"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(inc, "x", "y.proto"), []byte("INC"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	fs := &importer.OSFS{BaseDir: base, IncludePaths: []string{inc}}
+	got, err := fs.Read(filepath.Join("x", "y.proto"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "INC" {
+		t.Fatalf("got %q, want INC (include path should win over BaseDir)", got)
+	}
+}
+
+func TestOSFSIncludePathFallsBackToBaseDir(t *testing.T) {
+	base := t.TempDir()
+	inc := t.TempDir() // empty
+	if err := os.MkdirAll(filepath.Join(base, "x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "x", "y.proto"), []byte("BASE"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	fs := &importer.OSFS{BaseDir: base, IncludePaths: []string{inc}}
+	got, err := fs.Read(filepath.Join("x", "y.proto"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "BASE" {
+		t.Fatalf("got %q, want BASE", got)
+	}
+}
+
+func TestOSFSIncludePathsSearchedInOrder(t *testing.T) {
+	base := t.TempDir()
+	first := t.TempDir()
+	second := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(first, "x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(second, "x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(first, "x", "y.proto"), []byte("FIRST"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(second, "x", "y.proto"), []byte("SECOND"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	fs := &importer.OSFS{BaseDir: base, IncludePaths: []string{first, second}}
+	got, err := fs.Read(filepath.Join("x", "y.proto"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "FIRST" {
+		t.Fatalf("got %q, want FIRST (earlier include path should win)", got)
+	}
+}
+
 func TestResolveExternal_PublicReExport(t *testing.T) {
 	// Input imports a barrel file which `public` imports the file
 	// defining the actual type.

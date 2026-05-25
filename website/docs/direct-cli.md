@@ -39,6 +39,7 @@ If `-o` is omitted, files are written into the current working directory.
 | Flag | Default | Notes |
 | --- | --- | --- |
 | `-o, --output` | Current directory | Output **directory** for generated `.pb.gd` files and `proto_core_utils.gd`. Must not end in `.gd` and must not point at an existing file. |
+| `-I, --proto_path` | | Directory searched for imported `.proto` files. Repeatable; matches `protoc`'s convention. Each path is checked in order before falling back to the input file's directory. |
 | `--print-options-proto` | | Prints the embedded `gdproto/options.proto` descriptor to stdout and exits. Useful for vendoring without cloning the repo. |
 | `--log-level` | `warn` | One of `debug`, `info`, `warn`, or `error`. Logs are JSON on stderr. |
 | `--version` | | Prints the binary version. |
@@ -51,28 +52,45 @@ reject unknown extensions. Vendor the descriptor to keep the same schema
 portable across all three paths:
 
 ```bash
-mkdir -p proto/gdproto
-gdproto --print-options-proto > proto/gdproto/options.proto
+mkdir -p proto-include/gdproto
+gdproto --print-options-proto > proto-include/gdproto/options.proto
+```
+
+Then tell `gdproto` where to find the vendored descriptor with `-I`:
+
+```bash
+gdproto -I proto-include -o godot/generated proto/example.proto
 ```
 
 ## Import Resolution
 
-Direct CLI import resolution starts from the input file's directory:
+The direct CLI resolves each `import "path";` by checking, in order:
+
+1. Each `-I/--proto_path` directory, joined with the import path.
+2. The input file's own directory, joined with the import path.
+3. Parent directories of the input file (a backwards-compatible fallback
+   for projects that rely on the original walk-up behavior).
+
+For example, given:
 
 ```text
+proto-include/
+  gdproto/options.proto
 proto/
   player.proto
   shared/team.proto
 ```
 
-If `player.proto` imports `shared/team.proto`, run:
+if `player.proto` writes `import "shared/team.proto";` and
+`import "gdproto/options.proto";`, run:
 
 ```bash
-gdproto proto/player.proto -o godot/generated/
+gdproto -I proto-include -o godot/generated/ proto/player.proto
 ```
 
-For projects with multiple import roots, prefer Buf or the `protoc` plugin
-because they expose import roots explicitly.
+`-I` is repeatable, so multiple include roots may be stacked
+(`-I proto-include -I third-party`). This mirrors `protoc`'s
+convention.
 
 ## Exit Codes
 

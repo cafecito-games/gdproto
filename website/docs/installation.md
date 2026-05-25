@@ -79,11 +79,21 @@ extension descriptor on disk so that `protoc` and `buf` can resolve it.
 Either binary can print the embedded descriptor:
 
 ```bash
-mkdir -p proto/gdproto
-gdproto --print-options-proto > proto/gdproto/options.proto
+mkdir -p proto-include/gdproto
+gdproto --print-options-proto > proto-include/gdproto/options.proto
 # or
-protoc-gen-gdscript --print-options-proto > proto/gdproto/options.proto
+protoc-gen-gdscript --print-options-proto > proto-include/gdproto/options.proto
 ```
+
+For the direct CLI, pass the vendored directory as an import root using
+`-I` (alias `--proto_path`, mirroring `protoc`):
+
+```bash
+gdproto -I proto-include -o godot/generated proto/example.proto
+```
+
+`protoc` and `buf` use their own native include configuration; see the
+[`protoc` plugin](./protoc-plugin.md) and [Buf](./buf.md) pages.
 
 See [Generated GDScript](./generated-code.md#class-prefix) for the full
 explanation of how the option is consumed.

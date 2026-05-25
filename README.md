@@ -140,11 +140,21 @@ toolchain:
 needed:
 
 ```bash
-mkdir -p proto/gdproto
-gdproto --print-options-proto > proto/gdproto/options.proto
+mkdir -p proto-include/gdproto
+gdproto --print-options-proto > proto-include/gdproto/options.proto
 ```
 
 `protoc-gen-gdscript --print-options-proto` works the same way.
+
+Then point the direct CLI at the vendored descriptor with `-I` (alias
+`--proto_path`), matching `protoc`'s convention:
+
+```bash
+gdproto -I proto-include -o godot/generated proto/example.proto
+```
+
+`-I` is repeatable: each directory is searched in order before falling
+back to the input file's directory.
 
 **(b) Raw `protoc`.** Vendor the file anywhere on disk and add the
 directory as an import root:
