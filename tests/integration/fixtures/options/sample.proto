@@ -1,0 +1,9 @@
+syntax = "proto3";
+import "gdproto/options.proto";
+
+option (gdproto.class_prefix) = "Game";
+
+message Hero {
+  string name = 1;
+  int32 hp = 2;
+}

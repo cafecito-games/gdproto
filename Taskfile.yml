@@ -34,6 +34,11 @@ tasks:
       - go test -race -count=1 -coverprofile=coverage.out -covermode=atomic {{.PKG}}
       - go tool cover -func=coverage.out | tail -1
 
+  integration:
+    desc: Run integration tests (requires protoc and buf in PATH).
+    cmds:
+      - go test -tags=integration ./tests/integration/... -v -count=1
+
   lint:
     desc: Run golangci-lint.
     cmds:
