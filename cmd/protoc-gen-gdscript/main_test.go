@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/pluginpb"
+
+	"github.com/cafecito-games/gdproto/internal/gdprotopb"
 )
 
 func buildRequestFromDescriptorSet(t *testing.T, filesToGenerate []string, srcByName map[string]string) *pluginpb.CodeGeneratorRequest {
@@ -77,6 +80,28 @@ func runPluginRequest(t *testing.T, request *pluginpb.CodeGeneratorRequest) *plu
 	return response
 }
 
+// runPluginRequestRaw is like runPluginRequest but does not fail when
+// response.Error is set; callers can inspect the error directly.
+func runPluginRequestRaw(t *testing.T, request *pluginpb.CodeGeneratorRequest) *pluginpb.CodeGeneratorResponse {
+	t.Helper()
+
+	requestBytes, err := proto.Marshal(request)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+
+	var output bytes.Buffer
+	if err := run(bytes.NewReader(requestBytes), &output); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	response := &pluginpb.CodeGeneratorResponse{}
+	if err := proto.Unmarshal(output.Bytes(), response); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	return response
+}
+
 func dirOf(path string) string {
 	if idx := strings.LastIndex(path, "/"); idx >= 0 {
 		return path[:idx]
@@ -84,10 +109,19 @@ func dirOf(path string) string {
 	return "."
 }
 
+func responseFilenames(response *pluginpb.CodeGeneratorResponse) []string {
+	names := make([]string, 0, len(response.File))
+	for _, f := range response.File {
+		names = append(names, f.GetName())
+	}
+	sort.Strings(names)
+	return names
+}
+
 // TestRunWithExampleProto exercises the full plugin pipeline by shelling out
-// to protoc to build a descriptor set for examples/example.proto, wrapping it
-// in a CodeGeneratorRequest, and asserting the response file matches the
-// committed golden byte-for-byte. The test skips when protoc is unavailable.
+// to protoc to build a descriptor set for examples/example.proto, wrapping
+// it in a CodeGeneratorRequest, and asserting the per-class files match the
+// committed goldens byte-for-byte. The test skips when protoc is unavailable.
 func TestRunWithExampleProto(t *testing.T) {
 	if _, err := exec.LookPath("protoc"); err != nil {
 		t.Skip("protoc not on PATH")
@@ -129,34 +163,49 @@ func TestRunWithExampleProto(t *testing.T) {
 	if response.Error != nil {
 		t.Fatalf("plugin reported error: %s", *response.Error)
 	}
-	if len(response.File) != 2 {
-		t.Fatalf("expected 2 generated files (wrapper + proto_core_utils), got %d", len(response.File))
+
+	wantFilenames := []string{
+		"ExampleGameState.pb.gd",
+		"ExamplePlayer.pb.gd",
+		"ExamplePlayerPosition.pb.gd",
+		"ExamplePlayerStatus.pb.gd",
+		"proto_core_utils.gd",
 	}
-	if got, want := response.File[0].GetName(), "example.pb.gd"; got != want {
-		t.Errorf("output filename = %q, want %q", got, want)
-	}
-	if got, want := response.File[1].GetName(), "proto_core_utils.gd"; got != want {
-		t.Errorf("sibling filename = %q, want %q", got, want)
+	gotNames := responseFilenames(response)
+	if !equalStringSlices(gotNames, wantFilenames) {
+		t.Fatalf("emitted filenames mismatch:\n  got:  %v\n  want: %v", gotNames, wantFilenames)
 	}
 
-	got := response.File[0].GetContent()
-	want, err := os.ReadFile("../../examples/golden.gd")
-	if err != nil {
-		t.Fatalf("read golden: %v", err)
+	contents := map[string]string{}
+	for _, f := range response.File {
+		contents[f.GetName()] = f.GetContent()
 	}
-	if got != string(want) {
-		gotLines := strings.Split(got, "\n")
-		wantLines := strings.Split(string(want), "\n")
-		limit := len(gotLines)
-		if len(wantLines) < limit {
-			limit = len(wantLines)
+
+	for _, filename := range []string{
+		"ExampleGameState.pb.gd",
+		"ExamplePlayer.pb.gd",
+		"ExamplePlayerPosition.pb.gd",
+		"ExamplePlayerStatus.pb.gd",
+	} {
+		want, err := os.ReadFile("../../examples/golden/" + filename)
+		if err != nil {
+			t.Fatalf("read golden %s: %v", filename, err)
 		}
-		for i := 0; i < limit; i++ {
-			if gotLines[i] != wantLines[i] {
-				t.Fatalf("output differs from golden at line %d:\n  got:  %q\n  want: %q", i+1, gotLines[i], wantLines[i])
+		got := contents[filename]
+		if got != string(want) {
+			gotLines := strings.Split(got, "\n")
+			wantLines := strings.Split(string(want), "\n")
+			limit := len(gotLines)
+			if len(wantLines) < limit {
+				limit = len(wantLines)
 			}
+			for i := 0; i < limit; i++ {
+				if gotLines[i] != wantLines[i] {
+					t.Fatalf("%s differs from golden at line %d:\n  got:  %q\n  want: %q", filename, i+1, gotLines[i], wantLines[i])
+				}
+			}
+			t.Fatalf("%s differs from golden in length: got %d lines, want %d lines", filename, len(gotLines), len(wantLines))
 		}
-		t.Fatalf("output differs from golden in length: got %d lines, want %d lines", len(gotLines), len(wantLines))
 	}
 }
 
@@ -201,15 +250,24 @@ message Uses { Outer.Inner inner = 1; }`,
 	})
 
 	response := runPluginRequest(t, request)
-	if len(response.File) != 2 {
-		t.Fatalf("expected 2 generated files (wrapper + proto_core_utils), got %d", len(response.File))
+	// Per-class output: NestedOuter.pb.gd, NestedOuterInner.pb.gd,
+	// NestedUses.pb.gd, plus proto_core_utils.gd.
+	if got, want := len(response.File), 4; got != want {
+		t.Fatalf("expected %d generated files, got %d (%v)", want, got, responseFilenames(response))
 	}
-	got := response.File[0].GetContent()
-	if !strings.Contains(got, "var _inner: Outer.Inner = null") {
-		t.Fatalf("missing qualified field type:\n%s", got)
+	contents := map[string]string{}
+	for _, f := range response.File {
+		contents[f.GetName()] = f.GetContent()
 	}
-	if !strings.Contains(got, "_inner = Outer.Inner.new()") {
-		t.Fatalf("missing qualified constructor:\n%s", got)
+	uses, ok := contents["NestedUses.pb.gd"]
+	if !ok {
+		t.Fatalf("missing NestedUses.pb.gd in %v", responseFilenames(response))
+	}
+	if !strings.Contains(uses, "var _inner: NestedOuterInner = null") {
+		t.Fatalf("missing flattened field type:\n%s", uses)
+	}
+	if !strings.Contains(uses, "_inner = NestedOuterInner.new()") {
+		t.Fatalf("missing flattened constructor:\n%s", uses)
 	}
 }
 
@@ -223,62 +281,72 @@ message Uses { Shared shared = 1; }`,
 	})
 
 	response := runPluginRequest(t, request)
-	names := make([]string, 0, len(response.File))
-	for _, f := range response.File {
-		names = append(names, f.GetName())
-	}
+	names := responseFilenames(response)
 
-	hasMain := false
-	hasShared := false
-	hasCore := false
+	want := map[string]bool{
+		"MainUses.pb.gd":      false,
+		"SharedShared.pb.gd":  false,
+		"proto_core_utils.gd": false,
+	}
 	for _, name := range names {
-		switch name {
-		case "main.pb.gd":
-			hasMain = true
-		case "shared.pb.gd":
-			hasShared = true
-		case "proto_core_utils.gd":
-			hasCore = true
+		if _, ok := want[name]; ok {
+			want[name] = true
 		}
 	}
-	if !hasMain {
-		t.Fatalf("missing main.pb.gd in %v", names)
-	}
-	if !hasShared {
-		t.Fatalf("imported shared.pb.gd was not generated; got %v", names)
-	}
-	if !hasCore {
-		t.Fatalf("missing proto_core_utils.gd in %v", names)
-	}
-}
-
-func TestConvertToWrapperFilename(t *testing.T) {
-	cases := map[string]string{
-		"google/protobuf/timestamp.proto": "google/protobuf/timestamp.pb.gd",
-		"foo/bar.proto":                   "foo/bar.pb.gd",
-		"PlayerStats.proto":               "player_stats.pb.gd",
-		"player_stats.proto":              "player_stats.pb.gd",
-		"example.proto":                   "example.pb.gd",
-	}
-	for input, want := range cases {
-		if got := convertToWrapperFilename(input); got != want {
-			t.Errorf("convertToWrapperFilename(%q) = %q, want %q", input, got, want)
+	for name, present := range want {
+		if !present {
+			t.Fatalf("missing %s in %v", name, names)
 		}
 	}
 }
 
-func TestNormalizeProtoStem(t *testing.T) {
-	cases := map[string]string{
-		"PlayerStats":   "player_stats",
-		"player_stats":  "player_stats",
-		"HTTPResponse":  "http_response",
-		"":              "proto",
-		"123abc":        "proto_123abc",
-		"foo--bar__baz": "foo_bar_baz",
+func TestRunReportsClassNameCollision(t *testing.T) {
+	// foo_bar.proto derives prefix "FooBar" and produces FooBarBaz.pb.gd.
+	// foo.proto derives prefix "Foo" and produces FooBarBaz.pb.gd from its
+	// "BarBaz" message. Both files target the same on-disk filename without
+	// a symbol clash inside protoc.
+	request := buildRequestFromDescriptorSet(t, []string{"foo_bar.proto", "foo.proto"}, map[string]string{
+		"foo_bar.proto": `syntax = "proto3";
+message Baz {}`,
+		"foo.proto": `syntax = "proto3";
+message BarBaz {}`,
+	})
+
+	response := runPluginRequestRaw(t, request)
+	if response.Error == nil {
+		t.Fatalf("expected collision error, got files %v", responseFilenames(response))
 	}
-	for input, want := range cases {
-		if got := normalizeProtoStem(input); got != want {
-			t.Errorf("normalizeProtoStem(%q) = %q, want %q", input, got, want)
+	message := *response.Error
+	if !strings.Contains(message, "class name collision: FooBarBaz.pb.gd") {
+		t.Errorf("error message missing collision detail: %q", message)
+	}
+	if !strings.Contains(message, "set option (gdproto.class_prefix)") {
+		t.Errorf("error message missing class_prefix hint: %q", message)
+	}
+}
+
+func TestPrintOptionsProtoMatchesEmbed(t *testing.T) {
+	var buf bytes.Buffer
+	n, err := printOptionsProto(&buf)
+	if err != nil {
+		t.Fatalf("printOptionsProto: %v", err)
+	}
+	if n != len(gdprotopb.Bytes()) {
+		t.Fatalf("wrote %d bytes, want %d", n, len(gdprotopb.Bytes()))
+	}
+	if !bytes.Equal(buf.Bytes(), gdprotopb.Bytes()) {
+		t.Fatalf("printed bytes differ from gdprotopb.Bytes()")
+	}
+}
+
+func equalStringSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
 		}
 	}
+	return true
 }

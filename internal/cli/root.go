@@ -133,13 +133,13 @@ func runCompile(cmd *cobra.Command, inputPath, outputPath string) error {
 	written := 0
 	for _, gf := range files {
 		p := filepath.Join(outDir, gf.Filename)
-		if err := os.WriteFile(p, []byte(gf.Source()), 0o644); err != nil { //nolint:gosec
+		if err := os.WriteFile(p, []byte(gf.Source()), 0o644); err != nil { //nolint:gosec // generated source intended to be world-readable
 			return fmt.Errorf("write %s: %w", p, err)
 		}
 		written++
 	}
 	siblingPath := filepath.Join(outDir, "proto_core_utils.gd")
-	if err := os.WriteFile(siblingPath, []byte(generator.GenerateProtoCoreUtilsRaw()), 0o644); err != nil { //nolint:gosec
+	if err := os.WriteFile(siblingPath, []byte(generator.GenerateProtoCoreUtilsRaw()), 0o644); err != nil { //nolint:gosec // generated source intended to be world-readable
 		return fmt.Errorf("write %s: %w", siblingPath, err)
 	}
 	written++

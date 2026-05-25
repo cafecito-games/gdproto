@@ -7,13 +7,16 @@
 // Usage:
 //
 //	protoc --gdscript_out=<out_dir> --plugin=protoc-gen-gdscript=/path/to/binary <file.proto>
+//
+// When invoked with --print-options-proto the binary writes the embedded
+// gdproto/options.proto bytes to stdout and exits without reading stdin, so
+// users who only have the plugin installed can recover the options schema.
 package main
 
 import (
 	"fmt"
 	"io"
 	"os"
-	"regexp"
 	"strings"
 
 	"google.golang.org/protobuf/proto"
@@ -21,15 +24,30 @@ import (
 
 	"github.com/cafecito-games/gdproto/internal/ast"
 	"github.com/cafecito-games/gdproto/internal/descriptors"
+	"github.com/cafecito-games/gdproto/internal/gdprotopb"
 	"github.com/cafecito-games/gdproto/internal/generator"
 	"github.com/cafecito-games/gdproto/internal/validator"
 )
 
 func main() {
+	for _, arg := range os.Args[1:] {
+		if arg == "--print-options-proto" {
+			if _, err := printOptionsProto(os.Stdout); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+			return
+		}
+	}
 	if err := run(os.Stdin, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+// printOptionsProto writes the embedded gdproto options proto to w.
+func printOptionsProto(w io.Writer) (int, error) {
+	return w.Write(gdprotopb.Bytes())
 }
 
 // run executes one round of the plugin protocol against the supplied IO.
@@ -68,6 +86,8 @@ func run(in io.Reader, out io.Writer) error {
 
 	generationOrder := transitiveGenerationOrder(request.GetFileToGenerate(), files, fileIndex)
 
+	emittedFrom := map[string]string{}
+
 	for _, name := range generationOrder {
 		index, ok := fileIndex[name]
 		if !ok {
@@ -88,22 +108,28 @@ func run(in io.Reader, out io.Writer) error {
 			return writeResponse(out, response)
 		}
 
-		class, err := generator.Generate(file, name)
+		generated, err := generator.Generate(file, name)
 		if err != nil {
 			message := fmt.Sprintf("generate %s: %v", name, err)
 			response.Error = &message
 			return writeResponse(out, response)
 		}
 
-		outputName := convertToWrapperFilename(name)
-		content := class.ToGDScript(0)
-		if !strings.HasSuffix(content, "\n") {
-			content += "\n"
+		for _, gf := range generated {
+			if origin, dup := emittedFrom[gf.Filename]; dup {
+				message := fmt.Sprintf(
+					"class name collision: %s emitted by both %s and %s; set option (gdproto.class_prefix) to disambiguate",
+					gf.Filename, origin, name,
+				)
+				response.Error = &message
+				return writeResponse(out, response)
+			}
+			emittedFrom[gf.Filename] = name
+			response.File = append(response.File, &pluginpb.CodeGeneratorResponse_File{
+				Name:    proto.String(gf.Filename),
+				Content: proto.String(gf.Source()),
+			})
 		}
-		response.File = append(response.File, &pluginpb.CodeGeneratorResponse_File{
-			Name:    proto.String(outputName),
-			Content: proto.String(content),
-		})
 	}
 
 	if len(response.File) > 0 {
@@ -118,10 +144,11 @@ func run(in io.Reader, out io.Writer) error {
 
 // transitiveGenerationOrder returns the explicit file_to_generate list followed
 // by every file transitively imported through them that the request also
-// supplied a descriptor for. Generated wrappers reference imported messages by
-// their wrapper class (e.g. GoogleProtobufTimestampProto.Timestamp), so those
-// classes have to exist on disk for Godot to resolve the type. Order is
-// deterministic: BFS over the original file_to_generate sequence.
+// supplied a descriptor for. Each imported message becomes its own global
+// GDScript class (named from the imported file's (gdproto.class_prefix) or
+// filename-derived prefix), so every imported file must be present on disk
+// for Godot to resolve cross-file type references. Order is deterministic:
+// BFS over the original file_to_generate sequence.
 func transitiveGenerationOrder(seeds []string, files []*ast.ProtoFile, fileIndex map[string]int) []string {
 	seen := make(map[string]bool, len(seeds))
 	order := make([]string, 0, len(seeds))
@@ -165,55 +192,4 @@ func writeResponse(out io.Writer, response *pluginpb.CodeGeneratorResponse) erro
 		return fmt.Errorf("write response: %w", err)
 	}
 	return nil
-}
-
-// convertToWrapperFilename mirrors the Python plugin's filename rule:
-// strip the .proto suffix, snake_case the basename, and append ".pb.gd".
-//
-//	"google/protobuf/timestamp.proto" -> "google/protobuf/timestamp.pb.gd"
-//	"PlayerStats.proto"               -> "player_stats.pb.gd"
-func convertToWrapperFilename(path string) string {
-	base := strings.TrimSuffix(path, ".proto")
-	slash := strings.LastIndex(base, "/")
-	var directory, stem string
-	if slash >= 0 {
-		directory = base[:slash+1]
-		stem = base[slash+1:]
-	} else {
-		stem = base
-	}
-	return directory + normalizeProtoStem(stem) + ".pb.gd"
-}
-
-var (
-	snakeBoundary1  = regexp.MustCompile(`(.)([A-Z][a-z]+)`)
-	snakeBoundary2  = regexp.MustCompile(`([a-z0-9])([A-Z])`)
-	nonAlphanumeric = regexp.MustCompile(`[^A-Za-z0-9]+`)
-	multiUnderscore = regexp.MustCompile(`_+`)
-)
-
-// toSnakeCase converts PascalCase or camelCase to snake_case, matching the
-// Python plugin's _to_snake_case helper.
-func toSnakeCase(name string) string {
-	intermediate := snakeBoundary1.ReplaceAllString(name, `${1}_${2}`)
-	intermediate = snakeBoundary2.ReplaceAllString(intermediate, `${1}_${2}`)
-	return strings.ToLower(intermediate)
-}
-
-// normalizeProtoStem sanitizes a proto filename stem into a snake_case
-// identifier suitable for use in generated wrapper paths.
-func normalizeProtoStem(name string) string {
-	sanitized := strings.Trim(nonAlphanumeric.ReplaceAllString(name, "_"), "_")
-	if sanitized == "" {
-		return "proto"
-	}
-	snake := toSnakeCase(sanitized)
-	snake = strings.Trim(multiUnderscore.ReplaceAllString(snake, "_"), "_")
-	if snake == "" {
-		return "proto"
-	}
-	if snake[0] >= '0' && snake[0] <= '9' {
-		snake = "proto_" + snake
-	}
-	return snake
 }
