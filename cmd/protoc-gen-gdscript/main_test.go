@@ -271,7 +271,12 @@ message Uses { Outer.Inner inner = 1; }`,
 	}
 }
 
-func TestRunGeneratesTransitivelyImportedFiles(t *testing.T) {
+// TestRunOnlyGeneratesRequestedFiles confirms the plugin honors the standard
+// protoc contract: only files listed in file_to_generate are emitted, even
+// when the request supplies descriptors for transitively-imported files.
+// Users who want wrappers for imported messages must list those .proto files
+// explicitly in the generator input set.
+func TestRunOnlyGeneratesRequestedFiles(t *testing.T) {
 	request := buildRequestFromDescriptorSet(t, []string{"main.proto"}, map[string]string{
 		"shared.proto": `syntax = "proto3";
 message Shared {}`,
@@ -283,20 +288,63 @@ message Uses { Shared shared = 1; }`,
 	response := runPluginRequest(t, request)
 	names := responseFilenames(response)
 
-	want := map[string]bool{
-		"MainUses.pb.gd":      false,
-		"SharedShared.pb.gd":  false,
-		"proto_core_utils.gd": false,
-	}
-	for _, name := range names {
-		if _, ok := want[name]; ok {
-			want[name] = true
+	wantPresent := []string{"MainUses.pb.gd", "proto_core_utils.gd"}
+	for _, name := range wantPresent {
+		found := false
+		for _, got := range names {
+			if got == name {
+				found = true
+				break
+			}
 		}
-	}
-	for name, present := range want {
-		if !present {
+		if !found {
 			t.Fatalf("missing %s in %v", name, names)
 		}
+	}
+	for _, got := range names {
+		if got == "SharedShared.pb.gd" {
+			t.Fatalf("SharedShared.pb.gd should not be emitted when shared.proto is not in file_to_generate; got %v", names)
+		}
+	}
+}
+
+// TestRunGeneratesAllRequestedFiles confirms that listing both a file and
+// its imports in file_to_generate emits wrappers for both and that cross-file
+// type references render with the imported file's class prefix.
+func TestRunGeneratesAllRequestedFiles(t *testing.T) {
+	request := buildRequestFromDescriptorSet(t, []string{"main.proto", "shared.proto"}, map[string]string{
+		"shared.proto": `syntax = "proto3";
+message Shared {}`,
+		"main.proto": `syntax = "proto3";
+import "shared.proto";
+message Uses { Shared shared = 1; }`,
+	})
+
+	response := runPluginRequest(t, request)
+	names := responseFilenames(response)
+
+	for _, want := range []string{"MainUses.pb.gd", "SharedShared.pb.gd", "proto_core_utils.gd"} {
+		found := false
+		for _, got := range names {
+			if got == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("missing %s in %v", want, names)
+		}
+	}
+
+	var usesSource string
+	for _, f := range response.File {
+		if f.GetName() == "MainUses.pb.gd" {
+			usesSource = f.GetContent()
+			break
+		}
+	}
+	if !strings.Contains(usesSource, "SharedShared") {
+		t.Fatalf("MainUses.pb.gd should reference SharedShared for the cross-file field type:\n%s", usesSource)
 	}
 }
 

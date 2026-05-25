@@ -22,7 +22,6 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/pluginpb"
 
-	"github.com/cafecito-games/gdproto/internal/ast"
 	"github.com/cafecito-games/gdproto/internal/descriptors"
 	"github.com/cafecito-games/gdproto/internal/gdprotopb"
 	"github.com/cafecito-games/gdproto/internal/generator"
@@ -84,11 +83,9 @@ func run(in io.Reader, out io.Writer) error {
 		fileIndex[descriptor.GetName()] = i
 	}
 
-	generationOrder := transitiveGenerationOrder(request.GetFileToGenerate(), files, fileIndex)
-
 	emittedFrom := map[string]string{}
 
-	for _, name := range generationOrder {
+	for _, name := range request.GetFileToGenerate() {
 		index, ok := fileIndex[name]
 		if !ok {
 			continue
@@ -140,47 +137,6 @@ func run(in io.Reader, out io.Writer) error {
 	}
 
 	return writeResponse(out, response)
-}
-
-// transitiveGenerationOrder returns the explicit file_to_generate list followed
-// by every file transitively imported through them that the request also
-// supplied a descriptor for. Each imported message becomes its own global
-// GDScript class (named from the imported file's (gdproto.class_prefix) or
-// filename-derived prefix), so every imported file must be present on disk
-// for Godot to resolve cross-file type references. Order is deterministic:
-// BFS over the original file_to_generate sequence.
-func transitiveGenerationOrder(seeds []string, files []*ast.ProtoFile, fileIndex map[string]int) []string {
-	seen := make(map[string]bool, len(seeds))
-	order := make([]string, 0, len(seeds))
-	queue := make([]string, 0, len(seeds))
-	for _, name := range seeds {
-		if seen[name] {
-			continue
-		}
-		seen[name] = true
-		order = append(order, name)
-		queue = append(queue, name)
-	}
-	for len(queue) > 0 {
-		name := queue[0]
-		queue = queue[1:]
-		index, ok := fileIndex[name]
-		if !ok {
-			continue
-		}
-		for _, imp := range files[index].Imports {
-			if seen[imp.Path] {
-				continue
-			}
-			if _, ok := fileIndex[imp.Path]; !ok {
-				continue
-			}
-			seen[imp.Path] = true
-			order = append(order, imp.Path)
-			queue = append(queue, imp.Path)
-		}
-	}
-	return order
 }
 
 func writeResponse(out io.Writer, response *pluginpb.CodeGeneratorResponse) error {
