@@ -17,8 +17,12 @@ var (
 )
 
 // ResolvePrefix returns the GDScript class_name prefix for the given proto
-// file. The (gdproto.class_prefix) option wins; otherwise the basename of
-// filename is split on non-alphanumerics and PascalCased.
+// file. The (gdproto.class_prefix) option wins; otherwise the full proto path
+// (with .proto stripped) is split on path separators and non-alphanumerics,
+// each piece is PascalCased, and the pieces are concatenated. Using the full
+// path avoids class-name collisions in monorepo layouts that segregate
+// otherwise-identical filenames (e.g. multiple common.proto) into different
+// directories.
 func ResolvePrefix(file *ast.ProtoFile, filename string) (string, error) {
 	if raw, ok := file.Options[classPrefixOptionKey]; ok {
 		s, isString := raw.(string)
@@ -32,15 +36,22 @@ func ResolvePrefix(file *ast.ProtoFile, filename string) (string, error) {
 		}
 		return s, nil
 	}
-	base := strings.TrimSuffix(filepath.Base(filename), ".proto")
+	stem := strings.TrimSuffix(filename, ".proto")
+	// Normalize separators so Windows paths split consistently.
+	stem = filepath.ToSlash(stem)
 	var b strings.Builder
-	for _, p := range nonAlnumSplit.Split(base, -1) {
-		if p == "" {
+	for _, segment := range strings.Split(stem, "/") {
+		if segment == "" {
 			continue
 		}
-		b.WriteString(strings.ToUpper(p[:1]))
-		if len(p) > 1 {
-			b.WriteString(strings.ToLower(p[1:]))
+		for _, p := range nonAlnumSplit.Split(segment, -1) {
+			if p == "" {
+				continue
+			}
+			b.WriteString(strings.ToUpper(p[:1]))
+			if len(p) > 1 {
+				b.WriteString(strings.ToLower(p[1:]))
+			}
 		}
 	}
 	out := b.String()

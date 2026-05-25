@@ -12,8 +12,11 @@ func TestResolvePrefixFromFilename(t *testing.T) {
 		{"example.proto", "Example"},
 		{"game_state.proto", "GameState"},
 		{"weird-name.proto", "WeirdName"},
-		{"nested/foo_bar.proto", "FooBar"},
-		{"v1/api.proto", "Api"},
+		{"nested/foo_bar.proto", "NestedFooBar"},
+		{"v1/api.proto", "V1Api"},
+		{"uzir/common/v1/common.proto", "UzirCommonV1Common"},
+		{"uzir/assetpack/server/v1/world.proto", "UzirAssetpackServerV1World"},
+		{"/abs/path/foo.proto", "AbsPathFoo"},
 	}
 	for _, c := range cases {
 		f := &ast.ProtoFile{}

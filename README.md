@@ -106,7 +106,12 @@ buf generate
 ## Custom prefix
 
 By default the class prefix for generated files is derived from the input
-`.proto` filename (`example.proto` -> `Example`). To override it, set the
+`.proto` path: each path segment is split on non-alphanumerics, PascalCased,
+and concatenated. So `example.proto` -> `Example`, `game_state.proto` ->
+`GameState`, and `uzir/common/v1/common.proto` -> `UzirCommonV1Common`.
+Using the full path keeps prefixes unique in monorepo layouts that
+segregate otherwise-identical filenames (e.g. multiple `common.proto`)
+into different directories. To override it, set the
 `(gdproto.class_prefix)` file option:
 
 ```protobuf

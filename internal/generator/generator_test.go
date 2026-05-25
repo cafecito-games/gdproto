@@ -60,9 +60,9 @@ func TestGenerateHeaderUsesBasename(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
-	f := findFile(files, "BarBazFoo")
+	f := findFile(files, "TmpFooBarBazFoo")
 	if f == nil {
-		t.Fatalf("missing BarBazFoo class; got %v", classNames(files))
+		t.Fatalf("missing TmpFooBarBazFoo class; got %v", classNames(files))
 	}
 	if !strings.Contains(f.Source(), "# Source: bar_baz.proto") {
 		t.Errorf("output should reference basename of input path; got:\n%s", f.Source())

@@ -72,8 +72,24 @@ Two rules cover every enum:
 
 ## Class Prefix
 
-The default prefix comes from the input filename. To override it, use the
-`(gdproto.class_prefix)` file option:
+The default prefix comes from the input `.proto` path. Each path segment is
+split on non-alphanumerics, PascalCased, and concatenated:
+
+| Input path | Derived prefix |
+|---|---|
+| `example.proto` | `Example` |
+| `game_state.proto` | `GameState` |
+| `nested/foo_bar.proto` | `NestedFooBar` |
+| `v1/api.proto` | `V1Api` |
+| `uzir/common/v1/common.proto` | `UzirCommonV1Common` |
+
+Using the entire path (not just the basename) keeps prefixes unique across
+monorepo layouts that segregate otherwise-identical filenames into
+different directories — without this, several `common.proto` files in
+different packages would all derive to `Common` and collide at generation
+time.
+
+To override the default, use the `(gdproto.class_prefix)` file option:
 
 ```protobuf
 syntax = "proto3";

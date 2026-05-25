@@ -174,25 +174,10 @@ func validateOutputDir(p string) error {
 }
 
 func sourceNameForCLI(inputPath string) string {
-	cleaned := filepath.Clean(inputPath)
-	if !filepath.IsAbs(cleaned) {
-		parts := strings.Split(filepath.ToSlash(cleaned), "/")
-		filtered := parts[:0]
-		for _, part := range parts {
-			if part == "." || part == ".." || part == "" {
-				continue
-			}
-			filtered = append(filtered, part)
-		}
-		if len(filtered) == 0 {
-			return filepath.ToSlash(filepath.Base(cleaned))
-		}
-		return strings.Join(filtered, "/")
-	}
-	dir := filepath.Base(filepath.Dir(cleaned))
-	base := filepath.Base(cleaned)
-	if dir == "." || dir == string(filepath.Separator) || dir == "" {
-		return filepath.ToSlash(base)
-	}
-	return filepath.ToSlash(filepath.Join(dir, base))
+	// CLI users pass filesystem paths whose intermediate directory
+	// structure rarely carries proto-package meaning (especially absolute
+	// paths under temp dirs, build trees, etc.). Use the basename so the
+	// derived class_name prefix is stable and free of incidental segments
+	// like build-artifact digits.
+	return filepath.ToSlash(filepath.Base(filepath.Clean(inputPath)))
 }
