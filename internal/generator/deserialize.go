@@ -48,7 +48,7 @@ func (g *generator) generateFromBytes(m *ast.Message) gdast.Function {
 		caseBody := []gdast.Statement{
 			gdast.Comment{Text: fmt.Sprintf("Map field %s", mf.Name)},
 		}
-		caseBody = append(caseBody, mapFieldDeserialization(mf)...)
+		caseBody = append(caseBody, g.mapFieldDeserialization(mf)...)
 		cases = append(cases, gdast.MatchCase{
 			Pattern: strconv.Itoa(mf.Number),
 			Body:    caseBody,
@@ -557,7 +557,7 @@ func fixedAppend(fieldVar, decodeFunc string, width int) []gdast.Statement {
 // mapFieldDeserialization decodes a single map<K,V> entry message: it reads
 // the length-prefixed entry, then iterates the entry's tag stream, decoding
 // each `1: key` / `2: value` pair before storing it into the map field.
-func mapFieldDeserialization(mf *ast.MapField) []gdast.Statement {
+func (g *generator) mapFieldDeserialization(mf *ast.MapField) []gdast.Statement {
 	stmts := lengthPrefixDecode()
 	stmts = append(stmts,
 		gdast.EmptyLine{},
@@ -573,11 +573,11 @@ func mapFieldDeserialization(mf *ast.MapField) []gdast.Statement {
 		},
 		gdast.EmptyLine{},
 		inferredVar("map_key", mapDefault(mf.KeyType, false)),
-		mapValueDecl(mf),
+		g.mapValueDecl(mf),
 		gdast.EmptyLine{},
 		gdast.WhileStatement{
 			Condition: gdast.Lt(gdast.V("entry_offset"), gdast.RawExpression{Code: "entry_data.size()"}),
-			Body:      mapEntryLoopBody(mf),
+			Body:      g.mapEntryLoopBody(mf),
 		},
 		gdast.EmptyLine{},
 		rawf("_%s[map_key] = map_value", mf.Name),
@@ -588,7 +588,7 @@ func mapFieldDeserialization(mf *ast.MapField) []gdast.Statement {
 
 // mapEntryLoopBody emits the inner while-loop body that reads one entry tag
 // from `entry_data` and dispatches to either the key or value decoder.
-func mapEntryLoopBody(mf *ast.MapField) []gdast.Statement {
+func (g *generator) mapEntryLoopBody(mf *ast.MapField) []gdast.Statement {
 	return []gdast.Statement{
 		inferredVar("entry_tag_result", "ProtoCoreUtils.decode_varint(entry_data, entry_offset)"),
 		gdast.IfStatement{
@@ -623,7 +623,7 @@ func mapEntryLoopBody(mf *ast.MapField) []gdast.Statement {
 					Pattern: "2",
 					Body: append(
 						[]gdast.Statement{gdast.Comment{Text: "Entry value"}},
-						mapEntryDecode("map_value", mf.ValueType, mf.ValueIsEnum, gRenderedMapType(mf))...,
+						mapEntryDecode("map_value", mf.ValueType, mf.ValueIsEnum, g.gRenderedMapType(mf))...,
 					),
 				},
 			},
@@ -818,12 +818,12 @@ func mapMessageAssign(target, typeName string) []gdast.Statement {
 // usable type. Message values default to null, which Godot's parser cannot
 // infer a type for, so we emit a typed declaration to keep the script
 // compiling on Godot 4.6+.
-func mapValueDecl(mf *ast.MapField) gdast.Statement {
+func (g *generator) mapValueDecl(mf *ast.MapField) gdast.Statement {
 	if !mf.ValueIsEnum {
 		if _, ok := scalarTypeMap[mf.ValueType]; !ok {
 			return gdast.VarDeclaration{
 				Name:         "map_value",
-				TypeHint:     gRenderedMapType(mf),
+				TypeHint:     g.gRenderedMapType(mf),
 				InitialValue: gdast.RawExpression{Code: "null"},
 			}
 		}
@@ -843,12 +843,10 @@ func mapDefault(protoType string, isEnum bool) string {
 	return "null"
 }
 
-func gRenderedMapType(mf *ast.MapField) string {
-	if t, ok := scalarTypeMap[mf.ValueType]; ok {
-		return t
-	}
-	if mf.ValueSourceFile == "" {
-		return mf.ValueType
-	}
-	return wrapperClassName(mf.ValueSourceFile) + "." + mf.ValueType
+// gRenderedMapType returns the rendered GDScript type for a map value,
+// resolved through the generator's name resolver so that same-file and
+// cross-file references both end up as their globally-addressable class
+// names.
+func (g *generator) gRenderedMapType(mf *ast.MapField) string {
+	return g.renderedMapValueType(mf)
 }

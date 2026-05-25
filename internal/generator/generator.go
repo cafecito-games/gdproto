@@ -2,19 +2,51 @@ package generator
 
 import (
 	"path/filepath"
-	"regexp"
 	"strings"
-	"unicode"
 
 	"github.com/cafecito-games/gdproto/internal/ast"
 	"github.com/cafecito-games/gdproto/internal/gdast"
 )
 
-// Generate produces a gdast ClassDefinition representing the GDScript
-// translation of the proto file. The sourceName is the input filename used in
-// the file header comment.
-func Generate(file *ast.ProtoFile, sourceName string) (*gdast.ClassDefinition, error) {
-	g := &generator{file: file, sourceName: sourceName}
+// GeneratedFile is one rendered .gd source file produced by Generate. Each
+// top-level proto message yields one file; nested messages become sibling
+// files with concatenated parent-chain class names; top-level enums get
+// their own wrapper class file.
+type GeneratedFile struct {
+	Filename  string
+	ClassName string
+	Class     *gdast.ClassDefinition
+}
+
+// Source renders the class to GDScript, ensuring a trailing newline.
+func (gf GeneratedFile) Source() string {
+	out := gf.Class.ToGDScript(0)
+	if !strings.HasSuffix(out, "\n") {
+		out += "\n"
+	}
+	return out
+}
+
+// Generate produces one GeneratedFile per top-level enum and per message
+// (including nested messages, flattened as siblings) for the given proto file.
+// sourceName is the .proto path or filename; it is used for both the header
+// comment and prefix derivation when the file does not set
+// (gdproto.class_prefix).
+func Generate(file *ast.ProtoFile, sourceName string) ([]GeneratedFile, error) {
+	prefix, err := ResolvePrefix(file, sourceName)
+	if err != nil {
+		return nil, err
+	}
+	resolver, err := NewNameResolver([]FileEntry{{File: file, Filename: sourceName}})
+	if err != nil {
+		return nil, err
+	}
+	g := &generator{
+		file:       file,
+		sourceName: sourceName,
+		prefix:     prefix,
+		resolver:   resolver,
+	}
 	g.annotateLocalEnumUsage()
 	return g.generate()
 }
@@ -22,139 +54,44 @@ func Generate(file *ast.ProtoFile, sourceName string) (*gdast.ClassDefinition, e
 type generator struct {
 	file       *ast.ProtoFile
 	sourceName string
+	prefix     string
+	resolver   *NameResolver
+	// currentScope is the dotted proto-FQN-style path (without the package
+	// prefix) of the message whose body is currently being rendered. It is
+	// set at the entrypoint of generateMessageClass and consulted by
+	// renderedType to resolve same-file type references through the
+	// NameResolver. Empty when rendering top-level constructs.
+	currentScope string
 }
 
-func (g *generator) generate() (*gdast.ClassDefinition, error) {
-	var statements []gdast.Node
-	appendItem := func(node gdast.Node) {
-		if len(statements) > 0 {
-			statements = append(statements, gdast.EmptyLine{})
-		}
-		statements = append(statements, node)
-	}
+func (g *generator) generate() ([]GeneratedFile, error) {
+	var files []GeneratedFile
 
 	for _, e := range g.file.Enums {
-		appendItem(generateEnum(e))
+		files = append(files, g.generateTopLevelEnumFile(e))
 	}
 	for _, m := range g.file.Messages {
-		appendItem(g.generateMessage(m))
+		files = append(files, g.generateMessageFiles(m, "", "")...)
 	}
-	if len(statements) > 0 {
-		statements = append(statements, gdast.EmptyLine{})
-	}
+	return files, nil
+}
 
-	return &gdast.ClassDefinition{
-		ClassNameDirective: wrapperClassName(g.sourceName),
+// generateTopLevelEnumFile wraps a top-level enum in a RefCounted class so it
+// can be addressed globally via its class_name directive.
+func (g *generator) generateTopLevelEnumFile(e *ast.Enum) GeneratedFile {
+	className := g.prefix + e.Name
+	class := &gdast.ClassDefinition{
+		ClassNameDirective: className,
 		Extends:            "RefCounted",
-		HeaderComment:      headerCommentText(headerSourceName(g.sourceName)),
-		Statements:         statements,
+		HeaderComment:      headerCommentText(filepath.Base(g.sourceName)),
+		Statements:         []gdast.Node{generateEnum(e)},
 		TightStatements:    true,
-	}, nil
-}
-
-// headerSourceName returns the basename of the input path used in the file
-// header comment (e.g. "/tmp/foo/example.proto" -> "example.proto").
-func headerSourceName(filename string) string {
-	return filepath.Base(filename)
-}
-
-// nonAlphaNumericRun matches one or more characters that are not ASCII
-// letters or digits. It is used by normalizeProtoStem to coerce arbitrary
-// punctuation in a proto path component into single underscores.
-var nonAlphaNumericRun = regexp.MustCompile(`[^A-Za-z0-9]+`)
-
-// underscoreRun matches one or more consecutive underscores. After the snake-
-// case conversion runs we collapse any runs created by it back to a single
-// underscore so the final identifier is stable.
-var underscoreRun = regexp.MustCompile(`_+`)
-
-// wrapperClassName derives the GDScript `class_name` directive from the input
-// proto path. It mirrors `_get_wrapper_class_name` from the upstream Python
-// implementation: each path component is sanitized and snake-cased, then each
-// piece is PascalCased, joined, and finally suffixed with "Proto".
-func wrapperClassName(protoFile string) string {
-	protoFile = strings.TrimSuffix(protoFile, ".proto")
-	parts := strings.Split(protoFile, "/")
-	var pieces []string
-	for _, part := range parts {
-		if part == "" {
-			continue
-		}
-		normalized := normalizeProtoStem(part)
-		for _, sub := range strings.Split(normalized, "_") {
-			if sub == "" {
-				continue
-			}
-			pieces = append(pieces, capitalizeASCII(sub))
-		}
 	}
-	return strings.Join(pieces, "") + "Proto"
-}
-
-// normalizeProtoStem converts an arbitrary path component into a stable
-// snake_case identifier suitable for further PascalCase joining. The pipeline
-// matches the Python helper of the same name: punctuation collapses to `_`,
-// the result is snake-cased, repeated underscores collapse, and an empty or
-// digit-leading result is rewritten to a safe identifier.
-func normalizeProtoStem(name string) string {
-	sanitized := strings.Trim(nonAlphaNumericRun.ReplaceAllString(name, "_"), "_")
-	var snake string
-	if sanitized != "" {
-		snake = toSnakeCase(sanitized)
-	} else {
-		snake = "proto"
+	return GeneratedFile{
+		Filename:  className + ".pb.gd",
+		ClassName: className,
+		Class:     class,
 	}
-	snake = strings.Trim(underscoreRun.ReplaceAllString(snake, "_"), "_")
-	if snake == "" {
-		snake = "proto"
-	}
-	if unicode.IsDigit(rune(snake[0])) {
-		snake = "proto_" + snake
-	}
-	return snake
-}
-
-// toSnakeCase converts CamelCase or mixedCase input to snake_case. Runs of
-// upper-case letters followed by a lower-case letter are split before the
-// final upper-case letter ("HTTPServer" -> "http_server").
-func toSnakeCase(name string) string {
-	var b strings.Builder
-	runes := []rune(name)
-	for i, r := range runes {
-		if unicode.IsUpper(r) {
-			if i > 0 {
-				prev := runes[i-1]
-				next := rune(0)
-				if i+1 < len(runes) {
-					next = runes[i+1]
-				}
-				if unicode.IsLower(prev) || unicode.IsDigit(prev) {
-					b.WriteByte('_')
-				} else if unicode.IsUpper(prev) && next != 0 && unicode.IsLower(next) {
-					b.WriteByte('_')
-				}
-			}
-			b.WriteRune(unicode.ToLower(r))
-		} else {
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
-}
-
-// capitalizeASCII returns the input with its first ASCII letter upper-cased
-// and the remainder lower-cased, matching Python's `str.capitalize` behaviour
-// for the identifier subset produced by normalizeProtoStem.
-func capitalizeASCII(s string) string {
-	if s == "" {
-		return s
-	}
-	runes := []rune(s)
-	runes[0] = unicode.ToUpper(runes[0])
-	for i := 1; i < len(runes); i++ {
-		runes[i] = unicode.ToLower(runes[i])
-	}
-	return string(runes)
 }
 
 func (g *generator) renderedFieldType(f *ast.Field) string {
@@ -165,14 +102,77 @@ func (g *generator) renderedMapValueType(mf *ast.MapField) string {
 	return g.renderedType(mf.ValueType, mf.ValueSourceFile)
 }
 
+// renderedType returns the GDScript type to use for a proto type reference,
+// resolving same-file message/enum references to their generated prefixed
+// class names. Cross-file references derive their prefix from the imported
+// file's filename (no access to the imported file's options for now; a
+// follow-up could thread the imported file's ProtoFile through Generate).
 func (g *generator) renderedType(protoType, sourceFile string) string {
 	if t, ok := scalarTypeMap[protoType]; ok {
 		return t
 	}
-	if sourceFile == "" || sourceFile == g.sourceName || sourceFile == filepath.Base(g.sourceName) {
-		return protoType
+	if sourceFile != "" && sourceFile != g.sourceName && sourceFile != filepath.Base(g.sourceName) {
+		otherPrefix, err := ResolvePrefix(&ast.ProtoFile{}, sourceFile)
+		if err == nil {
+			return otherPrefix + concatProtoPath(protoType)
+		}
+		return strings.TrimPrefix(protoType, ".")
 	}
-	return wrapperClassName(sourceFile) + "." + protoType
+	for _, candidate := range buildLookupCandidates(protoType, g.currentScope, g.file.Package) {
+		if name, ok := g.resolver.Lookup(candidate); ok {
+			return name
+		}
+	}
+	// Fallback: bare type name (handles nested-enum references which the
+	// resolver does not index; they render inside the parent class scope
+	// as e.g. "Status.ONLINE").
+	return strings.TrimPrefix(protoType, ".")
+}
+
+// concatProtoPath turns a dotted proto type path like "pkg.Outer.Inner" into a
+// concatenated class-name fragment like "OuterInner". When the path has more
+// than two segments the leading segment(s) are assumed to be a package
+// prefix and dropped. For one- or two-segment paths every segment is kept.
+func concatProtoPath(typePath string) string {
+	s := strings.TrimPrefix(typePath, ".")
+	parts := strings.Split(s, ".")
+	if len(parts) > 2 {
+		parts = parts[len(parts)-2:]
+	}
+	return strings.Join(parts, "")
+}
+
+// buildLookupCandidates produces the set of proto FQNs to try when resolving
+// a type reference written inside currentScope. It mirrors the scope walk
+// used by isLocalEnumReference: the bare name, the bare name under the
+// package, and the name appended to every prefix of the current scope (with
+// and without the package).
+func buildLookupCandidates(typeName, currentScope, pkg string) []string {
+	typeName = strings.TrimPrefix(typeName, ".")
+	var out []string
+	seen := map[string]bool{}
+	add := func(s string) {
+		if s == "" || seen[s] {
+			return
+		}
+		seen[s] = true
+		out = append(out, s)
+	}
+	add(typeName)
+	if pkg != "" {
+		add(pkg + "." + typeName)
+	}
+	if currentScope != "" {
+		parts := strings.Split(currentScope, ".")
+		for i := len(parts); i > 0; i-- {
+			candidate := strings.Join(append(append([]string{}, parts[:i]...), typeName), ".")
+			add(candidate)
+			if pkg != "" {
+				add(pkg + "." + candidate)
+			}
+		}
+	}
+	return out
 }
 
 func (g *generator) annotateLocalEnumUsage() {

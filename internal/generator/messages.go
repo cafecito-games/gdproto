@@ -1,6 +1,8 @@
 package generator
 
 import (
+	"path/filepath"
+
 	"github.com/cafecito-games/gdproto/internal/ast"
 	"github.com/cafecito-games/gdproto/internal/gdast"
 )
@@ -15,26 +17,45 @@ func generateEnum(e *ast.Enum) gdast.EnumDefinition {
 	return gdast.EnumDefinition{Name: e.Name, Values: values}
 }
 
-// generateMessage produces the class block for a proto message including
-// nested enums, nested messages, field declarations, oneof tracking variables,
-// accessors, enum-name helpers, and serialization methods. ClassDefinition
-// inserts a single blank line between adjacent statements automatically, and
-// suppresses that blank between section comments and the field declarations
-// that follow them, so the layout below is what the reader sees.
-func (g *generator) generateMessage(m *ast.Message) *gdast.ClassDefinition {
+// generateMessageFiles returns one GeneratedFile for the given message and one
+// for each of its nested messages (recursively, flattened). classChain is the
+// concatenated PascalCase parent chain (without separators) used to derive
+// each generated class name; protoChain is the dotted proto-FQN-style scope
+// without the package prefix, used to resolve same-file type references.
+func (g *generator) generateMessageFiles(m *ast.Message, classChain, protoChain string) []GeneratedFile {
+	className := g.prefix + classChain + m.Name
+	scope := m.Name
+	if protoChain != "" {
+		scope = protoChain + "." + m.Name
+	}
+	class := g.generateMessageClass(m, className, scope)
+	out := []GeneratedFile{{
+		Filename:  className + ".pb.gd",
+		ClassName: className,
+		Class:     class,
+	}}
+	childClassChain := classChain + m.Name
+	for _, nested := range m.NestedMessages {
+		out = append(out, g.generateMessageFiles(nested, childClassChain, scope)...)
+	}
+	return out
+}
+
+// generateMessageClass produces the file-level ClassDefinition for a single
+// proto message. Nested enums remain inline inside the class body; nested
+// messages are emitted as sibling files by generateMessageFiles and are
+// intentionally NOT included here.
+func (g *generator) generateMessageClass(m *ast.Message, className, scope string) *gdast.ClassDefinition {
+	prevScope := g.currentScope
+	g.currentScope = scope
+	defer func() { g.currentScope = prevScope }()
+
 	var statements []gdast.Node
 
 	for _, e := range m.NestedEnums {
 		statements = append(statements,
 			gdast.Comment{Text: "Nested enum"},
 			generateEnum(e),
-		)
-	}
-
-	for _, nested := range m.NestedMessages {
-		statements = append(statements,
-			gdast.Comment{Text: "Nested message"},
-			g.generateMessage(nested),
 		)
 	}
 
@@ -82,9 +103,10 @@ func (g *generator) generateMessage(m *ast.Message) *gdast.ClassDefinition {
 	)
 
 	return &gdast.ClassDefinition{
-		Name:       m.Name,
-		Extends:    "RefCounted",
-		Statements: statements,
+		ClassNameDirective: className,
+		Extends:            "RefCounted",
+		HeaderComment:      headerCommentText(filepath.Base(g.sourceName)),
+		Statements:         statements,
 	}
 }
 
