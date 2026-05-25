@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/cafecito-games/gdproto/internal/ast"
@@ -87,12 +88,24 @@ type NameResolver struct {
 	enumInnerByFQN map[string]string
 }
 
-// NewNameResolver builds a NameResolver from the given file entries.
+// indexEntry records one indexed proto type along with the file it came
+// from, so cross-file class-name collisions can report both sites.
+type indexEntry struct {
+	fqn      string
+	class    string
+	filename string
+	// innerEnum is set for top-level enums; it carries the enum's inner
+	// name so callers can produce qualified `<Wrapper>.<EnumName>`
+	// references.
+	innerEnum string
+}
+
+// NewNameResolver builds a NameResolver from the given file entries. It
+// returns an error if two distinct proto FQNs across the input files would
+// generate the same GDScript class name; the user can disambiguate by
+// setting (gdproto.class_prefix) on one of the offending files.
 func NewNameResolver(entries []FileEntry) (*NameResolver, error) {
-	r := &NameResolver{
-		classByFQN:     map[string]string{},
-		enumInnerByFQN: map[string]string{},
-	}
+	var indexed []indexEntry
 	for _, e := range entries {
 		prefix, err := ResolvePrefix(e.File, e.Filename)
 		if err != nil {
@@ -103,22 +116,80 @@ func NewNameResolver(entries []FileEntry) (*NameResolver, error) {
 			scope = e.File.Package + "."
 		}
 		for _, en := range e.File.Enums {
-			r.classByFQN[scope+en.Name] = prefix + en.Name
-			r.enumInnerByFQN[scope+en.Name] = en.Name
+			indexed = append(indexed, indexEntry{
+				fqn:       scope + en.Name,
+				class:     prefix + en.Name,
+				filename:  e.Filename,
+				innerEnum: en.Name,
+			})
 		}
 		for _, m := range e.File.Messages {
-			r.indexMessage(m, scope, prefix, "")
+			indexed = appendMessageIndex(indexed, m, scope, prefix, "", e.Filename)
+		}
+	}
+
+	byClass := make(map[string][]indexEntry, len(indexed))
+	for _, entry := range indexed {
+		byClass[entry.class] = append(byClass[entry.class], entry)
+	}
+	for class, entries := range byClass {
+		if len(entries) < 2 {
+			continue
+		}
+		// Same FQN registered twice from a single file (shouldn't happen
+		// for valid inputs, but be defensive) is not a cross-file
+		// collision — only report when the FQNs differ.
+		distinctFQNs := map[string]indexEntry{}
+		for _, entry := range entries {
+			if _, seen := distinctFQNs[entry.fqn]; !seen {
+				distinctFQNs[entry.fqn] = entry
+			}
+		}
+		if len(distinctFQNs) < 2 {
+			continue
+		}
+		ordered := make([]indexEntry, 0, len(distinctFQNs))
+		for _, entry := range distinctFQNs {
+			ordered = append(ordered, entry)
+		}
+		sort.Slice(ordered, func(i, j int) bool {
+			if ordered[i].filename != ordered[j].filename {
+				return ordered[i].filename < ordered[j].filename
+			}
+			return ordered[i].fqn < ordered[j].fqn
+		})
+		return nil, fmt.Errorf(
+			"class name collision across files: class %q produced by both %q (from %s) and %q (from %s); set option (gdproto.class_prefix) on one of them",
+			class,
+			ordered[0].fqn, ordered[0].filename,
+			ordered[1].fqn, ordered[1].filename,
+		)
+	}
+
+	r := &NameResolver{
+		classByFQN:     make(map[string]string, len(indexed)),
+		enumInnerByFQN: make(map[string]string),
+	}
+	for _, entry := range indexed {
+		r.classByFQN[entry.fqn] = entry.class
+		if entry.innerEnum != "" {
+			r.enumInnerByFQN[entry.fqn] = entry.innerEnum
 		}
 	}
 	return r, nil
 }
 
-func (r *NameResolver) indexMessage(m *ast.Message, packageScope, prefix, parentChain string) {
+func appendMessageIndex(out []indexEntry, m *ast.Message, packageScope, prefix, parentChain, filename string) []indexEntry {
 	name := parentChain + m.Name
-	r.classByFQN[packageScope+name] = prefix + strings.ReplaceAll(name, ".", "")
+	out = append(out, indexEntry{
+		fqn:      packageScope + name,
+		class:    prefix + strings.ReplaceAll(name, ".", ""),
+		filename: filename,
+	})
 	for _, nm := range m.NestedMessages {
-		r.indexMessage(nm, packageScope, prefix, name+".")
+		out = appendMessageIndex(out, nm, packageScope, prefix, name+".", filename)
 	}
+	return out
 }
 
 // Lookup returns the generated GDScript class name for a proto FQN. The FQN

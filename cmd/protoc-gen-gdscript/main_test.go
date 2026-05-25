@@ -365,8 +365,11 @@ message BarBaz {}`,
 		t.Fatalf("expected collision error, got files %v", responseFilenames(response))
 	}
 	message := *response.Error
-	if !strings.Contains(message, "class name collision: FooBarBaz.pb.gd") {
+	if !strings.Contains(message, "class name collision") || !strings.Contains(message, `"FooBarBaz"`) {
 		t.Errorf("error message missing collision detail: %q", message)
+	}
+	if !strings.Contains(message, "foo.proto") || !strings.Contains(message, "foo_bar.proto") {
+		t.Errorf("error message missing source filenames: %q", message)
 	}
 	if !strings.Contains(message, "set option (gdproto.class_prefix)") {
 		t.Errorf("error message missing class_prefix hint: %q", message)

@@ -162,3 +162,37 @@ func TestNameResolverWithPackage(t *testing.T) {
 		t.Fatalf("leading-dot lookup: got %q ok=%v", got, ok)
 	}
 }
+
+func TestNewNameResolverDetectsCrossFileClassCollision(t *testing.T) {
+	// Two files in different packages whose (gdproto.class_prefix) values
+	// happen to produce the same generated class name "FooBar". Both
+	// would write FooBar.pb.gd, silently clobbering one another without
+	// detection.
+	a := &ast.ProtoFile{
+		Package:  "a",
+		Options:  map[string]any{"(gdproto.class_prefix)": "Foo"},
+		Messages: []*ast.Message{{Name: "Bar"}},
+	}
+	b := &ast.ProtoFile{
+		Package:  "b",
+		Options:  map[string]any{"(gdproto.class_prefix)": "Foo"},
+		Messages: []*ast.Message{{Name: "Bar"}},
+	}
+
+	_, err := NewNameResolver([]FileEntry{
+		{File: a, Filename: "a.proto"},
+		{File: b, Filename: "b.proto"},
+	})
+	if err == nil {
+		t.Fatal("expected cross-file collision error")
+	}
+	if !strings.Contains(err.Error(), `"FooBar"`) {
+		t.Fatalf("error missing class name: %v", err)
+	}
+	if !strings.Contains(err.Error(), "a.proto") || !strings.Contains(err.Error(), "b.proto") {
+		t.Fatalf("error missing source filenames: %v", err)
+	}
+	if !strings.Contains(err.Error(), "gdproto.class_prefix") {
+		t.Fatalf("error missing remediation hint: %v", err)
+	}
+}

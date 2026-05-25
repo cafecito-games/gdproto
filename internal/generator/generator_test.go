@@ -814,7 +814,7 @@ message Foo { message Bar { int32 b = 1; } }
 		t.Fatal("expected collision error")
 	}
 	msg := err.Error()
-	for _, want := range []string{"class name collision", "FooBar", "Foo.Bar", "CollideFooBar.pb.gd"} {
+	for _, want := range []string{"class name collision", "FooBar", "Foo.Bar", "CollideFooBar"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("error missing %q: %s", want, msg)
 		}
