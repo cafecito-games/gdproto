@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/cafecito-games/gdproto/internal/ast"
@@ -48,6 +49,33 @@ func TestResolvePrefixOptionValidation(t *testing.T) {
 		if _, err := ResolvePrefix(f, "example.proto"); err == nil {
 			t.Fatalf("%q: expected error", v)
 		}
+	}
+}
+
+func TestResolvePrefixErrorIncludesPositionWhenKnown(t *testing.T) {
+	f := &ast.ProtoFile{
+		Options:         map[string]any{"(gdproto.class_prefix)": "bad"},
+		OptionPositions: map[string]ast.Position{"(gdproto.class_prefix)": {Line: 3, Column: 1}},
+	}
+	_, err := ResolvePrefix(f, "example.proto")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "at line 3:1") {
+		t.Fatalf("error missing position: %v", err)
+	}
+}
+
+func TestResolvePrefixErrorOmitsPositionWhenAbsent(t *testing.T) {
+	f := &ast.ProtoFile{
+		Options: map[string]any{"(gdproto.class_prefix)": "bad"},
+	}
+	_, err := ResolvePrefix(f, "example.proto")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if strings.Contains(err.Error(), "at line") {
+		t.Fatalf("error unexpectedly includes position: %v", err)
 	}
 }
 

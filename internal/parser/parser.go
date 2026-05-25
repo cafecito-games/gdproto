@@ -99,7 +99,11 @@ func (p *parser) parseFile() (*ast.ProtoFile, error) {
 			if file.Options == nil {
 				file.Options = map[string]any{}
 			}
+			if file.OptionPositions == nil {
+				file.OptionPositions = map[string]ast.Position{}
+			}
 			file.Options[opt.Name] = opt.Value
+			file.OptionPositions[opt.Name] = opt.Position
 		case p.match(lexer.TokenMessage):
 			m, err := p.parseMessage()
 			if err != nil {

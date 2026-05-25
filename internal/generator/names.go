@@ -22,10 +22,12 @@ func ResolvePrefix(file *ast.ProtoFile, filename string) (string, error) {
 	if raw, ok := file.Options[classPrefixOptionKey]; ok {
 		s, isString := raw.(string)
 		if !isString {
-			return "", fmt.Errorf("option %s must be a string, got %T", classPrefixOptionKey, raw)
+			return "", fmt.Errorf("%soption %s must be a string, got %T",
+				optionPositionPrefix(file, classPrefixOptionKey), classPrefixOptionKey, raw)
 		}
 		if !prefixPattern.MatchString(s) {
-			return "", fmt.Errorf("option %s value %q is not a valid GDScript identifier (must match %s)", classPrefixOptionKey, s, prefixPattern.String())
+			return "", fmt.Errorf("%soption %s value %q is not a valid GDScript identifier (must match %s)",
+				optionPositionPrefix(file, classPrefixOptionKey), classPrefixOptionKey, s, prefixPattern.String())
 		}
 		return s, nil
 	}
@@ -45,6 +47,20 @@ func ResolvePrefix(file *ast.ProtoFile, filename string) (string, error) {
 		return "", fmt.Errorf("cannot derive class_name prefix from filename %q", filename)
 	}
 	return out, nil
+}
+
+// optionPositionPrefix returns "at line X:Y " when the file's parser stored
+// a non-zero position for the named option, or "" otherwise. The trailing
+// space is part of the prefix so call sites can concatenate cleanly.
+func optionPositionPrefix(file *ast.ProtoFile, name string) string {
+	if file.OptionPositions == nil {
+		return ""
+	}
+	pos, ok := file.OptionPositions[name]
+	if !ok || (pos.Line == 0 && pos.Column == 0) {
+		return ""
+	}
+	return fmt.Sprintf("at line %d:%d ", pos.Line, pos.Column)
 }
 
 // FileEntry pairs an ast.ProtoFile with the source filename it was parsed

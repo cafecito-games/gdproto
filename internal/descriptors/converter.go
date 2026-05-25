@@ -142,6 +142,9 @@ func (c *converter) convertFile(fd *descriptorpb.FileDescriptorProto) (*ast.Prot
 			}
 		}
 	}
+	// file.OptionPositions is intentionally left nil here: FileDescriptorProto
+	// carries no per-option source position, so downstream error messages
+	// degrade to the position-less form.
 
 	publicSet := map[int32]struct{}{}
 	for _, idx := range fd.GetPublicDependency() {

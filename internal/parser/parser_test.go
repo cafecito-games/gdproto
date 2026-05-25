@@ -683,6 +683,13 @@ message Hero { string name = 1; }
 	if got != "Game" {
 		t.Fatalf("got %v want Game", got)
 	}
+	pos, ok := file.OptionPositions["(gdproto.class_prefix)"]
+	if !ok {
+		t.Fatal("OptionPositions missing entry for (gdproto.class_prefix)")
+	}
+	if pos.Line == 0 || pos.Column == 0 {
+		t.Fatalf("expected non-zero position, got %+v", pos)
+	}
 }
 
 func TestFileOptionString(t *testing.T) {
