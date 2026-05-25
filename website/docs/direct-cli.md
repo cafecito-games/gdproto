@@ -1,37 +1,59 @@
 ---
 title: Direct CLI
-description: Generate one GDScript wrapper with the gdproto command.
+description: Generate GDScript wrappers with the gdproto command.
 ---
 
 # Direct CLI
 
-The `gdproto` command reads one `.proto` file and writes one requested `.gd`
-wrapper path. It is useful for small projects, quick experiments, and golden
-fixture updates.
+The `gdproto` command reads one `.proto` file and writes one `.pb.gd` file
+per top-level message or enum into an output directory. It is useful for
+small projects, quick experiments, and golden fixture updates.
 
 ## Command
 
 ```bash
-gdproto path/to/player.proto -o godot/generated/player.gd
+gdproto examples/example.proto -o godot/generated/
 ```
 
-This writes:
+For `examples/example.proto` this writes:
 
 ```text
-godot/generated/player.gd
-godot/generated/proto_core_utils.gd
+godot/generated/
+  ExamplePlayer.pb.gd
+  ExamplePlayerPosition.pb.gd
+  ExampleGameState.pb.gd
+  ExamplePlayerStatus.pb.gd
+  proto_core_utils.gd
 ```
 
-The output filename is exactly the path passed with `--output`. Direct CLI mode
-does not append `.pb.gd` for you.
+The class prefix (`Example`) is derived from the input filename. Nested
+messages are flattened into sibling files using the same prefix; top-level
+enums get a thin wrapper class so the values stay globally addressable in
+Godot. See [Generated GDScript](./generated-code.md) for the addressing
+rules and the `(gdproto.class_prefix)` option that overrides the prefix.
+
+If `-o` is omitted, files are written into the current working directory.
 
 ## Flags
 
 | Flag | Default | Notes |
 | --- | --- | --- |
-| `-o, --output` | Required | Output `.gd` file path. |
+| `-o, --output` | Current directory | Output **directory** for generated `.pb.gd` files and `proto_core_utils.gd`. Must not end in `.gd` and must not point at an existing file. |
+| `--print-options-proto` | | Prints the embedded `gdproto/options.proto` descriptor to stdout and exits. Useful for vendoring without cloning the repo. |
 | `--log-level` | `warn` | One of `debug`, `info`, `warn`, or `error`. Logs are JSON on stderr. |
 | `--version` | | Prints the binary version. |
+
+## Vendoring `gdproto/options.proto`
+
+The direct CLI tolerates a missing `import "gdproto/options.proto";` when
+parsing schemas that use `(gdproto.class_prefix)`, but `protoc` and `buf`
+reject unknown extensions. Vendor the descriptor to keep the same schema
+portable across all three paths:
+
+```bash
+mkdir -p proto/gdproto
+gdproto --print-options-proto > proto/gdproto/options.proto
+```
 
 ## Import Resolution
 
@@ -46,7 +68,7 @@ proto/
 If `player.proto` imports `shared/team.proto`, run:
 
 ```bash
-gdproto proto/player.proto -o godot/generated/player.gd
+gdproto proto/player.proto -o godot/generated/
 ```
 
 For projects with multiple import roots, prefer Buf or the `protoc` plugin

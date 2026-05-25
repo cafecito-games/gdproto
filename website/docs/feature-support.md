@@ -39,6 +39,6 @@ messages. It does not generate service clients or servers.
 | --- | --- |
 | proto2 syntax | Rejected by validation. |
 | Services and RPCs | Not generated. |
-| Custom options | Parsed as options where possible, but custom option semantics are not implemented. |
+| Custom options | Parsed as options where possible, but custom option semantics are not implemented. The one exception is the `(gdproto.class_prefix)` file option, which the generator reads to override the per-file class prefix — see [Generated GDScript](./generated-code.md#class-prefix). |
 | Extensions | Not implemented. |
 | Protobuf JSON mapping | Not generated. Use binary wire format or gdproto text format. |

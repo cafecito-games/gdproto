@@ -48,37 +48,53 @@ protoc-gen-gdscript` in the same shell or CI step that runs `buf generate`.
 
 ## Generated Godot Script Cannot Preload `proto_core_utils.gd`
 
-Keep the runtime file with the generated wrappers. Plugin mode emits
-`proto_core_utils.gd` at the output root when files are generated. Direct CLI
-mode writes it next to the requested output file.
+Keep the runtime file with the generated wrappers. Both the direct CLI and
+the plugin emit `proto_core_utils.gd` at the output directory root alongside
+the generated `.pb.gd` files.
 
 Do not move generated wrappers without moving the runtime to the path expected
 by the generated preload.
 
 ## Imported Message Class Is Missing In Godot
 
-If a proto file imports another message type, generate wrappers for the imported
-proto files too. Generated GDScript references imported messages by wrapper
-class name.
+The plugin only generates `.pb.gd` files for the protos explicitly listed in
+`file_to_generate` (the files you pass on the command line or include in the
+buf module). Imported `.proto` files are parsed for type resolution but do
+not produce wrappers automatically.
 
-Buf is the easiest way to keep the generated set complete because it supplies
-the plugin with descriptors for the input module.
+If a generated wrapper references an imported message type, add the
+imported `.proto` to the input set in the same invocation so its wrapper
+is generated too.
 
-## Output File Name Is Different Between CLI And Plugin Mode
+## `-o` Rejected With "Looks Like A File"
 
-Direct CLI mode writes the exact path supplied with `--output`:
-
-```bash
-gdproto proto/player.proto -o godot/generated/player.gd
-```
-
-Plugin mode computes `.pb.gd` filenames from proto-relative paths:
+The direct CLI's `-o` flag takes an **output directory**, not a file path.
+It rejects values that end in `.gd` or point at an existing file. Pass a
+directory instead:
 
 ```bash
-protoc --gdscript_out=godot/generated -I proto proto/player.proto
+gdproto proto/example.proto -o godot/generated/
 ```
 
-That writes `godot/generated/player.pb.gd`.
+This writes one `.pb.gd` per top-level message or enum (for example
+`ExamplePlayer.pb.gd`, `ExampleGameState.pb.gd`) plus
+`proto_core_utils.gd`.
+
+## `(gdproto.class_prefix)` Is Not Applied
+
+Both `protoc` and `buf` require the `gdproto/options.proto` extension
+descriptor to be reachable from your proto sources. The schema must
+`import "gdproto/options.proto";` and the descriptor must live on an `-I`
+import root (raw `protoc`) or inside the buf module (Buf). Vendor it with:
+
+```bash
+mkdir -p proto/gdproto
+gdproto --print-options-proto > proto/gdproto/options.proto
+```
+
+The direct `gdproto` CLI tolerates a missing import, but importing it
+everywhere keeps a single schema portable. See
+[Generated GDScript](./generated-code.md#class-prefix).
 
 ## Validation Fails For A Schema Feature
 

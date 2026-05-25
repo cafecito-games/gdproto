@@ -71,3 +71,19 @@ plugin path to `protoc`.
 | `protoc` plugin | `protoc`, `protoc-gen-gdscript` |
 | Buf generation | `buf`, `protoc-gen-gdscript` |
 | Repository development | Go 1.26+, Task, golangci-lint |
+
+## Optional: Vendoring `gdproto/options.proto`
+
+If your schemas use the `(gdproto.class_prefix)` file option, you need the
+extension descriptor on disk so that `protoc` and `buf` can resolve it.
+Either binary can print the embedded descriptor:
+
+```bash
+mkdir -p proto/gdproto
+gdproto --print-options-proto > proto/gdproto/options.proto
+# or
+protoc-gen-gdscript --print-options-proto > proto/gdproto/options.proto
+```
+
+See [Generated GDScript](./generated-code.md#class-prefix) for the full
+explanation of how the option is consumed.
