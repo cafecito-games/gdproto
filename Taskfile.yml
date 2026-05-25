@@ -57,6 +57,12 @@ tasks:
         fi
     silent: true
 
+  gen-options:
+    desc: Generate Go stubs for gdproto/options.proto and refresh the embedded copy.
+    cmds:
+      - protoc -I proto --go_out=. --go_opt=module=github.com/cafecito-games/gdproto proto/gdproto/options.proto
+      - cp proto/gdproto/options.proto internal/gdprotopb/options.proto
+
   tidy:
     desc: Run go mod tidy.
     cmds:

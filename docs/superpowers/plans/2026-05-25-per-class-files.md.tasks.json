@@ -1,0 +1,67 @@
+{
+  "planPath": "docs/superpowers/plans/2026-05-25-per-class-files.md",
+  "tasks": [
+    {
+      "id": 1,
+      "subject": "Task 0: Vendor gdproto/options.proto + Go stubs",
+      "status": "completed",
+      "description": "**Goal:** Ship proto/gdproto/options.proto, committed Go stubs at internal/gdprotopb/, and a //go:embed accessor. Add `task gen-options` to Taskfile.\n\n**Verify:** `go test ./internal/gdprotopb/...` PASS; `task gen-options && git diff --quiet internal/gdprotopb/` exits 0.\n\n```json:metadata\n{\"files\":[\"proto/gdproto/options.proto\",\"internal/gdprotopb/options.pb.go\",\"internal/gdprotopb/embed.go\",\"internal/gdprotopb/embed_test.go\",\"Taskfile.yml\"],\"verifyCommand\":\"go test ./internal/gdprotopb/... -v\",\"acceptanceCriteria\":[\"options.proto defines class_prefix at field 51000\",\"gdprotopb.Bytes() returns embedded proto source\",\"task gen-options is idempotent\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 1: Plumb class_prefix through parser and descriptor paths",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** ast.ProtoFile.Options[\"(gdproto.class_prefix)\"] is populated by both parser path and descriptor path.\n\n**Verify:** `go test ./internal/parser/... ./internal/descriptors/... -v` PASS\n\n```json:metadata\n{\"files\":[\"internal/descriptors/converter.go\",\"internal/descriptors/converter_test.go\",\"internal/parser/parser_test.go\"],\"verifyCommand\":\"go test ./internal/parser/... ./internal/descriptors/... -v\",\"acceptanceCriteria\":[\"parser populates Options key\",\"descriptor path reads gdprotopb.E_ClassPrefix extension\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 2: Prefix and name resolvers",
+      "status": "pending",
+      "description": "**Goal:** Pure helpers ResolvePrefix(file) and NewNameResolver(files).Lookup(fqn).\n\n**Verify:** `go test ./internal/generator/ -run Prefix -v` PASS\n\n```json:metadata\n{\"files\":[\"internal/generator/names.go\",\"internal/generator/names_test.go\"],\"verifyCommand\":\"go test ./internal/generator/ -run Prefix -v\",\"acceptanceCriteria\":[\"filename PascalCase derivation\",\"option override with identifier validation\",\"resolver covers nested messages and top-level enums\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 3: Rewrite generator.Generate for multi-file output",
+      "status": "pending",
+      "blockedBy": [2, 3],
+      "description": "**Goal:** generator.Generate returns []GeneratedFile; one file per message/top-level enum; cross-refs use NameResolver. Update goldens to examples/golden/.\n\n**Verify:** `go test ./internal/generator/... -v` PASS\n\n```json:metadata\n{\"files\":[\"internal/generator/\",\"examples/golden/\"],\"verifyCommand\":\"go test ./internal/generator/... -v\",\"acceptanceCriteria\":[\"Generate returns []GeneratedFile\",\"one file per message/top-level enum\",\"nested enums stay inline\",\"cross-message refs use NameResolver\",\"goldens match output byte-for-byte\"]}\n```"
+    },
+    {
+      "id": 5,
+      "subject": "Task 4: CLI -o directory semantics + --print-options-proto",
+      "status": "pending",
+      "blockedBy": [4],
+      "description": "**Goal:** `gdproto -o <dir>` writes per-class files into the directory; `--print-options-proto` writes embedded proto to stdout.\n\n**Verify:** `go test ./internal/cli/... -v` PASS\n\n```json:metadata\n{\"files\":[\"internal/cli/root.go\",\"internal/cli/root_test.go\"],\"verifyCommand\":\"go test ./internal/cli/... -v\",\"acceptanceCriteria\":[\"-o accepts directory; rejects .gd file paths\",\"wrote N files to <dir>/ message\",\"--print-options-proto byte-equal exit 0\"]}\n```"
+    },
+    {
+      "id": 6,
+      "subject": "Task 5: protoc plugin emits multiple files",
+      "status": "pending",
+      "blockedBy": [4],
+      "description": "**Goal:** protoc-gen-gdscript emits one CodeGeneratorResponse_File per GeneratedFile plus proto_core_utils.gd; duplicate-filename guard; --print-options-proto.\n\n**Verify:** `go test ./cmd/protoc-gen-gdscript/... -v` PASS\n\n```json:metadata\n{\"files\":[\"cmd/protoc-gen-gdscript/main.go\",\"cmd/protoc-gen-gdscript/main_test.go\"],\"verifyCommand\":\"go test ./cmd/protoc-gen-gdscript/... -v\",\"acceptanceCriteria\":[\"one File per GeneratedFile\",\"duplicate filename errors with class_prefix hint\",\"--print-options-proto supported\"]}\n```"
+    },
+    {
+      "id": 7,
+      "subject": "Task 6: Integration tests for CLI / protoc / buf install paths",
+      "status": "pending",
+      "blockedBy": [5, 6],
+      "description": "**Goal:** End-to-end tests prove README install paths work; CI installs protoc + buf.\n\n**Verify:** `go test -tags=integration ./tests/integration/... -v` PASS\n\n```json:metadata\n{\"files\":[\"tests/integration/\",\".github/workflows/\"],\"verifyCommand\":\"go test -tags=integration ./tests/integration/... -v\",\"acceptanceCriteria\":[\"CLI scenario produces GameHero.pb.gd\",\"protoc scenario produces GameHero.pb.gd\",\"buf scenario produces GameHero.pb.gd\",\"--print-options-proto byte-equal\",\"CI installs protoc + buf\"]}\n```"
+    },
+    {
+      "id": 8,
+      "subject": "Task 7: Update Vest/Godot runtime harness",
+      "status": "pending",
+      "blockedBy": [5],
+      "description": "**Goal:** Vest suite round-trips wire bytes through per-class files; add multi-proto cross-file test.\n\n**Verify:** Vest target (e.g. `task test:godot`) PASS\n\n```json:metadata\n{\"files\":[\"tests/\"],\"verifyCommand\":\"task test:godot\",\"acceptanceCriteria\":[\"existing Vest tests pass\",\"multi-proto cross-file test passes\"]}\n```"
+    },
+    {
+      "id": 9,
+      "subject": "Task 8: README and Docusaurus docs",
+      "status": "pending",
+      "blockedBy": [7],
+      "description": "**Goal:** README + website docs explain new directory output, class_prefix option, mandatory import for protoc/buf, three install snippets, breaking-change callout.\n\n**Verify:** Task 6 integration tests pass against README snippets.\n\n```json:metadata\n{\"files\":[\"README.md\",\"website/\"],\"verifyCommand\":\"go test -tags=integration ./tests/integration/... -v\",\"acceptanceCriteria\":[\"Quick Usage shows -o <dir>\",\"Custom prefix section with required import\",\"breaking-change callout\",\"Docusaurus updated\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-05-25T12:00:00Z"
+}
