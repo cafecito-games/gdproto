@@ -6,6 +6,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/pluginpb"
+
+	"github.com/cafecito-games/gdproto/internal/gdprotopb"
 )
 
 func strPtr(s string) *string { return &s }
@@ -590,5 +592,41 @@ func TestFromCodeGeneratorRequest(t *testing.T) {
 	}
 	if len(files) != 1 || files[0].Package != "p" || files[0].Messages[0].Name != "X" {
 		t.Errorf("unexpected: %+v", files)
+	}
+}
+
+func TestConvertFilePropagatesClassPrefix(t *testing.T) {
+	opts := &descriptorpb.FileOptions{}
+	proto.SetExtension(opts, gdprotopb.E_ClassPrefix, "Game")
+	fd := &descriptorpb.FileDescriptorProto{
+		Name:    strPtr("hero.proto"),
+		Syntax:  strPtr("proto3"),
+		Package: strPtr("game.v1"),
+		Options: opts,
+	}
+	file, err := FromFileDescriptorProto(fd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok := file.Options["(gdproto.class_prefix)"]
+	if !ok {
+		t.Fatal("option key (gdproto.class_prefix) not set")
+	}
+	if got != "Game" {
+		t.Fatalf("got %v want Game", got)
+	}
+}
+
+func TestConvertFileMissingClassPrefix(t *testing.T) {
+	fd := &descriptorpb.FileDescriptorProto{
+		Name:   strPtr("hero.proto"),
+		Syntax: strPtr("proto3"),
+	}
+	file, err := FromFileDescriptorProto(fd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := file.Options["(gdproto.class_prefix)"]; ok {
+		t.Fatal("option key (gdproto.class_prefix) should be absent")
 	}
 }

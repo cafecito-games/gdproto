@@ -666,6 +666,25 @@ func TestParenthesizedOptionName(t *testing.T) {
 	}
 }
 
+func TestParseClassPrefixOption(t *testing.T) {
+	src := `syntax = "proto3";
+import "gdproto/options.proto";
+option (gdproto.class_prefix) = "Game";
+message Hero { string name = 1; }
+`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok := file.Options["(gdproto.class_prefix)"]
+	if !ok {
+		t.Fatal("option key (gdproto.class_prefix) not set")
+	}
+	if got != "Game" {
+		t.Fatalf("got %v want Game", got)
+	}
+}
+
 func TestFileOptionString(t *testing.T) {
 	file, err := parseSource(t, `syntax = "proto3"; option go_package = "example.com/foo";`)
 	if err != nil {
