@@ -111,7 +111,8 @@ func runCompile(cmd *cobra.Command, inputPath, outputPath string, includePaths [
 		BaseDir:      filepath.Dir(inputPath),
 		IncludePaths: includePaths,
 	}
-	if err := importer.ResolveExternal(file, inputPath, fs); err != nil {
+	importedFiles, err := importer.ResolveExternalWithFiles(file, inputPath, fs)
+	if err != nil {
 		return err
 	}
 
@@ -122,7 +123,12 @@ func runCompile(cmd *cobra.Command, inputPath, outputPath string, includePaths [
 		return fmt.Errorf("validation failed")
 	}
 
-	files, err := generator.Generate(file, sourceNameForCLI(inputPath))
+	imports := make([]generator.FileEntry, 0, len(importedFiles))
+	for _, imp := range importedFiles {
+		imports = append(imports, generator.FileEntry{File: imp.File, Filename: imp.Filename})
+	}
+
+	files, err := generator.Generate(file, sourceNameForCLI(inputPath), imports)
 	if err != nil {
 		return err
 	}

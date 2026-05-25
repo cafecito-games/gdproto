@@ -18,6 +18,14 @@ type importedType struct {
 	EnumValues []*ast.EnumValue
 }
 
+// ImportedFile pairs a parsed imported proto file with the path string used
+// by the import statement that pulled it in. Returned in deterministic
+// depth-first order from ResolveExternalWithFiles.
+type ImportedFile struct {
+	File     *ast.ProtoFile
+	Filename string
+}
+
 // ResolveExternal walks file's imports, parses them via fs, builds a
 // registry of imported types, and annotates Field/MapField/Oneof
 // references in file with SourceFile/FullTypePath/IsEnum metadata.
@@ -27,35 +35,39 @@ type importedType struct {
 // argument is retained for parity with the Python CLI; resolution
 // itself is delegated entirely to fs.
 func ResolveExternal(file *ast.ProtoFile, inputPath string, fs FS) error {
-	_ = inputPath
-	registry := buildExternalRegistry(file, fs)
-	if len(registry) == 0 {
-		return nil
-	}
-	lookup := buildLookup(registry, file.Package)
-	for _, m := range file.Messages {
-		annotateMessage(m, lookup)
-	}
-	return nil
+	_, err := ResolveExternalWithFiles(file, inputPath, fs)
+	return err
 }
 
-// buildExternalRegistry parses every import and collects its top-level
-// and nested types keyed by fully qualified name. Public re-exports are
-// followed transitively, with cycle detection to guard against import
-// loops.
-func buildExternalRegistry(file *ast.ProtoFile, fs FS) map[string]importedType {
-	out := map[string]importedType{}
+// ResolveExternalWithFiles is like ResolveExternal but additionally returns
+// the parsed AST of every imported file (including transitively reachable
+// public re-exports), each paired with the path used by its import
+// statement. The returned slice is in deterministic depth-first order,
+// matches the set indexed by the cross-file type registry, and contains no
+// duplicates.
+func ResolveExternalWithFiles(file *ast.ProtoFile, inputPath string, fs FS) ([]ImportedFile, error) {
+	_ = inputPath
+	registry := map[string]importedType{}
 	visited := map[string]bool{}
+	var imported []ImportedFile
 	for _, imp := range file.Imports {
-		collectImportedTypes(out, visited, imp.Path, fs)
+		collectImportedTypes(registry, visited, &imported, imp.Path, fs)
 	}
-	return out
+	if len(registry) != 0 {
+		lookup := buildLookup(registry, file.Package)
+		for _, m := range file.Messages {
+			annotateMessage(m, lookup)
+		}
+	}
+	return imported, nil
 }
 
 // collectImportedTypes parses path through fs, records its types into
 // out, then recurses into its public re-exports. Already-visited paths
-// short-circuit, preventing infinite loops on circular imports.
-func collectImportedTypes(out map[string]importedType, visited map[string]bool, path string, fs FS) {
+// short-circuit, preventing infinite loops on circular imports. The
+// imported slice receives the parsed file alongside the import path in
+// the order files are first visited.
+func collectImportedTypes(out map[string]importedType, visited map[string]bool, imported *[]ImportedFile, path string, fs FS) {
 	if visited[path] {
 		return
 	}
@@ -74,6 +86,9 @@ func collectImportedTypes(out map[string]importedType, visited map[string]bool, 
 	impFile, err := parser.Parse(tokens, path)
 	if err != nil {
 		return
+	}
+	if imported != nil {
+		*imported = append(*imported, ImportedFile{File: impFile, Filename: path})
 	}
 	prefix := ""
 	if impFile.Package != "" {
@@ -94,7 +109,7 @@ func collectImportedTypes(out map[string]importedType, visited map[string]bool, 
 	}
 	for _, nested := range impFile.Imports {
 		if nested.Public {
-			collectImportedTypes(out, visited, nested.Path, fs)
+			collectImportedTypes(out, visited, imported, nested.Path, fs)
 		}
 	}
 }

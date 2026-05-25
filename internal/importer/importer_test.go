@@ -508,6 +508,57 @@ message M {
 	}
 }
 
+func TestResolveExternalWithFiles_ReturnsParsedASTs(t *testing.T) {
+	other := `syntax = "proto3";
+option (gdproto.class_prefix) = "Custom";
+message Foo { int32 x = 1; }`
+	in := `syntax = "proto3";
+import "other.proto";
+message M { Foo f = 1; }`
+	fs := &memFS{files: map[string]string{"other.proto": other}}
+	file := parseFile(t, in)
+	imported, err := importer.ResolveExternalWithFiles(file, "in.proto", fs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(imported) != 1 {
+		t.Fatalf("expected 1 imported file, got %d", len(imported))
+	}
+	if imported[0].Filename != "other.proto" {
+		t.Errorf("Filename = %q, want %q", imported[0].Filename, "other.proto")
+	}
+	if got, ok := imported[0].File.Options["(gdproto.class_prefix)"]; !ok || got != "Custom" {
+		t.Errorf("expected class_prefix option to be exposed; got %v ok=%v", got, ok)
+	}
+	// Side-effect annotation still happens.
+	f := findField(t, file, "M", "f")
+	if f.SourceFile != "other.proto" {
+		t.Errorf("annotation lost: SourceFile=%q", f.SourceFile)
+	}
+}
+
+func TestResolveExternalWithFiles_FollowsPublicReExports(t *testing.T) {
+	leaf := `syntax = "proto3"; message Leaf {}`
+	barrel := `syntax = "proto3"; import public "leaf.proto";`
+	in := `syntax = "proto3"; import "barrel.proto"; message M { Leaf l = 1; }`
+	fs := &memFS{files: map[string]string{
+		"leaf.proto":   leaf,
+		"barrel.proto": barrel,
+	}}
+	file := parseFile(t, in)
+	imported, err := importer.ResolveExternalWithFiles(file, "in.proto", fs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := []string{}
+	for _, imp := range imported {
+		names = append(names, imp.Filename)
+	}
+	if len(names) != 2 || names[0] != "barrel.proto" || names[1] != "leaf.proto" {
+		t.Errorf("expected [barrel.proto, leaf.proto], got %v", names)
+	}
+}
+
 func TestResolveExternal_MissingImportSilent(t *testing.T) {
 	in := `syntax = "proto3";
 import "missing.proto";

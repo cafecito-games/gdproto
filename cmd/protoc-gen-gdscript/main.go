@@ -105,7 +105,18 @@ func run(in io.Reader, out io.Writer) error {
 			return writeResponse(out, response)
 		}
 
-		generated, err := generator.Generate(file, name)
+		imports := make([]generator.FileEntry, 0, len(files)-1)
+		for otherIndex, otherFile := range files {
+			if otherIndex == index {
+				continue
+			}
+			imports = append(imports, generator.FileEntry{
+				File:     otherFile,
+				Filename: request.GetProtoFile()[otherIndex].GetName(),
+			})
+		}
+
+		generated, err := generator.Generate(file, name, imports)
 		if err != nil {
 			message := fmt.Sprintf("generate %s: %v", name, err)
 			response.Error = &message

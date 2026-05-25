@@ -32,12 +32,21 @@ func (gf GeneratedFile) Source() string {
 // sourceName is the .proto path or filename; it is used for both the header
 // comment and prefix derivation when the file does not set
 // (gdproto.class_prefix).
-func Generate(file *ast.ProtoFile, sourceName string) ([]GeneratedFile, error) {
+//
+// imports is the set of additional proto files whose types may be referenced
+// from file. Each entry contributes its messages/top-level enums to the
+// NameResolver so cross-file references render with the imported file's
+// (gdproto.class_prefix) — or filename-derived prefix — instead of falling
+// back to the importer's filename. Pass nil for single-file inputs.
+func Generate(file *ast.ProtoFile, sourceName string, imports []FileEntry) ([]GeneratedFile, error) {
 	prefix, err := ResolvePrefix(file, sourceName)
 	if err != nil {
 		return nil, err
 	}
-	resolver, err := NewNameResolver([]FileEntry{{File: file, Filename: sourceName}})
+	entries := make([]FileEntry, 0, 1+len(imports))
+	entries = append(entries, FileEntry{File: file, Filename: sourceName})
+	entries = append(entries, imports...)
+	resolver, err := NewNameResolver(entries)
 	if err != nil {
 		return nil, err
 	}
@@ -104,20 +113,30 @@ func (g *generator) renderedMapValueType(mf *ast.MapField) string {
 
 // renderedType returns the GDScript type to use for a proto type reference,
 // resolving same-file message/enum references to their generated prefixed
-// class names. Cross-file references derive their prefix from the imported
-// file's filename (no access to the imported file's options for now; a
-// follow-up could thread the imported file's ProtoFile through Generate).
+// class names. Cross-file references are first looked up in the resolver
+// (which indexes both the input file and any imports threaded through
+// Generate); when the resolver has no entry — e.g. an unknown well-known
+// type — the prefix is derived from the source filename so behavior degrades
+// gracefully.
 //
-// isEnumHint is consulted only for cross-file references, where the resolver
-// does not currently index imported files. When set, the cross-file wrapper
-// class name is qualified with the inner enum name derived from the last
-// segment of protoType so the emitted type is `<Wrapper>.<EnumName>`. For
-// same-file references the resolver provides the authoritative answer.
+// isEnumHint is consulted only for the filename-derived fallback path. When
+// set, the cross-file wrapper class name is qualified with the inner enum
+// name derived from the last segment of protoType so the emitted type is
+// `<Wrapper>.<EnumName>`. For resolver-backed references (same-file or
+// imported) the resolver provides the authoritative answer.
 func (g *generator) renderedType(protoType, sourceFile string, isEnumHint bool) string {
 	if t, ok := scalarTypeMap[protoType]; ok {
 		return t
 	}
 	if sourceFile != "" && sourceFile != g.sourceName && sourceFile != filepath.Base(g.sourceName) {
+		for _, candidate := range buildLookupCandidates(protoType, "", g.file.Package) {
+			if wrapper, inner, ok := g.resolver.LookupEnum(candidate); ok {
+				return wrapper + "." + inner
+			}
+			if name, ok := g.resolver.Lookup(candidate); ok {
+				return name
+			}
+		}
 		otherPrefix, err := ResolvePrefix(&ast.ProtoFile{}, sourceFile)
 		if err == nil {
 			wrapper := otherPrefix + concatProtoPath(protoType)

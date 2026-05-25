@@ -37,7 +37,7 @@ func classNames(files []generator.GeneratedFile) []string {
 
 func TestGenerateEmptyProto(t *testing.T) {
 	file := &ast.ProtoFile{Syntax: "proto3"}
-	files, err := generator.Generate(file, "example.proto")
+	files, err := generator.Generate(file, "example.proto", nil)
 	if err != nil {
 		t.Fatalf("Generate returned error: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestGenerateHeaderUsesBasename(t *testing.T) {
 			},
 		}},
 	}
-	files, err := generator.Generate(file, "/tmp/foo/bar_baz.proto")
+	files, err := generator.Generate(file, "/tmp/foo/bar_baz.proto", nil)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestGenerateTopLevelEnum(t *testing.T) {
 			},
 		}},
 	}
-	files, err := generator.Generate(file, "example.proto")
+	files, err := generator.Generate(file, "example.proto", nil)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestGenerateMessageClassShell(t *testing.T) {
 			}},
 		}},
 	}
-	files, err := generator.Generate(file, "example.proto")
+	files, err := generator.Generate(file, "example.proto", nil)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -210,7 +210,7 @@ func TestGenerateAccessorBodies(t *testing.T) {
 			},
 		}},
 	}
-	files, err := generator.Generate(file, "example.proto")
+	files, err := generator.Generate(file, "example.proto", nil)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -259,7 +259,7 @@ func TestGenerateToBytesScalar(t *testing.T) {
 			},
 		}},
 	}
-	files, err := generator.Generate(file, "example.proto")
+	files, err := generator.Generate(file, "example.proto", nil)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -317,7 +317,7 @@ func TestGenerateToBytesStringRepeatedMessageOneofMap(t *testing.T) {
 			}},
 		}},
 	}
-	files, err := generator.Generate(file, "example.proto")
+	files, err := generator.Generate(file, "example.proto", nil)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -367,7 +367,7 @@ func TestGenerateFromBytesScalar(t *testing.T) {
 			},
 		}},
 	}
-	files, err := generator.Generate(file, "example.proto")
+	files, err := generator.Generate(file, "example.proto", nil)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -430,7 +430,7 @@ func TestGenerateFromBytesComplex(t *testing.T) {
 			},
 		}},
 	}
-	files, err := generator.Generate(file, "example.proto")
+	files, err := generator.Generate(file, "example.proto", nil)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -493,7 +493,7 @@ message Hello {
 	if errs := validator.Validate(file, "hello.proto"); len(errs) != 0 {
 		t.Fatalf("validation: %+v", errs)
 	}
-	files, err := generator.Generate(file, "hello.proto")
+	files, err := generator.Generate(file, "hello.proto", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -526,7 +526,7 @@ func TestGenerateImportedMessageUsesPrefixedClassName(t *testing.T) {
 		}},
 	}
 
-	files, err := generator.Generate(file, "main.proto")
+	files, err := generator.Generate(file, "main.proto", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -567,7 +567,7 @@ func TestGenerateImportedEnumFieldEmitsHelpers(t *testing.T) {
 		}},
 	}
 
-	files, err := generator.Generate(file, "main.proto")
+	files, err := generator.Generate(file, "main.proto", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -620,7 +620,7 @@ func TestGenerateMapEnumUsesVarintPaths(t *testing.T) {
 		}},
 	}
 
-	files, err := generator.Generate(file, "map_enum.proto")
+	files, err := generator.Generate(file, "map_enum.proto", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -666,7 +666,7 @@ func TestGenerateMessageEnumNameCollisionDoesNotUseEnumPaths(t *testing.T) {
 		},
 	}
 
-	files, err := generator.Generate(file, "collision.proto")
+	files, err := generator.Generate(file, "collision.proto", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -706,7 +706,7 @@ func TestGenerateExampleGoldenDirectory(t *testing.T) {
 		t.Fatalf("validation errors: %+v", errs)
 	}
 
-	files, err := generator.Generate(file, "example.proto")
+	files, err := generator.Generate(file, "example.proto", nil)
 	if err != nil {
 		t.Fatalf("generate: %v", err)
 	}
