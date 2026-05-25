@@ -3,10 +3,12 @@ package descriptors
 import (
 	"strings"
 
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/pluginpb"
 
 	"github.com/cafecito-games/gdproto/internal/ast"
+	"github.com/cafecito-games/gdproto/internal/gdprotopb"
 )
 
 // scalarTypeNames maps the wire-type enum to the proto scalar type spelling.
@@ -132,6 +134,17 @@ func (c *converter) convertFile(fd *descriptorpb.FileDescriptorProto) (*ast.Prot
 		Package: fd.GetPackage(),
 		Options: map[string]any{},
 	}
+
+	if fdOpts := fd.GetOptions(); fdOpts != nil {
+		if proto.HasExtension(fdOpts, gdprotopb.E_ClassPrefix) {
+			if v, ok := proto.GetExtension(fdOpts, gdprotopb.E_ClassPrefix).(string); ok {
+				file.Options["(gdproto.class_prefix)"] = v
+			}
+		}
+	}
+	// file.OptionPositions is intentionally left nil here: FileDescriptorProto
+	// carries no per-option source position, so downstream error messages
+	// degrade to the position-less form.
 
 	publicSet := map[int32]struct{}{}
 	for _, idx := range fd.GetPublicDependency() {

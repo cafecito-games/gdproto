@@ -1,6 +1,6 @@
 extends VestTest
 
-func _populate(msg: IntegrationProto.KitchenSink) -> void:
+func _populate(msg: IntegrationKitchenSink) -> void:
 	msg.set_name("kitchen")
 	msg.set_score(42)
 
@@ -14,7 +14,7 @@ func _populate(msg: IntegrationProto.KitchenSink) -> void:
 	msg.add_counters("a", 1)
 	msg.add_counters("b", 2)
 
-	msg.set_accent(SharedProto.Hue.BLUE)
+	msg.set_accent(SharedHue.Hue.BLUE)
 
 	var ts := msg.new_created_at()
 	ts.set_seconds(1700000000)
@@ -24,9 +24,9 @@ func _populate(msg: IntegrationProto.KitchenSink) -> void:
 	extra.set_data("payload-data")
 
 	# oneof source: choose the cross-file enum branch.
-	msg.set_kind(SharedProto.SourceKind.USER)
+	msg.set_kind(SharedSourceKind.SourceKind.USER)
 
-func _expect_populated(msg: IntegrationProto.KitchenSink) -> void:
+func _expect_populated(msg: IntegrationKitchenSink) -> void:
 	expect_equal(msg.get_name(), "kitchen")
 	expect_equal(msg.get_score(), 42)
 
@@ -41,43 +41,43 @@ func _expect_populated(msg: IntegrationProto.KitchenSink) -> void:
 	expect_equal(counters["a"], 1)
 	expect_equal(counters["b"], 2)
 
-	expect_equal(msg.get_accent(), SharedProto.Hue.BLUE)
+	expect_equal(msg.get_accent(), SharedHue.Hue.BLUE)
 	expect_equal(msg.get_created_at().get_seconds(), 1700000000)
 	expect_equal(msg.get_created_at().get_nanos(), 7)
 	expect_equal(msg.get_extra().get_data(), "payload-data")
 
-	expect_equal(msg.get_source_case(), IntegrationProto.KitchenSink.SourceOneOf.KIND)
-	expect_equal(msg.get_kind(), SharedProto.SourceKind.USER)
+	expect_equal(msg.get_source_case(), IntegrationKitchenSink.SourceOneOf.KIND)
+	expect_equal(msg.get_kind(), SharedSourceKind.SourceKind.USER)
 
 func test_kitchen_sink_round_trip_binary():
-	var original := IntegrationProto.KitchenSink.new()
+	var original := IntegrationKitchenSink.new()
 	_populate(original)
 
 	var bytes := original.to_bytes()
-	var decoded := IntegrationProto.KitchenSink.new()
+	var decoded := IntegrationKitchenSink.new()
 	expect_equal(decoded.from_bytes(bytes), ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	_expect_populated(decoded)
 
 func test_kitchen_sink_round_trip_text():
-	var original := IntegrationProto.KitchenSink.new()
+	var original := IntegrationKitchenSink.new()
 	_populate(original)
 
 	var text := original.to_text()
-	var decoded := IntegrationProto.KitchenSink.new()
+	var decoded := IntegrationKitchenSink.new()
 	expect_equal(decoded.from_text(text), ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	_expect_populated(decoded)
 
 func test_kitchen_sink_oneof_message_branch_round_trip():
-	var msg := IntegrationProto.KitchenSink.new()
+	var msg := IntegrationKitchenSink.new()
 	msg.set_name("origin-only")
-	var origin := IntegrationProto.KitchenSink.Stat.new()
+	var origin := IntegrationKitchenSinkStat.new()
 	origin.set_key("source")
 	origin.set_value(123)
 	msg.set_origin(origin)
-	expect_equal(msg.get_source_case(), IntegrationProto.KitchenSink.SourceOneOf.ORIGIN)
+	expect_equal(msg.get_source_case(), IntegrationKitchenSink.SourceOneOf.ORIGIN)
 
-	var decoded := IntegrationProto.KitchenSink.new()
+	var decoded := IntegrationKitchenSink.new()
 	expect_equal(decoded.from_bytes(msg.to_bytes()), ProtoCoreUtils.ProtobufError.NO_ERRORS)
-	expect_equal(decoded.get_source_case(), IntegrationProto.KitchenSink.SourceOneOf.ORIGIN)
+	expect_equal(decoded.get_source_case(), IntegrationKitchenSink.SourceOneOf.ORIGIN)
 	expect_equal(decoded.get_origin().get_key(), "source")
 	expect_equal(decoded.get_origin().get_value(), 123)

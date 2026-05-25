@@ -37,8 +37,25 @@ jobs:
         with:
           version: v2.11
 
+      - name: Install protoc
+        run: |
+          PROTOC_VERSION=27.2
+          PROTOC_ZIP=protoc-${PROTOC_VERSION}-linux-x86_64.zip
+          curl -fsSL -o /tmp/${PROTOC_ZIP} \
+            https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/${PROTOC_ZIP}
+          sudo unzip -o /tmp/${PROTOC_ZIP} -d /usr/local
+          protoc --version
+
+      - name: Install buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Run CI
         run: task ci
+
+      - name: Run integration tests
+        run: task integration
 
       - name: Run coverage
         run: task test:cover

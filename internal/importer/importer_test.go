@@ -334,22 +334,96 @@ func TestOSFSWalkUp(t *testing.T) {
 	}
 }
 
-func TestOSFSWalkUpBasename(t *testing.T) {
-	// Place the target file two levels above BaseDir under a different
-	// relative path so only the basename strategy can match.
+func TestOSFSDoesNotMatchByBasenameAcrossDirs(t *testing.T) {
+	// Place a stray basename match in an ancestor directory under no
+	// importable subtree. The previous walk-up-by-basename strategy
+	// resolved `nested/shared.proto` to `dir/shared.proto`; that behavior
+	// was surprising (imports could silently bind to unrelated files), so
+	// locate should now refuse to match.
 	dir := t.TempDir()
 	deep := filepath.Join(dir, "a", "b", "c")
 	if err := os.MkdirAll(deep, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	// Target at dir/shared.proto; import path "nested/shared.proto"
-	// won't match dir+path, but basename "shared.proto" will.
 	if err := os.WriteFile(filepath.Join(dir, "shared.proto"), []byte(`syntax = "proto3";`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	fs := &importer.OSFS{BaseDir: deep}
-	if !fs.Exists("nested/shared.proto") {
-		t.Errorf("expected basename walk-up to find shared.proto")
+	if fs.Exists("nested/shared.proto") {
+		t.Errorf("locate should not match a stray basename in an ancestor directory")
+	}
+}
+
+func TestOSFSIncludePathsTakePriority(t *testing.T) {
+	base := t.TempDir()
+	inc := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(base, "x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(inc, "x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "x", "y.proto"), []byte("BASE"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(inc, "x", "y.proto"), []byte("INC"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	fs := &importer.OSFS{BaseDir: base, IncludePaths: []string{inc}}
+	got, err := fs.Read(filepath.Join("x", "y.proto"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "INC" {
+		t.Fatalf("got %q, want INC (include path should win over BaseDir)", got)
+	}
+}
+
+func TestOSFSIncludePathFallsBackToBaseDir(t *testing.T) {
+	base := t.TempDir()
+	inc := t.TempDir() // empty
+	if err := os.MkdirAll(filepath.Join(base, "x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "x", "y.proto"), []byte("BASE"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	fs := &importer.OSFS{BaseDir: base, IncludePaths: []string{inc}}
+	got, err := fs.Read(filepath.Join("x", "y.proto"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "BASE" {
+		t.Fatalf("got %q, want BASE", got)
+	}
+}
+
+func TestOSFSIncludePathsSearchedInOrder(t *testing.T) {
+	base := t.TempDir()
+	first := t.TempDir()
+	second := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(first, "x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(second, "x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(first, "x", "y.proto"), []byte("FIRST"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(second, "x", "y.proto"), []byte("SECOND"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	fs := &importer.OSFS{BaseDir: base, IncludePaths: []string{first, second}}
+	got, err := fs.Read(filepath.Join("x", "y.proto"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "FIRST" {
+		t.Fatalf("got %q, want FIRST (earlier include path should win)", got)
 	}
 }
 
@@ -432,6 +506,57 @@ message M {
 	}
 	if findField(t, file, "M", "b").SourceFile != "b.proto" {
 		t.Error("B not resolved through cycle")
+	}
+}
+
+func TestResolveExternalWithFiles_ReturnsParsedASTs(t *testing.T) {
+	other := `syntax = "proto3";
+option (gdproto.class_prefix) = "Custom";
+message Foo { int32 x = 1; }`
+	in := `syntax = "proto3";
+import "other.proto";
+message M { Foo f = 1; }`
+	fs := &memFS{files: map[string]string{"other.proto": other}}
+	file := parseFile(t, in)
+	imported, err := importer.ResolveExternalWithFiles(file, "in.proto", fs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(imported) != 1 {
+		t.Fatalf("expected 1 imported file, got %d", len(imported))
+	}
+	if imported[0].Filename != "other.proto" {
+		t.Errorf("Filename = %q, want %q", imported[0].Filename, "other.proto")
+	}
+	if got, ok := imported[0].File.Options["(gdproto.class_prefix)"]; !ok || got != "Custom" {
+		t.Errorf("expected class_prefix option to be exposed; got %v ok=%v", got, ok)
+	}
+	// Side-effect annotation still happens.
+	f := findField(t, file, "M", "f")
+	if f.SourceFile != "other.proto" {
+		t.Errorf("annotation lost: SourceFile=%q", f.SourceFile)
+	}
+}
+
+func TestResolveExternalWithFiles_FollowsPublicReExports(t *testing.T) {
+	leaf := `syntax = "proto3"; message Leaf {}`
+	barrel := `syntax = "proto3"; import public "leaf.proto";`
+	in := `syntax = "proto3"; import "barrel.proto"; message M { Leaf l = 1; }`
+	fs := &memFS{files: map[string]string{
+		"leaf.proto":   leaf,
+		"barrel.proto": barrel,
+	}}
+	file := parseFile(t, in)
+	imported, err := importer.ResolveExternalWithFiles(file, "in.proto", fs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := []string{}
+	for _, imp := range imported {
+		names = append(names, imp.Filename)
+	}
+	if len(names) != 2 || names[0] != "barrel.proto" || names[1] != "leaf.proto" {
+		t.Errorf("expected [barrel.proto, leaf.proto], got %v", names)
 	}
 }
 

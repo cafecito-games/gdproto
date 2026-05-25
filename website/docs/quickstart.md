@@ -59,36 +59,42 @@ protoc \
   proto/player.proto
 ```
 
-The plugin writes:
+The plugin writes one `.pb.gd` file per top-level message or enum, plus the
+runtime:
 
 ```text
 godot/generated/
-  player.pb.gd
+  PlayerPlayer.pb.gd
   proto_core_utils.gd
 ```
+
+The `Player` prefix is derived from `player.proto`, so the generated wrapper
+for the `Player` message is `PlayerPlayer`. To pick a different prefix, use
+the `(gdproto.class_prefix)` file option (see
+[Generated GDScript](./generated-code.md#class-prefix)).
 
 With Buf, the same generation can be kept in `buf.gen.yaml`. See
 [Using buf](./buf.md) for the full setup.
 
 ## 4. Use The Generated Code
 
-Copy or generate the output into your Godot project. Each generated file declares
-a `class_name`, so the wrapper (e.g. `PlayerProto`) is available as a global
+Copy or generate the output into your Godot project. Each generated file
+declares a top-level `class_name`, so the wrapper is available as a global
 identifier — no `preload` needed:
 
 ```gdscript
-var player := PlayerProto.Player.new()
+var player := PlayerPlayer.new()
 player.set_username("alice")
 player.set_level(42)
 player.add_inventory("sword")
 
 var bytes: PackedByteArray = player.to_bytes()
 
-var decoded := PlayerProto.Player.new()
+var decoded := PlayerPlayer.new()
 var err := decoded.from_bytes(bytes)
 if err != ProtoCoreUtils.ProtobufError.NO_ERRORS:
     push_error("decode failed: %s" % err)
 ```
 
-`player.pb.gd` depends on the sibling `proto_core_utils.gd`, so keep both files
-in the generated output directory.
+Every generated wrapper depends on the sibling `proto_core_utils.gd`, so keep
+both files in the generated output directory.

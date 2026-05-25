@@ -1,0 +1,6 @@
+syntax = "proto3";
+import "shared.proto";
+
+message Use {
+  Foo bar = 1;
+}

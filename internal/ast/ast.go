@@ -15,6 +15,12 @@ type ProtoFile struct {
 	Messages []*Message
 	Enums    []*Enum
 	Options  map[string]any
+	// OptionPositions records the source position (line/col) of each
+	// file-level option keyed by option name. Populated by the source-text
+	// parser; left nil by the descriptor-based path, which has no per-option
+	// source position. Consumers must treat absence/zero positions as
+	// "unknown" and degrade gracefully.
+	OptionPositions map[string]Position
 }
 
 // Import represents an `import "..."` statement.

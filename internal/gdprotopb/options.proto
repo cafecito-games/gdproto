@@ -1,0 +1,14 @@
+syntax = "proto2";
+
+package gdproto;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/cafecito-games/gdproto/internal/gdprotopb";
+
+extend google.protobuf.FileOptions {
+  // class_prefix is prepended to every GDScript class name generated from
+  // this .proto file. It is used to disambiguate class names when generating
+  // one .gd file per message/enum.
+  optional string class_prefix = 51000;
+}

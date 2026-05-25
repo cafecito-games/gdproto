@@ -15,7 +15,9 @@ game/
   buf.yaml
   buf.gen.yaml
   proto/
-    player.proto
+    example.proto
+    gdproto/
+      options.proto
   godot/
     generated/
 ```
@@ -59,14 +61,17 @@ and invokes the plugin.
 
 ## Output Paths
 
-Plugin mode preserves the proto-relative path below the configured output
-directory and uses `.pb.gd` filenames.
+The plugin writes one `.pb.gd` file per top-level message or enum, plus the
+runtime, under the configured output directory.
 
 With this input:
 
 ```text
-proto/player.proto
+proto/example.proto
 ```
+
+(the `examples/example.proto` schema with `Player`, nested `Position`,
+`GameState`, and top-level `PlayerStatus`)
 
 and this config:
 
@@ -77,30 +82,65 @@ plugins:
     out: godot/generated
 ```
 
-the generated wrapper is:
+Buf invokes the plugin and the generated tree is:
 
 ```text
-godot/generated/player.pb.gd
-```
-
-The plugin also emits:
-
-```text
-godot/generated/proto_core_utils.gd
+godot/generated/
+  ExamplePlayer.pb.gd
+  ExamplePlayerPosition.pb.gd
+  ExampleGameState.pb.gd
+  ExamplePlayerStatus.pb.gd
+  proto_core_utils.gd
 ```
 
 Keep `proto_core_utils.gd` with the generated wrappers in your Godot project.
 
-## Imports And Generated Wrappers
+## Files Generated
 
-Generated GDScript references imported message types through their generated
-wrapper classes. If `player.proto` imports `shared/team.proto`, the imported
-schema needs a generated wrapper too.
+The plugin only emits files for the protos Buf includes in
+`file_to_generate`. Imported `.proto` files are parsed for type resolution
+but do not automatically produce `.pb.gd` output. If you want wrappers for
+an imported schema, make sure it is part of your buf module (or add a
+second module).
 
-Buf supplies transitive descriptors to plugins, and `protoc-gen-gdscript`
-generates wrappers for imported files that are present in the request. This is
-important for Godot class resolution when a generated file references another
-generated proto wrapper.
+Cross-file type references render with the imported file's own
+`(gdproto.class_prefix)` (or its filename-derived default), so mixed
+projects where some files set an explicit prefix and others rely on the
+default still resolve correctly. See
+[Generated GDScript](./generated-code.md#cross-file-references-honor-imported-prefixes).
+
+## Custom Class Prefix
+
+To override the auto-derived class prefix, add the `(gdproto.class_prefix)`
+file option:
+
+```protobuf
+syntax = "proto3";
+import "gdproto/options.proto";
+
+option (gdproto.class_prefix) = "Game";
+
+message Hero {
+  string name = 1;
+  int32 hp = 2;
+}
+```
+
+Buf needs the `gdproto/options.proto` descriptor available inside the module
+to resolve the `(gdproto.class_prefix)` extension. Vendor it into the buf
+module path:
+
+```bash
+mkdir -p proto/gdproto
+gdproto --print-options-proto > proto/gdproto/options.proto
+```
+
+With `modules: - path: proto`, Buf will pick up `gdproto/options.proto`
+alongside your schemas and the plugin can read the prefix. The integration
+fixture under `tests/integration/fixtures/options/` shows the same layout.
+
+See [Generated GDScript](./generated-code.md#class-prefix) for the full
+explanation of how the prefix affects generated class names.
 
 ## CI Example
 
