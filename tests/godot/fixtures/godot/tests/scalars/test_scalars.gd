@@ -1,6 +1,6 @@
 extends VestTest
 
-func _populate(msg: ScalarsProto.AllScalars) -> void:
+func _populate(msg: ScalarsAllScalars) -> void:
 	msg.set_v_int32(-2147483648)
 	msg.set_v_int64(-9223372036854775808)
 	msg.set_v_uint32(4294967295)
@@ -20,7 +20,7 @@ func _populate(msg: ScalarsProto.AllScalars) -> void:
 	msg.add_packed_ints(2)
 	msg.add_packed_ints(3)
 
-func _expect_populated(msg: ScalarsProto.AllScalars) -> void:
+func _expect_populated(msg: ScalarsAllScalars) -> void:
 	expect_equal(msg.get_v_int32(), -2147483648)
 	expect_equal(msg.get_v_int64(), -9223372036854775808)
 	expect_equal(msg.get_v_uint32(), 4294967295)
@@ -39,12 +39,12 @@ func _expect_populated(msg: ScalarsProto.AllScalars) -> void:
 	expect_equal(msg.get_packed_ints(), [1, 2, 3] as Array[int])
 
 func test_default_values_round_trip_binary():
-	var msg := ScalarsProto.AllScalars.new()
+	var msg := ScalarsAllScalars.new()
 	var bytes := msg.to_bytes()
 	# proto3 omits scalar defaults, so the wire form is empty.
 	expect_equal(bytes.size(), 0)
 
-	var decoded := ScalarsProto.AllScalars.new()
+	var decoded := ScalarsAllScalars.new()
 	expect_equal(decoded.from_bytes(bytes), ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	expect_equal(decoded.get_v_int32(), 0)
 	expect_equal(decoded.get_v_string(), "")
@@ -52,23 +52,23 @@ func test_default_values_round_trip_binary():
 	expect_equal(decoded.get_v_bytes(), PackedByteArray())
 
 func test_extreme_values_round_trip_binary():
-	var msg := ScalarsProto.AllScalars.new()
+	var msg := ScalarsAllScalars.new()
 	_populate(msg)
 	var bytes := msg.to_bytes()
 
-	var decoded := ScalarsProto.AllScalars.new()
+	var decoded := ScalarsAllScalars.new()
 	expect_equal(decoded.from_bytes(bytes), ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	_expect_populated(decoded)
 
 func test_extreme_values_round_trip_text():
 	# Bytes go through to_utf8_buffer in from_text, so we use a UTF-8 payload
 	# here. Non-UTF-8 byte sequences are still binary-only.
-	var msg := ScalarsProto.AllScalars.new()
+	var msg := ScalarsAllScalars.new()
 	_populate(msg)
 	msg.set_v_bytes("ascii".to_utf8_buffer())
 	var text := msg.to_text()
 
-	var decoded := ScalarsProto.AllScalars.new()
+	var decoded := ScalarsAllScalars.new()
 	expect_equal(decoded.from_text(text), ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	expect_equal(decoded.get_v_int32(), -2147483648)
 	expect_equal(decoded.get_v_string(), "héllo, 世界")

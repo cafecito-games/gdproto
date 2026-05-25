@@ -1,7 +1,7 @@
 extends VestTest
 
 func test_repeated_scalars_round_trip():
-	var bag := CollectionsProto.Bag.new()
+	var bag := CollectionsBag.new()
 	bag.add_numbers(10)
 	bag.add_numbers(20)
 	bag.add_numbers(30)
@@ -9,13 +9,13 @@ func test_repeated_scalars_round_trip():
 	bag.add_labels("two")
 
 	var bytes := bag.to_bytes()
-	var decoded := CollectionsProto.Bag.new()
+	var decoded := CollectionsBag.new()
 	expect_equal(decoded.from_bytes(bytes), ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	expect_equal(decoded.get_numbers(), [10, 20, 30] as Array[int])
 	expect_equal(decoded.get_labels(), ["one", "two"] as Array[String])
 
 func test_repeated_messages_round_trip():
-	var bag := CollectionsProto.Bag.new()
+	var bag := CollectionsBag.new()
 	var first := bag.add_items()
 	first.set_id(1)
 	first.set_name("first")
@@ -24,7 +24,7 @@ func test_repeated_messages_round_trip():
 	second.set_name("second")
 
 	var bytes := bag.to_bytes()
-	var decoded := CollectionsProto.Bag.new()
+	var decoded := CollectionsBag.new()
 	expect_equal(decoded.from_bytes(bytes), ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	var got := decoded.get_items()
 	expect_equal(got.size(), 2)
@@ -34,7 +34,7 @@ func test_repeated_messages_round_trip():
 	expect_equal(got[1].get_name(), "second")
 
 func test_scalar_keyed_maps_round_trip():
-	var bag := CollectionsProto.Bag.new()
+	var bag := CollectionsBag.new()
 	bag.add_string_to_int("a", 1)
 	bag.add_string_to_int("b", 2)
 	bag.add_int_to_string(7, "seven")
@@ -44,7 +44,7 @@ func test_scalar_keyed_maps_round_trip():
 	bag.add_bool_to_string(false, "no")
 
 	var bytes := bag.to_bytes()
-	var decoded := CollectionsProto.Bag.new()
+	var decoded := CollectionsBag.new()
 	expect_equal(decoded.from_bytes(bytes), ProtoCoreUtils.ProtobufError.NO_ERRORS)
 
 	var s2i := decoded.get_string_to_int()
@@ -63,14 +63,14 @@ func test_scalar_keyed_maps_round_trip():
 	expect_equal(b2s[false], "no")
 
 func test_message_valued_map_round_trip():
-	var bag := CollectionsProto.Bag.new()
-	var item := CollectionsProto.ItemEntry.new()
+	var bag := CollectionsBag.new()
+	var item := CollectionsItemEntry.new()
 	item.set_id(99)
 	item.set_name("named")
 	bag.add_string_to_message("k", item)
 
 	var bytes := bag.to_bytes()
-	var decoded := CollectionsProto.Bag.new()
+	var decoded := CollectionsBag.new()
 	expect_equal(decoded.from_bytes(bytes), ProtoCoreUtils.ProtobufError.NO_ERRORS)
 	var m := decoded.get_string_to_message()
 	expect_equal(m["k"].get_id(), 99)
