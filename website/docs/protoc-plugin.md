@@ -69,6 +69,10 @@ are still parsed for type resolution, but they do **not** produce
 If you need wrappers for an imported `.proto`, add it to the input set in
 the same `protoc` invocation, or run a second `protoc` command for it.
 
+Cross-file type references render with the imported file's own
+`(gdproto.class_prefix)` (or its filename-derived default) — the importer's
+prefix is not applied to imported types. See [Generated GDScript](./generated-code.md#cross-file-references-honor-imported-prefixes).
+
 ## Imports
 
 Set every import root with `-I`:

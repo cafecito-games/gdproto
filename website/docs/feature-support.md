@@ -30,7 +30,7 @@ messages. It does not generate service clients or servers.
 | Feature | Caveat |
 | --- | --- |
 | Well-known types | They can be treated as ordinary imported message schemas when their `.proto` descriptors are available and generated. gdproto does not provide special Godot-native mappings for types such as `Timestamp` or `Duration`. |
-| Imported message references | Generated GDScript references imported messages through their generated wrapper classes, so imported proto wrappers must exist in the Godot project. |
+| Imported message references | Generated GDScript references imported messages through their generated wrapper classes, so imported proto wrappers must exist in the Godot project. The imported file's own `(gdproto.class_prefix)` (or filename-derived default) is used when rendering the reference. |
 | JSON names and JSON mapping | JSON names may be parsed as options, but gdproto does not generate protobuf JSON mapping helpers. |
 
 ## Not Supported

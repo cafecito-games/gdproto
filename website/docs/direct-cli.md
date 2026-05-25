@@ -92,6 +92,12 @@ gdproto -I proto-include -o godot/generated/ proto/player.proto
 (`-I proto-include -I third-party`). This mirrors `protoc`'s
 convention.
 
+When the generated wrapper for `player.proto` references a type defined in
+`shared/team.proto`, the rendered class name uses `team.proto`'s own
+`(gdproto.class_prefix)` (or its filename-derived default) — not
+`player.proto`'s prefix. See
+[Generated GDScript](./generated-code.md#cross-file-references-honor-imported-prefixes).
+
 ## Exit Codes
 
 | Code | Meaning |

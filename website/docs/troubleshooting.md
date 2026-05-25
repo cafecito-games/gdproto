@@ -80,6 +80,20 @@ This writes one `.pb.gd` per top-level message or enum (for example
 `ExamplePlayer.pb.gd`, `ExampleGameState.pb.gd`) plus
 `proto_core_utils.gd`.
 
+## `(gdproto.class_prefix)` Rejected With "at line X:Y"
+
+When the `(gdproto.class_prefix)` option value is invalid (not a string, or
+not a valid GDScript identifier), the generator reports the error with the
+exact source position of the option, for example:
+
+```
+option (gdproto.class_prefix) value "9bad" is not a valid GDScript identifier ... at line 4:1
+```
+
+Open the cited `.proto` at that line and column and adjust the value. The
+prefix must be a legal GDScript identifier (letters, digits, underscores,
+and not starting with a digit).
+
 ## `(gdproto.class_prefix)` Is Not Applied
 
 Both `protoc` and `buf` require the `gdproto/options.proto` extension

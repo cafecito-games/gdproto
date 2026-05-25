@@ -125,6 +125,16 @@ There are three supported ways to install the options proto:
 range `50000`-`99999` for internal third-party extensions; see
 <https://protobuf.dev/programming-guides/proto3/#customoptions>.
 
+### Cross-File References Honor Imported Prefixes
+
+When a generated wrapper references a message or enum defined in an
+imported `.proto`, the rendered type uses the **imported file's**
+`(gdproto.class_prefix)` — or its filename-derived prefix when the option
+is absent. The importer's prefix is not applied to imported types. This
+means a single project can mix files with explicit `class_prefix` options
+and files that rely on the default, and cross-file references resolve to
+the right class names in either direction.
+
 ## Construct A Message
 
 ```gdscript

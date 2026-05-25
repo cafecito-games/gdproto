@@ -103,6 +103,12 @@ but do not automatically produce `.pb.gd` output. If you want wrappers for
 an imported schema, make sure it is part of your buf module (or add a
 second module).
 
+Cross-file type references render with the imported file's own
+`(gdproto.class_prefix)` (or its filename-derived default), so mixed
+projects where some files set an explicit prefix and others rely on the
+default still resolve correctly. See
+[Generated GDScript](./generated-code.md#cross-file-references-honor-imported-prefixes).
+
 ## Custom Class Prefix
 
 To override the auto-derived class prefix, add the `(gdproto.class_prefix)`
