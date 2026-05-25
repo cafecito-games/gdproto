@@ -334,22 +334,23 @@ func TestOSFSWalkUp(t *testing.T) {
 	}
 }
 
-func TestOSFSWalkUpBasename(t *testing.T) {
-	// Place the target file two levels above BaseDir under a different
-	// relative path so only the basename strategy can match.
+func TestOSFSDoesNotMatchByBasenameAcrossDirs(t *testing.T) {
+	// Place a stray basename match in an ancestor directory under no
+	// importable subtree. The previous walk-up-by-basename strategy
+	// resolved `nested/shared.proto` to `dir/shared.proto`; that behavior
+	// was surprising (imports could silently bind to unrelated files), so
+	// locate should now refuse to match.
 	dir := t.TempDir()
 	deep := filepath.Join(dir, "a", "b", "c")
 	if err := os.MkdirAll(deep, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	// Target at dir/shared.proto; import path "nested/shared.proto"
-	// won't match dir+path, but basename "shared.proto" will.
 	if err := os.WriteFile(filepath.Join(dir, "shared.proto"), []byte(`syntax = "proto3";`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	fs := &importer.OSFS{BaseDir: deep}
-	if !fs.Exists("nested/shared.proto") {
-		t.Errorf("expected basename walk-up to find shared.proto")
+	if fs.Exists("nested/shared.proto") {
+		t.Errorf("locate should not match a stray basename in an ancestor directory")
 	}
 }
 

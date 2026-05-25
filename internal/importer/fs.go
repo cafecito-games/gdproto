@@ -15,7 +15,7 @@ type FS interface {
 // OSFS reads files from the real filesystem. Tries each entry in
 // IncludePaths first (mirroring protoc's `-I` semantics), then the
 // import path relative to BaseDir, then walks up parent directories
-// looking for the file.
+// trying each as the prefix for the import path.
 type OSFS struct {
 	BaseDir      string
 	IncludePaths []string
@@ -39,8 +39,11 @@ func (f *OSFS) Exists(path string) bool {
 // locate applies the following strategies in order:
 //  1. For each IncludePaths entry, IncludePath + path.
 //  2. BaseDir + path.
-//  3. Walk up parent directories, trying each as the prefix.
-//  4. Walk up parent directories, trying just the basename.
+//  3. Walk up parent directories, trying each as the prefix for path.
+//
+// The walk-up step preserves the full import path under each ancestor;
+// matching by basename alone would silently resolve `foo/options.proto`
+// to any stray `options.proto` reachable from an ancestor directory.
 func (f *OSFS) locate(path string) (string, bool) {
 	for _, inc := range f.IncludePaths {
 		if c := filepath.Join(inc, path); statOK(c) {
@@ -59,9 +62,6 @@ func (f *OSFS) locate(path string) (string, bool) {
 		}
 		dir = parent
 		if c := filepath.Join(dir, path); statOK(c) {
-			return c, true
-		}
-		if c := filepath.Join(dir, filepath.Base(path)); statOK(c) {
 			return c, true
 		}
 	}
