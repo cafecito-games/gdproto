@@ -95,11 +95,11 @@ func (g *generator) generateTopLevelEnumFile(e *ast.Enum) GeneratedFile {
 }
 
 func (g *generator) renderedFieldType(f *ast.Field) string {
-	return g.renderedType(f.FieldType, f.SourceFile)
+	return g.renderedType(f.FieldType, f.SourceFile, f.IsEnum)
 }
 
 func (g *generator) renderedMapValueType(mf *ast.MapField) string {
-	return g.renderedType(mf.ValueType, mf.ValueSourceFile)
+	return g.renderedType(mf.ValueType, mf.ValueSourceFile, mf.ValueIsEnum)
 }
 
 // renderedType returns the GDScript type to use for a proto type reference,
@@ -107,18 +107,31 @@ func (g *generator) renderedMapValueType(mf *ast.MapField) string {
 // class names. Cross-file references derive their prefix from the imported
 // file's filename (no access to the imported file's options for now; a
 // follow-up could thread the imported file's ProtoFile through Generate).
-func (g *generator) renderedType(protoType, sourceFile string) string {
+//
+// isEnumHint is consulted only for cross-file references, where the resolver
+// does not currently index imported files. When set, the cross-file wrapper
+// class name is qualified with the inner enum name derived from the last
+// segment of protoType so the emitted type is `<Wrapper>.<EnumName>`. For
+// same-file references the resolver provides the authoritative answer.
+func (g *generator) renderedType(protoType, sourceFile string, isEnumHint bool) string {
 	if t, ok := scalarTypeMap[protoType]; ok {
 		return t
 	}
 	if sourceFile != "" && sourceFile != g.sourceName && sourceFile != filepath.Base(g.sourceName) {
 		otherPrefix, err := ResolvePrefix(&ast.ProtoFile{}, sourceFile)
 		if err == nil {
-			return otherPrefix + concatProtoPath(protoType)
+			wrapper := otherPrefix + concatProtoPath(protoType)
+			if isEnumHint {
+				return wrapper + "." + lastProtoSegment(protoType)
+			}
+			return wrapper
 		}
 		return strings.TrimPrefix(protoType, ".")
 	}
 	for _, candidate := range buildLookupCandidates(protoType, g.currentScope, g.file.Package) {
+		if wrapper, inner, ok := g.resolver.LookupEnum(candidate); ok {
+			return wrapper + "." + inner
+		}
 		if name, ok := g.resolver.Lookup(candidate); ok {
 			return name
 		}
@@ -127,6 +140,16 @@ func (g *generator) renderedType(protoType, sourceFile string) string {
 	// resolver does not index; they render inside the parent class scope
 	// as e.g. "Status.ONLINE").
 	return strings.TrimPrefix(protoType, ".")
+}
+
+// lastProtoSegment returns the last dotted segment of a proto type path,
+// stripping any leading dot. For "shared.Color" it returns "Color".
+func lastProtoSegment(typePath string) string {
+	s := strings.TrimPrefix(typePath, ".")
+	if i := strings.LastIndex(s, "."); i >= 0 {
+		return s[i+1:]
+	}
+	return s
 }
 
 // concatProtoPath turns a dotted proto type path like "pkg.Outer.Inner" into a

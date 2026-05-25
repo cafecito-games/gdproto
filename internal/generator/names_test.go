@@ -81,6 +81,44 @@ func TestNameResolverResolvesNested(t *testing.T) {
 	}
 }
 
+func TestNameResolverEnumLookup(t *testing.T) {
+	file := &ast.ProtoFile{
+		Messages: []*ast.Message{{Name: "Player"}},
+		Enums: []*ast.Enum{{
+			Name:   "PlayerStatus",
+			Values: []*ast.EnumValue{{Name: "OFFLINE", Number: 0}},
+		}},
+	}
+	r, err := NewNameResolver([]FileEntry{{File: file, Filename: "example.proto"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !r.IsEnum("PlayerStatus") {
+		t.Fatalf("expected PlayerStatus to be reported as an enum")
+	}
+	if r.IsEnum("Player") {
+		t.Fatalf("Player message should not be reported as an enum")
+	}
+	wrapper, inner, ok := r.LookupEnum("PlayerStatus")
+	if !ok {
+		t.Fatalf("LookupEnum(PlayerStatus) returned ok=false")
+	}
+	if wrapper != "ExamplePlayerStatus" {
+		t.Fatalf("wrapper: got %q want ExamplePlayerStatus", wrapper)
+	}
+	if inner != "PlayerStatus" {
+		t.Fatalf("inner: got %q want PlayerStatus", inner)
+	}
+	if _, _, ok := r.LookupEnum("Player"); ok {
+		t.Fatalf("LookupEnum(Player) should return ok=false for a message")
+	}
+	// Lookup still returns the wrapper class for enums for backwards
+	// compatibility.
+	if got, ok := r.Lookup("PlayerStatus"); !ok || got != "ExamplePlayerStatus" {
+		t.Fatalf("Lookup(PlayerStatus): got %q ok=%v", got, ok)
+	}
+}
+
 func TestNameResolverWithPackage(t *testing.T) {
 	file := &ast.ProtoFile{
 		Package:  "game.v1",

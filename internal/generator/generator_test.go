@@ -222,9 +222,9 @@ func TestGenerateAccessorBodies(t *testing.T) {
 	for _, want := range []string{
 		"func set_username(value: String) -> void:\n\t_username = value",
 		"func get_username() -> String:\n\treturn _username",
-		"var _status: ExamplePlayerStatus = 0",
-		"func set_status(value: ExamplePlayerStatus) -> void:\n\t_status = value",
-		"func get_status() -> ExamplePlayerStatus:\n\treturn _status",
+		"var _status: ExamplePlayerStatus.PlayerStatus = 0",
+		"func set_status(value: ExamplePlayerStatus.PlayerStatus) -> void:\n\t_status = value",
+		"func get_status() -> ExamplePlayerStatus.PlayerStatus:\n\treturn _status",
 		"func new_position() -> ExamplePlayerPosition:\n\t_position = ExamplePlayerPosition.new()\n\treturn _position",
 		"func add_inventory(value: String) -> void:\n\t_inventory.append(value)",
 		"func add_stats(key: String, value: int) -> void:\n\t_stats[key] = value",
@@ -586,10 +586,12 @@ func TestGenerateImportedEnumFieldEmitsHelpers(t *testing.T) {
 		t.Fatalf("imported enum values missing from helpers:\n%s", got)
 	}
 	// Imported enum is referenced as the wrapper class for that imported
-	// file: prefix is derived from "shared.proto" -> "Shared", concatenated
-	// with the type path "shared.Color" -> "Color" => "SharedColor".
-	if !strings.Contains(got, "SharedColor.RED") {
-		t.Fatalf("imported enum match patterns are not qualified by their wrapper class:\n%s", got)
+	// file, qualified with the inner enum name: prefix from "shared.proto"
+	// -> "Shared", concatenated with the type path "shared.Color" -> "Color"
+	// => "SharedColor"; the enum inside that wrapper is "Color", giving
+	// "SharedColor.Color.<VALUE>".
+	if !strings.Contains(got, "SharedColor.Color.RED") {
+		t.Fatalf("imported enum match patterns are not qualified by their wrapper class and inner enum:\n%s", got)
 	}
 	if strings.Contains(got, "\tColor.RED") || strings.Contains(got, " Color.RED") {
 		t.Fatalf("unqualified Color.RED reference would not parse in GDScript:\n%s", got)

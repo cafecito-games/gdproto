@@ -59,13 +59,24 @@ type FileEntry struct {
 // names. It indexes every message and top-level enum across the provided
 // files. Nested enums are intentionally NOT indexed: generator code addresses
 // them as "<ParentClass>.<EnumName>" via the parent's lookup.
+//
+// For top-level enums, the resolved class is the wrapper class that holds
+// the enum declaration; the enum's inner name is also tracked so callers can
+// produce qualified references like "<Wrapper>.<EnumName>".
 type NameResolver struct {
 	classByFQN map[string]string
+	// enumInnerByFQN records the inner enum name for FQNs that point at a
+	// top-level enum wrapper class. Absence means the FQN refers to a
+	// message (or is unknown).
+	enumInnerByFQN map[string]string
 }
 
 // NewNameResolver builds a NameResolver from the given file entries.
 func NewNameResolver(entries []FileEntry) (*NameResolver, error) {
-	r := &NameResolver{classByFQN: map[string]string{}}
+	r := &NameResolver{
+		classByFQN:     map[string]string{},
+		enumInnerByFQN: map[string]string{},
+	}
 	for _, e := range entries {
 		prefix, err := ResolvePrefix(e.File, e.Filename)
 		if err != nil {
@@ -77,6 +88,7 @@ func NewNameResolver(entries []FileEntry) (*NameResolver, error) {
 		}
 		for _, en := range e.File.Enums {
 			r.classByFQN[scope+en.Name] = prefix + en.Name
+			r.enumInnerByFQN[scope+en.Name] = en.Name
 		}
 		for _, m := range e.File.Messages {
 			r.indexMessage(m, scope, prefix, "")
@@ -97,9 +109,31 @@ func (r *NameResolver) indexMessage(m *ast.Message, packageScope, prefix, parent
 }
 
 // Lookup returns the generated GDScript class name for a proto FQN. The FQN
-// may include a leading dot (as in descriptor source); it is stripped.
+// may include a leading dot (as in descriptor source); it is stripped. For
+// top-level enums, the returned name is the wrapper class; use LookupEnum to
+// also obtain the inner enum name for qualified references.
 func (r *NameResolver) Lookup(fqn string) (string, bool) {
 	fqn = strings.TrimPrefix(fqn, ".")
 	s, ok := r.classByFQN[fqn]
 	return s, ok
+}
+
+// LookupEnum returns the wrapper class and inner enum name for an FQN that
+// refers to a top-level enum. The third return is false when the FQN is
+// unknown or refers to a message.
+func (r *NameResolver) LookupEnum(fqn string) (wrapperClass, enumName string, ok bool) {
+	fqn = strings.TrimPrefix(fqn, ".")
+	inner, hasEnum := r.enumInnerByFQN[fqn]
+	if !hasEnum {
+		return "", "", false
+	}
+	return r.classByFQN[fqn], inner, true
+}
+
+// IsEnum reports whether the given FQN refers to a top-level enum wrapper
+// class indexed by this resolver. Nested enums are not indexed.
+func (r *NameResolver) IsEnum(fqn string) bool {
+	fqn = strings.TrimPrefix(fqn, ".")
+	_, ok := r.enumInnerByFQN[fqn]
+	return ok
 }

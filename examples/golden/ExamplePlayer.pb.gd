@@ -10,13 +10,13 @@ extends RefCounted
 var _username: String = ""
 var _level: int = 0
 var _experience: int = 0
-var _status: ExamplePlayerStatus = 0
+var _status: ExamplePlayerStatus.PlayerStatus = 0
 var _inventory: Array[String] = []
 var _position: ExamplePlayerPosition = null
 var _email: String = ""
 var _discord: String = ""
 var _stats: Dictionary[String, int] = {}
-var _status_effects: Dictionary[String, ExamplePlayerStatus] = {}
+var _status_effects: Dictionary[String, ExamplePlayerStatus.PlayerStatus] = {}
 
 # Oneof enums
 
@@ -49,10 +49,10 @@ func set_experience(value: int) -> void:
 func get_experience() -> int:
 	return _experience
 
-func set_status(value: ExamplePlayerStatus) -> void:
+func set_status(value: ExamplePlayerStatus.PlayerStatus) -> void:
 	_status = value
 
-func get_status() -> ExamplePlayerStatus:
+func get_status() -> ExamplePlayerStatus.PlayerStatus:
 	return _status
 
 func add_inventory(value: String) -> void:
@@ -98,10 +98,10 @@ func add_stats(key: String, value: int) -> void:
 func get_stats() -> Dictionary[String, int]:
 	return _stats
 
-func add_status_effects(key: String, value: ExamplePlayerStatus) -> void:
+func add_status_effects(key: String, value: ExamplePlayerStatus.PlayerStatus) -> void:
 	_status_effects[key] = value
 
-func get_status_effects() -> Dictionary[String, ExamplePlayerStatus]:
+func get_status_effects() -> Dictionary[String, ExamplePlayerStatus.PlayerStatus]:
 	return _status_effects
 
 # Oneof case getters
@@ -114,13 +114,13 @@ func get_contact_case() -> ContactOneOf:
 func _get_enum_name_status(value: int) -> String:
 	"""Get enum name for status value."""
 	match value:
-		ExamplePlayerStatus.OFFLINE:
+		ExamplePlayerStatus.PlayerStatus.OFFLINE:
 			return "OFFLINE"
-		ExamplePlayerStatus.ONLINE:
+		ExamplePlayerStatus.PlayerStatus.ONLINE:
 			return "ONLINE"
-		ExamplePlayerStatus.AWAY:
+		ExamplePlayerStatus.PlayerStatus.AWAY:
 			return "AWAY"
-		ExamplePlayerStatus.IN_GAME:
+		ExamplePlayerStatus.PlayerStatus.IN_GAME:
 			return "IN_GAME"
 		_:
 			return str(value)
@@ -129,13 +129,13 @@ func _parse_enum_value_status(name: String) -> int:
 	"""Parse enum value from name for status."""
 	match name:
 		"OFFLINE":
-			return ExamplePlayerStatus.OFFLINE
+			return ExamplePlayerStatus.PlayerStatus.OFFLINE
 		"ONLINE":
-			return ExamplePlayerStatus.ONLINE
+			return ExamplePlayerStatus.PlayerStatus.ONLINE
 		"AWAY":
-			return ExamplePlayerStatus.AWAY
+			return ExamplePlayerStatus.PlayerStatus.AWAY
 		"IN_GAME":
-			return ExamplePlayerStatus.IN_GAME
+			return ExamplePlayerStatus.PlayerStatus.IN_GAME
 		_:
 			return 0
 
