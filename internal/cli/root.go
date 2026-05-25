@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/cafecito-games/gdproto/internal/applog"
+	"github.com/cafecito-games/gdproto/internal/gdprotopb"
 	"github.com/cafecito-games/gdproto/internal/generator"
 	"github.com/cafecito-games/gdproto/internal/importer"
 	"github.com/cafecito-games/gdproto/internal/lexer"
@@ -32,6 +33,7 @@ func Execute(args []string, out, errOut io.Writer) int {
 func newRootCommand(out, errOut io.Writer) *cobra.Command {
 	var logLevelFlag string
 	var outputPath string
+	var printOptionsProto bool
 	var rootLogger *slog.Logger
 
 	cmd := &cobra.Command{
@@ -52,11 +54,12 @@ func newRootCommand(out, errOut io.Writer) *cobra.Command {
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if printOptionsProto {
+				_, err := cmd.OutOrStdout().Write(gdprotopb.Bytes())
+				return err
+			}
 			if len(args) == 0 {
 				return cmd.Help()
-			}
-			if outputPath == "" {
-				return fmt.Errorf("required flag(s) \"output\" not set")
 			}
 			return runCompile(cmd, args[0], outputPath)
 		},
@@ -73,7 +76,11 @@ func newRootCommand(out, errOut io.Writer) *cobra.Command {
 
 	cmd.Flags().StringVarP(
 		&outputPath, "output", "o", "",
-		"output .gd file path",
+		"output directory for generated .pb.gd files (default cwd)",
+	)
+	cmd.Flags().BoolVar(
+		&printOptionsProto, "print-options-proto", false,
+		"print the embedded gdproto/options.proto to stdout and exit",
 	)
 
 	return cmd
@@ -107,31 +114,48 @@ func runCompile(cmd *cobra.Command, inputPath, outputPath string) error {
 		return fmt.Errorf("validation failed")
 	}
 
-	cls, err := generator.Generate(file, sourceNameForCLI(inputPath))
+	files, err := generator.Generate(file, sourceNameForCLI(inputPath))
 	if err != nil {
 		return err
 	}
-	output := cls.ToGDScript(0)
-	if !strings.HasSuffix(output, "\n") {
-		output += "\n"
+
+	outDir := outputPath
+	if outDir == "" {
+		outDir = "."
+	}
+	if err := validateOutputDir(outDir); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(outDir, 0o750); err != nil {
+		return fmt.Errorf("create output dir: %w", err)
 	}
 
-	if dir := filepath.Dir(outputPath); dir != "" && dir != "." {
-		if err := os.MkdirAll(dir, 0o750); err != nil {
-			return fmt.Errorf("create output dir: %w", err)
+	written := 0
+	for _, gf := range files {
+		p := filepath.Join(outDir, gf.Filename)
+		if err := os.WriteFile(p, []byte(gf.Source()), 0o644); err != nil { //nolint:gosec
+			return fmt.Errorf("write %s: %w", p, err)
 		}
+		written++
 	}
-	if err := os.WriteFile(outputPath, []byte(output), 0o644); err != nil { //nolint:gosec // generated source written to user-specified path.
-		return fmt.Errorf("write output: %w", err)
+	siblingPath := filepath.Join(outDir, "proto_core_utils.gd")
+	if err := os.WriteFile(siblingPath, []byte(generator.GenerateProtoCoreUtilsRaw()), 0o644); err != nil { //nolint:gosec
+		return fmt.Errorf("write %s: %w", siblingPath, err)
 	}
+	written++
 
-	siblingPath := filepath.Join(filepath.Dir(outputPath), "proto_core_utils.gd")
-	if err := os.WriteFile(siblingPath, []byte(generator.GenerateProtoCoreUtilsRaw()), 0o644); err != nil { //nolint:gosec // sibling generated source written next to user-specified output.
-		return fmt.Errorf("write sibling: %w", err)
-	}
+	_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "wrote %d files to %s/\n", written, outDir)
+	return nil
+}
 
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "✓ Generated %s\n", outputPath)
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "✓ Generated %s\n", siblingPath)
+func validateOutputDir(p string) error {
+	if strings.HasSuffix(p, ".gd") {
+		return fmt.Errorf("-o must be a directory; per-message files are written inside it. Got: %s", p)
+	}
+	info, err := os.Stat(p)
+	if err == nil && !info.IsDir() {
+		return fmt.Errorf("-o must be a directory; per-message files are written inside it. Got: %s", p)
+	}
 	return nil
 }
 
