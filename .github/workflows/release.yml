@@ -130,7 +130,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         env:
           NEW_TAG: ${{ steps.release-version.outputs.tag }}
-	  # Token must have PR read/write permissions, contents read/write permissions
+          # Token must have PR read/write permissions, contents read/write permissions
           GH_TOKEN: ${{ secrets.RELEASE_PR_TOKEN }}
         run: |
           set -euo pipefail
