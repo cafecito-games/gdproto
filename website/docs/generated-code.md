@@ -139,7 +139,7 @@ There are three supported ways to install the options proto:
 
 `gdproto.class_prefix` uses field number `51000`. Protobuf reserves the
 range `50000`-`99999` for internal third-party extensions; see
-<https://protobuf.dev/programming-guides/proto3/#customoptions>.
+[custom options](https://protobuf.dev/programming-guides/proto3/#customoptions).
 
 ### Cross-File References Honor Imported Prefixes
 
