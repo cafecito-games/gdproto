@@ -62,11 +62,11 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 
 	while offset < data.size():
 		# Read field tag
-		var tag_result := ProtoCoreUtils.decode_varint(data, offset)
-		if tag_result.size == -1:
+		var tag_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+		if tag_result["size"] == -1:
 			return ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND
-		var tag: int = tag_result.value
-		offset += tag_result.size
+		var tag: int = tag_result["value"]
+		offset += tag_result["size"]
 
 		var field_number: int = ProtoCoreUtils.get_field_number(tag)
 		var wire_type: int = ProtoCoreUtils.get_wire_type(tag)
@@ -74,34 +74,34 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 		match field_number:
 			1:
 				# Field players
-				var length_result := ProtoCoreUtils.decode_varint(data, offset)
-				if length_result.size == -1:
+				var length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+				if length_result["size"] == -1:
 					return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
-				offset += length_result.size
-				var length: int = length_result.value
+				offset += length_result["size"]
+				var length: int = length_result["value"]
 				if offset + length > data.size():
 					return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_MISMATCH
 				var msg_data: PackedByteArray = data.slice(offset, offset + length)
-				var msg_item := ExamplePlayer.new()
-				var msg_result := msg_item.from_bytes(msg_data)
+				var msg_item: ExamplePlayer = ExamplePlayer.new()
+				var msg_result: ProtoCoreUtils.ProtobufError = msg_item.from_bytes(msg_data)
 				if msg_result != ProtoCoreUtils.ProtobufError.NO_ERRORS:
 					return msg_result
 				_players.append(msg_item)
 				offset += length
 			2:
 				# Field timestamp
-				var result := ProtoCoreUtils.decode_varint(data, offset)
-				if result.size == -1:
+				var result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+				if result["size"] == -1:
 					return ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND
-				_timestamp = result.value
-				offset += result.size
+				_timestamp = result["value"]
+				offset += result["size"]
 			3:
 				# Field map_name
-				var length_result := ProtoCoreUtils.decode_varint(data, offset)
-				if length_result.size == -1:
+				var length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+				if length_result["size"] == -1:
 					return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
-				offset += length_result.size
-				var length: int = length_result.value
+				offset += length_result["size"]
+				var length: int = length_result["value"]
 				if offset + length > data.size():
 					return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_MISMATCH
 				_map_name = ProtoCoreUtils.decode_string(data, offset, length)
@@ -110,17 +110,17 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 				# Skip unknown field
 				match wire_type:
 					0:  # Varint
-						var skip_result := ProtoCoreUtils.decode_varint(data, offset)
-						if skip_result.size == -1:
+						var skip_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+						if skip_result["size"] == -1:
 							return ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND
-						offset += skip_result.size
+						offset += skip_result["size"]
 					1:  # Fixed64
 						offset += 8
 					2:  # Length-delimited
-						var skip_length_result := ProtoCoreUtils.decode_varint(data, offset)
-						if skip_length_result.size == -1:
+						var skip_length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+						if skip_length_result["size"] == -1:
 							return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
-						offset += skip_length_result.size + skip_length_result.value
+						offset += skip_length_result["size"] + skip_length_result["value"]
 					5:  # Fixed32
 						offset += 4
 					_:
@@ -160,7 +160,7 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 			break
 
 		# Parse field name
-		var name_result := ProtoCoreUtils.parse_identifier(text, pos)
+		var name_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)
 		if "error" in name_result:
 			push_error(name_result["error"])
 			return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
@@ -184,8 +184,8 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
 					# Extract message body
-					var msg_start := pos
-					var depth := 1
+					var msg_start: int = pos
+					var depth: int = 1
 					while pos < text.length() and depth > 0:
 						if text[pos] == "{":
 							depth = depth + 1
@@ -195,11 +195,11 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 								break
 						pos = pos + 1
 
-					var msg_text := text.substr(msg_start, pos - msg_start)
+					var msg_text: String = text.substr(msg_start, pos - msg_start)
 					pos = pos + 1  # Skip closing brace
 
-					var msg_instance := ExamplePlayer.new()
-					var parse_result := msg_instance.from_text(msg_text)
+					var msg_instance: ExamplePlayer = ExamplePlayer.new()
+					var parse_result: ProtoCoreUtils.ProtobufError = msg_instance.from_text(msg_text)
 					if parse_result != ProtoCoreUtils.ProtobufError.NO_ERRORS:
 						return parse_result
 					_players.append(msg_instance)
@@ -209,7 +209,7 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = pos + 1
 				pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
-				var num_result := ProtoCoreUtils.parse_number(text, pos)
+				var num_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_number(text, pos)
 				if "error" in num_result:
 					return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
 				_timestamp = int(num_result["value"])
@@ -220,7 +220,7 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = pos + 1
 				pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
-				var str_result := ProtoCoreUtils.parse_string_literal(text, pos)
+				var str_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_string_literal(text, pos)
 				if "error" in str_result:
 					return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
 				_map_name = str_result["value"]
@@ -235,7 +235,7 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = ProtoCoreUtils.skip_whitespace(text, pos)
 					if pos < text.length() and text[pos] == "{":
 						# Skip message body
-						var depth := 1
+						var depth: int = 1
 						pos = pos + 1
 						while pos < text.length() and depth > 0:
 							if text[pos] == "{":

@@ -56,11 +56,11 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 
 	while offset < data.size():
 		# Read field tag
-		var tag_result := ProtoCoreUtils.decode_varint(data, offset)
-		if tag_result.size == -1:
+		var tag_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+		if tag_result["size"] == -1:
 			return ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND
-		var tag: int = tag_result.value
-		offset += tag_result.size
+		var tag: int = tag_result["value"]
+		offset += tag_result["size"]
 
 		var field_number: int = ProtoCoreUtils.get_field_number(tag)
 		var wire_type: int = ProtoCoreUtils.get_wire_type(tag)
@@ -88,17 +88,17 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 				# Skip unknown field
 				match wire_type:
 					0:  # Varint
-						var skip_result := ProtoCoreUtils.decode_varint(data, offset)
-						if skip_result.size == -1:
+						var skip_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+						if skip_result["size"] == -1:
 							return ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND
-						offset += skip_result.size
+						offset += skip_result["size"]
 					1:  # Fixed64
 						offset += 8
 					2:  # Length-delimited
-						var skip_length_result := ProtoCoreUtils.decode_varint(data, offset)
-						if skip_length_result.size == -1:
+						var skip_length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+						if skip_length_result["size"] == -1:
 							return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
-						offset += skip_length_result.size + skip_length_result.value
+						offset += skip_length_result["size"] + skip_length_result["value"]
 					5:  # Fixed32
 						offset += 4
 					_:
@@ -151,7 +151,7 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 			break
 
 		# Parse field name
-		var name_result := ProtoCoreUtils.parse_identifier(text, pos)
+		var name_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)
 		if "error" in name_result:
 			push_error(name_result["error"])
 			return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
@@ -169,10 +169,10 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = pos + 1
 				pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
-				var float_result: Dictionary
+				var float_result: Dictionary[String, Variant]
 				# Check for special values or identifiers
 				if pos < text.length() and text[pos] in ["i", "n", "-", "+"] or not text[pos].is_valid_int():
-					var id_result := ProtoCoreUtils.parse_identifier(text, pos)
+					var id_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)
 					if "value" in id_result:
 						match id_result["value"]:
 							"inf":
@@ -195,10 +195,10 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = pos + 1
 				pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
-				var float_result: Dictionary
+				var float_result: Dictionary[String, Variant]
 				# Check for special values or identifiers
 				if pos < text.length() and text[pos] in ["i", "n", "-", "+"] or not text[pos].is_valid_int():
-					var id_result := ProtoCoreUtils.parse_identifier(text, pos)
+					var id_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)
 					if "value" in id_result:
 						match id_result["value"]:
 							"inf":
@@ -221,10 +221,10 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = pos + 1
 				pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
-				var float_result: Dictionary
+				var float_result: Dictionary[String, Variant]
 				# Check for special values or identifiers
 				if pos < text.length() and text[pos] in ["i", "n", "-", "+"] or not text[pos].is_valid_int():
-					var id_result := ProtoCoreUtils.parse_identifier(text, pos)
+					var id_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)
 					if "value" in id_result:
 						match id_result["value"]:
 							"inf":
@@ -251,7 +251,7 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = ProtoCoreUtils.skip_whitespace(text, pos)
 					if pos < text.length() and text[pos] == "{":
 						# Skip message body
-						var depth := 1
+						var depth: int = 1
 						pos = pos + 1
 						while pos < text.length() and depth > 0:
 							if text[pos] == "{":

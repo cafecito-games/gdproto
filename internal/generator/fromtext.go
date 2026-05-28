@@ -27,7 +27,7 @@ func (g *generator) generateFromText(m *ast.Message) gdast.Function {
 	b.WriteString("\t\tbreak\n")
 	b.WriteString("\n")
 	b.WriteString("\t# Parse field name\n")
-	b.WriteString("\tvar name_result := ProtoCoreUtils.parse_identifier(text, pos)\n")
+	b.WriteString("\tvar name_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)\n")
 	b.WriteString("\tif \"error\" in name_result:\n")
 	b.WriteString("\t\tpush_error(name_result[\"error\"])\n")
 	b.WriteString("\t\treturn ProtoCoreUtils.ProtobufError.UNDEFINED_STATE\n")
@@ -50,7 +50,7 @@ func (g *generator) generateFromText(m *ast.Message) gdast.Function {
 		}
 	}
 	for _, mf := range m.Maps {
-		b.WriteString(fromTextMapCase(mf))
+		b.WriteString(g.fromTextMapCase(mf))
 	}
 
 	// Default unknown-field case.
@@ -64,7 +64,7 @@ func (g *generator) generateFromText(m *ast.Message) gdast.Function {
 	b.WriteString("\t\t\t\tpos = ProtoCoreUtils.skip_whitespace(text, pos)\n")
 	b.WriteString("\t\t\t\tif pos < text.length() and text[pos] == \"{\":\n")
 	b.WriteString("\t\t\t\t\t# Skip message body\n")
-	b.WriteString("\t\t\t\t\tvar depth := 1\n")
+	b.WriteString("\t\t\t\t\tvar depth: int = 1\n")
 	b.WriteString("\t\t\t\t\tpos = pos + 1\n")
 	b.WriteString("\t\t\t\t\twhile pos < text.length() and depth > 0:\n")
 	b.WriteString("\t\t\t\t\t\tif text[pos] == \"{\":\n")
@@ -146,7 +146,7 @@ func oneofAssignment(oneofGroup, fieldName string) string {
 
 func fromTextStringBody(f *ast.Field, oneofGroup string, repeated bool) string {
 	var b strings.Builder
-	b.WriteString("\t\t\tvar str_result := ProtoCoreUtils.parse_string_literal(text, pos)\n")
+	b.WriteString("\t\t\tvar str_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_string_literal(text, pos)\n")
 	b.WriteString("\t\t\tif \"error\" in str_result:\n")
 	b.WriteString("\t\t\t\treturn ProtoCoreUtils.ProtobufError.UNDEFINED_STATE\n")
 	if repeated {
@@ -167,7 +167,7 @@ func fromTextStringBody(f *ast.Field, oneofGroup string, repeated bool) string {
 // a scalar number assignment.
 func fromTextBytesBody(f *ast.Field, oneofGroup string) string {
 	var b strings.Builder
-	b.WriteString("\t\t\tvar str_result := ProtoCoreUtils.parse_string_literal(text, pos)\n")
+	b.WriteString("\t\t\tvar str_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_string_literal(text, pos)\n")
 	b.WriteString("\t\t\tif \"error\" in str_result:\n")
 	b.WriteString("\t\t\t\treturn ProtoCoreUtils.ProtobufError.UNDEFINED_STATE\n")
 	b.WriteString("\t\t\t_" + f.Name + " = (str_result[\"value\"] as String).to_utf8_buffer()\n")
@@ -178,7 +178,7 @@ func fromTextBytesBody(f *ast.Field, oneofGroup string) string {
 
 func fromTextScalarBody(f *ast.Field, oneofGroup string, repeated bool) string {
 	var b strings.Builder
-	b.WriteString("\t\t\tvar num_result := ProtoCoreUtils.parse_number(text, pos)\n")
+	b.WriteString("\t\t\tvar num_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_number(text, pos)\n")
 	b.WriteString("\t\t\tif \"error\" in num_result:\n")
 	b.WriteString("\t\t\t\treturn ProtoCoreUtils.ProtobufError.UNDEFINED_STATE\n")
 	if repeated {
@@ -193,10 +193,10 @@ func fromTextScalarBody(f *ast.Field, oneofGroup string, repeated bool) string {
 
 func fromTextFloatBody(f *ast.Field, oneofGroup string) string {
 	var b strings.Builder
-	b.WriteString("\t\t\tvar float_result: Dictionary\n")
+	b.WriteString("\t\t\tvar float_result: Dictionary[String, Variant]\n")
 	b.WriteString("\t\t\t# Check for special values or identifiers\n")
 	b.WriteString("\t\t\tif pos < text.length() and text[pos] in [\"i\", \"n\", \"-\", \"+\"] or not text[pos].is_valid_int():\n")
-	b.WriteString("\t\t\t\tvar id_result := ProtoCoreUtils.parse_identifier(text, pos)\n")
+	b.WriteString("\t\t\t\tvar id_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)\n")
 	b.WriteString("\t\t\t\tif \"value\" in id_result:\n")
 	b.WriteString("\t\t\t\t\tmatch id_result[\"value\"]:\n")
 	b.WriteString("\t\t\t\t\t\t\"inf\":\n")
@@ -219,7 +219,7 @@ func fromTextFloatBody(f *ast.Field, oneofGroup string) string {
 
 func fromTextBoolBody(f *ast.Field, oneofGroup string) string {
 	var b strings.Builder
-	b.WriteString("\t\t\tvar id_result := ProtoCoreUtils.parse_identifier(text, pos)\n")
+	b.WriteString("\t\t\tvar id_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)\n")
 	b.WriteString("\t\t\tif \"error\" in id_result:\n")
 	b.WriteString("\t\t\t\treturn ProtoCoreUtils.ProtobufError.UNDEFINED_STATE\n")
 	b.WriteString("\t\t\t_" + f.Name + " = id_result[\"value\"] == \"true\"\n")
@@ -231,7 +231,7 @@ func fromTextBoolBody(f *ast.Field, oneofGroup string) string {
 func fromTextEnumBody(f *ast.Field, oneofGroup, enumType string) string {
 	var b strings.Builder
 	b.WriteString("\t\t\t# Parse enum value (name or number)\n")
-	b.WriteString("\t\t\tvar enum_result: Dictionary\n")
+	b.WriteString("\t\t\tvar enum_result: Dictionary[String, Variant]\n")
 	b.WriteString("\t\t\tif pos < text.length() and not text[pos].is_valid_int() and text[pos] != \"-\":\n")
 	b.WriteString("\t\t\t\t# Parse as identifier (enum name)\n")
 	b.WriteString("\t\t\t\tenum_result = ProtoCoreUtils.parse_identifier(text, pos)\n")
@@ -268,8 +268,8 @@ func (g *generator) fromTextMessageBody(f *ast.Field, oneofGroup string) string 
 	b.WriteString("\t\t\t\tpos = ProtoCoreUtils.skip_whitespace(text, pos)\n")
 	b.WriteString("\n")
 	b.WriteString("\t\t\t\t# Extract message body\n")
-	b.WriteString("\t\t\t\tvar msg_start := pos\n")
-	b.WriteString("\t\t\t\tvar depth := 1\n")
+	b.WriteString("\t\t\t\tvar msg_start: int = pos\n")
+	b.WriteString("\t\t\t\tvar depth: int = 1\n")
 	b.WriteString("\t\t\t\twhile pos < text.length() and depth > 0:\n")
 	b.WriteString("\t\t\t\t\tif text[pos] == \"{\":\n")
 	b.WriteString("\t\t\t\t\t\tdepth = depth + 1\n")
@@ -279,11 +279,11 @@ func (g *generator) fromTextMessageBody(f *ast.Field, oneofGroup string) string 
 	b.WriteString("\t\t\t\t\t\t\tbreak\n")
 	b.WriteString("\t\t\t\t\tpos = pos + 1\n")
 	b.WriteString("\n")
-	b.WriteString("\t\t\t\tvar msg_text := text.substr(msg_start, pos - msg_start)\n")
+	b.WriteString("\t\t\t\tvar msg_text: String = text.substr(msg_start, pos - msg_start)\n")
 	b.WriteString("\t\t\t\tpos = pos + 1  # Skip closing brace\n")
 	b.WriteString("\n")
 	b.WriteString("\t\t\t\t_" + f.Name + " = " + messageType + ".new()\n")
-	b.WriteString("\t\t\t\tvar parse_result := _" + f.Name + ".from_text(msg_text)\n")
+	b.WriteString("\t\t\t\tvar parse_result: ProtoCoreUtils.ProtobufError = _" + f.Name + ".from_text(msg_text)\n")
 	b.WriteString("\t\t\t\tif parse_result != ProtoCoreUtils.ProtobufError.NO_ERRORS:\n")
 	b.WriteString("\t\t\t\t\treturn parse_result\n")
 	b.WriteString(oneofAssignmentExtraIndent(oneofGroup, f.Name, "\t\t\t\t"))
@@ -299,8 +299,8 @@ func (g *generator) fromTextRepeatedMessageBody(f *ast.Field) string {
 	b.WriteString("\t\t\t\tpos = ProtoCoreUtils.skip_whitespace(text, pos)\n")
 	b.WriteString("\n")
 	b.WriteString("\t\t\t\t# Extract message body\n")
-	b.WriteString("\t\t\t\tvar msg_start := pos\n")
-	b.WriteString("\t\t\t\tvar depth := 1\n")
+	b.WriteString("\t\t\t\tvar msg_start: int = pos\n")
+	b.WriteString("\t\t\t\tvar depth: int = 1\n")
 	b.WriteString("\t\t\t\twhile pos < text.length() and depth > 0:\n")
 	b.WriteString("\t\t\t\t\tif text[pos] == \"{\":\n")
 	b.WriteString("\t\t\t\t\t\tdepth = depth + 1\n")
@@ -310,18 +310,18 @@ func (g *generator) fromTextRepeatedMessageBody(f *ast.Field) string {
 	b.WriteString("\t\t\t\t\t\t\tbreak\n")
 	b.WriteString("\t\t\t\t\tpos = pos + 1\n")
 	b.WriteString("\n")
-	b.WriteString("\t\t\t\tvar msg_text := text.substr(msg_start, pos - msg_start)\n")
+	b.WriteString("\t\t\t\tvar msg_text: String = text.substr(msg_start, pos - msg_start)\n")
 	b.WriteString("\t\t\t\tpos = pos + 1  # Skip closing brace\n")
 	b.WriteString("\n")
-	b.WriteString("\t\t\t\tvar msg_instance := " + messageType + ".new()\n")
-	b.WriteString("\t\t\t\tvar parse_result := msg_instance.from_text(msg_text)\n")
+	b.WriteString("\t\t\t\tvar msg_instance: " + messageType + " = " + messageType + ".new()\n")
+	b.WriteString("\t\t\t\tvar parse_result: ProtoCoreUtils.ProtobufError = msg_instance.from_text(msg_text)\n")
 	b.WriteString("\t\t\t\tif parse_result != ProtoCoreUtils.ProtobufError.NO_ERRORS:\n")
 	b.WriteString("\t\t\t\t\treturn parse_result\n")
 	b.WriteString("\t\t\t\t_" + f.Name + ".append(msg_instance)\n")
 	return b.String()
 }
 
-func fromTextMapCase(mf *ast.MapField) string {
+func (g *generator) fromTextMapCase(mf *ast.MapField) string {
 	var b strings.Builder
 	b.WriteString("\t\t\"" + mf.Name + "\":\n")
 	b.WriteString("\t\t\t# Parse map entry\n")
@@ -332,12 +332,12 @@ func fromTextMapCase(mf *ast.MapField) string {
 	b.WriteString("\t\t\t\tpos += 1\n")
 	b.WriteString("\t\t\t\tpos = ProtoCoreUtils.skip_whitespace(text, pos)\n")
 	b.WriteString("\n")
-	b.WriteString("\t\t\t\tvar map_key = null\n")
-	b.WriteString("\t\t\t\tvar map_value = null\n")
+	b.WriteString("\t\t\t\tvar map_key: " + gdscriptScalarType(mf.KeyType) + " = " + mapDefault(mf.KeyType, false) + "\n")
+	b.WriteString("\t\t\t\tvar map_value: " + g.renderedMapValueType(mf) + " = " + g.mapTextDefault(mf) + "\n")
 	b.WriteString("\n")
 	b.WriteString("\t\t\t\t# Parse key and value\n")
 	b.WriteString("\t\t\t\twhile pos < text.length() and text[pos] != \"}\":\n")
-	b.WriteString("\t\t\t\t\tvar entry_name_result := ProtoCoreUtils.parse_identifier(text, pos)\n")
+	b.WriteString("\t\t\t\t\tvar entry_name_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)\n")
 	b.WriteString("\t\t\t\t\tif \"error\" in entry_name_result:\n")
 	b.WriteString("\t\t\t\t\t\tbreak\n")
 	b.WriteString("\t\t\t\t\tvar entry_field: String = entry_name_result[\"value\"]\n")
@@ -348,9 +348,9 @@ func fromTextMapCase(mf *ast.MapField) string {
 	b.WriteString("\t\t\t\t\tpos = ProtoCoreUtils.skip_whitespace(text, pos)\n")
 	b.WriteString("\n")
 	b.WriteString("\t\t\t\t\tif entry_field == \"key\":\n")
-	b.WriteString(fromTextMapEntryParser(mf.KeyType, "map_key", "\t\t\t\t\t\t"))
+	b.WriteString(fromTextMapEntryParser(mf.KeyType, "map_key", "\t\t\t\t\t\t", false, "", ""))
 	b.WriteString("\t\t\t\t\telif entry_field == \"value\":\n")
-	b.WriteString(fromTextMapEntryParser(mf.ValueType, "map_value", "\t\t\t\t\t\t"))
+	b.WriteString(fromTextMapEntryParser(mf.ValueType, "map_value", "\t\t\t\t\t\t", mf.ValueIsEnum, g.renderedMapValueType(mf), g.renderedMapValueType(mf)))
 	b.WriteString("\n")
 	b.WriteString("\t\t\t\t\tpos = ProtoCoreUtils.skip_whitespace(text, pos)\n")
 	b.WriteString("\n")
@@ -363,26 +363,62 @@ func fromTextMapCase(mf *ast.MapField) string {
 	return b.String()
 }
 
-func fromTextMapEntryParser(protoType, target, indent string) string {
+func (g *generator) mapTextDefault(mf *ast.MapField) string {
+	if mf.ValueIsEnum {
+		return "0 as " + g.renderedMapValueType(mf)
+	}
+	return mapDefault(mf.ValueType, false)
+}
+
+func fromTextMapEntryParser(protoType, target, indent string, isEnum bool, enumType, renderedType string) string {
 	var b strings.Builder
+	if isEnum {
+		b.WriteString(indent + "var num_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_number(text, pos)\n")
+		b.WriteString(indent + "if \"value\" in num_result:\n")
+		b.WriteString(indent + "\t" + target + " = int(num_result[\"value\"]) as " + enumType + "\n")
+		b.WriteString(indent + "\tpos = num_result[\"pos\"]\n")
+		return b.String()
+	}
+	if _, ok := scalarTypeMap[protoType]; !ok {
+		b.WriteString(indent + "if pos < text.length() and text[pos] == \"{\":\n")
+		b.WriteString(indent + "\tpos = pos + 1\n")
+		b.WriteString(indent + "\tpos = ProtoCoreUtils.skip_whitespace(text, pos)\n")
+		b.WriteString(indent + "\tvar msg_start: int = pos\n")
+		b.WriteString(indent + "\tvar depth: int = 1\n")
+		b.WriteString(indent + "\twhile pos < text.length() and depth > 0:\n")
+		b.WriteString(indent + "\t\tif text[pos] == \"{\":\n")
+		b.WriteString(indent + "\t\t\tdepth = depth + 1\n")
+		b.WriteString(indent + "\t\telif text[pos] == \"}\":\n")
+		b.WriteString(indent + "\t\t\tdepth = depth - 1\n")
+		b.WriteString(indent + "\t\t\tif depth == 0:\n")
+		b.WriteString(indent + "\t\t\t\tbreak\n")
+		b.WriteString(indent + "\t\tpos = pos + 1\n")
+		b.WriteString(indent + "\tvar msg_text: String = text.substr(msg_start, pos - msg_start)\n")
+		b.WriteString(indent + "\tpos = pos + 1\n")
+		b.WriteString(indent + "\t" + target + " = " + renderedType + ".new()\n")
+		b.WriteString(indent + "\tvar parse_result: ProtoCoreUtils.ProtobufError = " + target + ".from_text(msg_text)\n")
+		b.WriteString(indent + "\tif parse_result != ProtoCoreUtils.ProtobufError.NO_ERRORS:\n")
+		b.WriteString(indent + "\t\treturn ProtoCoreUtils.ProtobufError.UNDEFINED_STATE\n")
+		return b.String()
+	}
 	switch protoType {
 	case "string", "bytes":
-		b.WriteString(indent + "var str_result := ProtoCoreUtils.parse_string_literal(text, pos)\n")
+		b.WriteString(indent + "var str_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_string_literal(text, pos)\n")
 		b.WriteString(indent + "if \"value\" in str_result:\n")
 		b.WriteString(indent + "\t" + target + " = str_result[\"value\"]\n")
 		b.WriteString(indent + "\tpos = str_result[\"pos\"]\n")
 	case "float", "double":
-		b.WriteString(indent + "var num_result := ProtoCoreUtils.parse_number(text, pos)\n")
+		b.WriteString(indent + "var num_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_number(text, pos)\n")
 		b.WriteString(indent + "if \"value\" in num_result:\n")
 		b.WriteString(indent + "\t" + target + " = float(num_result[\"value\"])\n")
 		b.WriteString(indent + "\tpos = num_result[\"pos\"]\n")
 	case "bool":
-		b.WriteString(indent + "var id_result := ProtoCoreUtils.parse_identifier(text, pos)\n")
+		b.WriteString(indent + "var id_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)\n")
 		b.WriteString(indent + "if \"value\" in id_result:\n")
 		b.WriteString(indent + "\t" + target + " = id_result[\"value\"] == \"true\"\n")
 		b.WriteString(indent + "\tpos = id_result[\"pos\"]\n")
 	default:
-		b.WriteString(indent + "var num_result := ProtoCoreUtils.parse_number(text, pos)\n")
+		b.WriteString(indent + "var num_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_number(text, pos)\n")
 		b.WriteString(indent + "if \"value\" in num_result:\n")
 		b.WriteString(indent + "\t" + target + " = int(num_result[\"value\"])\n")
 		b.WriteString(indent + "\tpos = num_result[\"pos\"]\n")
