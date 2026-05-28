@@ -17,7 +17,10 @@ func (g *generator) generateToText(m *ast.Message) gdast.Function {
 	var b strings.Builder
 	b.WriteString(`"""Serialize message to protobuf text format."""` + "\n")
 	b.WriteString("var result: String = \"\"\n")
-	b.WriteString("var indent: String = \"\\t\".repeat(indent_level)\n")
+	hasBody := len(m.Fields) > 0 || len(m.Oneofs) > 0 || len(m.Maps) > 0
+	if hasBody {
+		b.WriteString("var indent: String = \"\\t\".repeat(indent_level)\n")
+	}
 
 	for _, f := range m.Fields {
 		b.WriteString("\n")
