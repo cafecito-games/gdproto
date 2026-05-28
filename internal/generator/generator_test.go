@@ -222,7 +222,7 @@ func TestGenerateAccessorBodies(t *testing.T) {
 	for _, want := range []string{
 		"func set_username(value: String) -> void:\n\t_username = value",
 		"func get_username() -> String:\n\treturn _username",
-		"var _status: ExamplePlayerStatus.PlayerStatus = 0",
+		"var _status: ExamplePlayerStatus.PlayerStatus = 0 as ExamplePlayerStatus.PlayerStatus",
 		"func set_status(value: ExamplePlayerStatus.PlayerStatus) -> void:\n\t_status = value",
 		"func get_status() -> ExamplePlayerStatus.PlayerStatus:\n\treturn _status",
 		"func new_position() -> ExamplePlayerPosition:\n\t_position = ExamplePlayerPosition.new()\n\treturn _position",

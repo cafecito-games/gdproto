@@ -167,7 +167,7 @@ func (g *generator) fieldDefault(f *ast.Field) string {
 		return def
 	}
 	if f.IsEnum {
-		return "0"
+		return "0 as " + g.renderedFieldType(f)
 	}
 	return "null"
 }

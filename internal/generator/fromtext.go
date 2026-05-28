@@ -116,7 +116,7 @@ func (g *generator) fromTextFieldCase(f *ast.Field, oneofGroup string) string {
 	case f.FieldType == "bool":
 		b.WriteString(fromTextBoolBody(f, oneofGroup))
 	case isEnumType(f):
-		b.WriteString(fromTextEnumBody(f, oneofGroup))
+		b.WriteString(fromTextEnumBody(f, oneofGroup, g.renderedFieldType(f)))
 	case isMessageType(f):
 		b.WriteString(g.fromTextMessageBody(f, oneofGroup))
 	default:
@@ -228,7 +228,7 @@ func fromTextBoolBody(f *ast.Field, oneofGroup string) string {
 	return b.String()
 }
 
-func fromTextEnumBody(f *ast.Field, oneofGroup string) string {
+func fromTextEnumBody(f *ast.Field, oneofGroup, enumType string) string {
 	var b strings.Builder
 	b.WriteString("\t\t\t# Parse enum value (name or number)\n")
 	b.WriteString("\t\t\tvar enum_result: Dictionary\n")
@@ -238,7 +238,7 @@ func fromTextEnumBody(f *ast.Field, oneofGroup string) string {
 	b.WriteString("\t\t\t\tif \"error\" not in enum_result:\n")
 	b.WriteString("\t\t\t\t\tvar enum_name: String = enum_result[\"value\"]\n")
 	b.WriteString("\t\t\t\t\tvar enum_value: int = _parse_enum_value_" + f.Name + "(enum_name)\n")
-	b.WriteString("\t\t\t\t\t_" + f.Name + " = enum_value\n")
+	b.WriteString("\t\t\t\t\t_" + f.Name + " = enum_value as " + enumType + "\n")
 	b.WriteString(oneofAssignmentExtraIndent(oneofGroup, f.Name, "\t\t\t\t\t"))
 	b.WriteString("\t\t\t\t\tpos = enum_result[\"pos\"]\n")
 	b.WriteString("\t\t\telse:\n")
@@ -246,7 +246,7 @@ func fromTextEnumBody(f *ast.Field, oneofGroup string) string {
 	b.WriteString("\t\t\t\tenum_result = ProtoCoreUtils.parse_number(text, pos)\n")
 	b.WriteString("\t\t\t\tif \"error\" in enum_result:\n")
 	b.WriteString("\t\t\t\t\treturn ProtoCoreUtils.ProtobufError.UNDEFINED_STATE\n")
-	b.WriteString("\t\t\t\t_" + f.Name + " = int(enum_result[\"value\"])\n")
+	b.WriteString("\t\t\t\t_" + f.Name + " = int(enum_result[\"value\"]) as " + enumType + "\n")
 	b.WriteString(oneofAssignmentExtraIndent(oneofGroup, f.Name, "\t\t\t\t"))
 	b.WriteString("\t\t\t\tpos = enum_result[\"pos\"]\n")
 	return b.String()

@@ -201,7 +201,7 @@ func (g *generator) fieldDeserialization(f *ast.Field) []gdast.Statement {
 func (g *generator) singleFieldDeserialization(f *ast.Field) []gdast.Statement {
 	fieldVar := "_" + f.Name
 	if g.isEnumField(f) {
-		return varintAssign(fieldVar, false)
+		return enumVarintAssign(fieldVar, g.renderedFieldType(f))
 	}
 	switch f.FieldType {
 	case "int32", "int64", "uint32", "uint64", "bool":
@@ -252,11 +252,30 @@ func (g *generator) repeatedFieldDeserialization(f *ast.Field) []gdast.Statement
 			// Repeated enum is wire-compatible with repeated int32, so it
 			// shares the packed-or-unpacked varint path. Without this, the
 			// generator falls through to the message branch and emits
-			// EnumName.new() / from_bytes(), which Godot rejects.
-			return repeatedNumericPackedOrUnpacked(fieldVar, "int32")
+			// EnumName.new() / from_bytes(), which Godot rejects. The append
+			// is wrapped with `as <EnumType>` so Array[EnumType] is satisfied
+			// without an INT_AS_ENUM_WITHOUT_CAST warning.
+			return repeatedEnumPackedOrUnpacked(fieldVar, g.renderedFieldType(f))
 		}
 		typeName := g.renderedFieldType(f)
 		return repeatedMessageAppend(fieldVar, typeName)
+	}
+}
+
+// enumVarintAssign decodes a varint into fieldVar, casting the integer value
+// to the field's enum type so Godot's INT_AS_ENUM_WITHOUT_CAST warning stays
+// silent.
+func enumVarintAssign(fieldVar, enumType string) []gdast.Statement {
+	return []gdast.Statement{
+		inferredVar("result", "ProtoCoreUtils.decode_varint(data, offset)"),
+		gdast.IfStatement{
+			Condition: gdast.Eq(gdast.RawExpression{Code: "result.size"}, gdast.Lit(-1)),
+			Body: []gdast.Statement{
+				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND"}),
+			},
+		},
+		rawf("%s = result.value as %s", fieldVar, enumType),
+		rawf("offset += result.size"),
 	}
 }
 
@@ -428,6 +447,61 @@ func repeatedMessageAppend(fieldVar, typeName string) []gdast.Statement {
 		rawf("offset += length"),
 	)
 	return stmts
+}
+
+// repeatedEnumPackedOrUnpacked decodes a repeated enum field using the same
+// packed-or-unpacked varint shape as repeated int32, but casts each appended
+// value to the field's enum type so Array[EnumType] does not trigger the
+// INT_AS_ENUM_WITHOUT_CAST warning.
+func repeatedEnumPackedOrUnpacked(fieldVar, enumType string) []gdast.Statement {
+	element := enumVarintAppend(fieldVar, enumType)
+	packedBody := []gdast.Statement{
+		inferredVar("length_result", "ProtoCoreUtils.decode_varint(data, offset)"),
+		gdast.IfStatement{
+			Condition: gdast.Eq(gdast.RawExpression{Code: "length_result.size"}, gdast.Lit(-1)),
+			Body: []gdast.Statement{
+				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND"}),
+			},
+		},
+		rawf("offset += length_result.size"),
+		gdast.VarDeclaration{
+			Name:         "length",
+			TypeHint:     "int",
+			InitialValue: gdast.RawExpression{Code: "length_result.value"},
+		},
+		gdast.VarDeclaration{
+			Name:         "end_offset",
+			TypeHint:     "int",
+			InitialValue: gdast.RawExpression{Code: "offset + length"},
+		},
+		gdast.WhileStatement{
+			Condition: gdast.Lt(gdast.V("offset"), gdast.V("end_offset")),
+			Body:      element,
+		},
+	}
+	return []gdast.Statement{
+		gdast.IfStatement{
+			Condition: gdast.Eq(gdast.V("wire_type"), gdast.Lit(2)),
+			Body:      packedBody,
+			ElseBody:  element,
+		},
+	}
+}
+
+// enumVarintAppend decodes a single varint and appends it to fieldVar cast to
+// the enum type.
+func enumVarintAppend(fieldVar, enumType string) []gdast.Statement {
+	return []gdast.Statement{
+		inferredVar("result", "ProtoCoreUtils.decode_varint(data, offset)"),
+		gdast.IfStatement{
+			Condition: gdast.Eq(gdast.RawExpression{Code: "result.size"}, gdast.Lit(-1)),
+			Body: []gdast.Statement{
+				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND"}),
+			},
+		},
+		rawf("%s.append(result.value as %s)", fieldVar, enumType),
+		rawf("offset += result.size"),
+	}
 }
 
 // repeatedNumericPackedOrUnpacked handles a repeated numeric field by

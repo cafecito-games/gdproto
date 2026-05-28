@@ -10,7 +10,7 @@ extends RefCounted
 var _username: String = ""
 var _level: int = 0
 var _experience: int = 0
-var _status: ExamplePlayerStatus.PlayerStatus = 0
+var _status: ExamplePlayerStatus.PlayerStatus = 0 as ExamplePlayerStatus.PlayerStatus
 var _inventory: Array[String] = []
 var _position: ExamplePlayerPosition = null
 var _email: String = ""
@@ -278,7 +278,7 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 				var result := ProtoCoreUtils.decode_varint(data, offset)
 				if result.size == -1:
 					return ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND
-				_status = result.value
+				_status = result.value as ExamplePlayerStatus.PlayerStatus
 				offset += result.size
 			5:
 				# Field inventory
@@ -576,14 +576,14 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					if "error" not in enum_result:
 						var enum_name: String = enum_result["value"]
 						var enum_value: int = _parse_enum_value_status(enum_name)
-						_status = enum_value
+						_status = enum_value as ExamplePlayerStatus.PlayerStatus
 						pos = enum_result["pos"]
 				else:
 					# Parse as number
 					enum_result = ProtoCoreUtils.parse_number(text, pos)
 					if "error" in enum_result:
 						return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
-					_status = int(enum_result["value"])
+					_status = int(enum_result["value"]) as ExamplePlayerStatus.PlayerStatus
 					pos = enum_result["pos"]
 			"inventory":
 				# Parse colon
