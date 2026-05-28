@@ -209,11 +209,11 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = pos + 1
 				pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
-				var num_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_number(text, pos)
-				if "error" in num_result:
+				var num_result: ProtoCoreUtils.NumberParseResult = ProtoCoreUtils.parse_number(text, pos)
+				if num_result.has_error():
 					return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
-				_timestamp = int(num_result["value"])
-				pos = num_result["pos"]
+				_timestamp = num_result.int_value
+				pos = num_result.pos
 			"map_name":
 				# Parse colon
 				if pos < text.length() and text[pos] == ":":

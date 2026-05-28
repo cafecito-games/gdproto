@@ -546,22 +546,22 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = pos + 1
 				pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
-				var num_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_number(text, pos)
-				if "error" in num_result:
+				var num_result: ProtoCoreUtils.NumberParseResult = ProtoCoreUtils.parse_number(text, pos)
+				if num_result.has_error():
 					return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
-				_level = int(num_result["value"])
-				pos = num_result["pos"]
+				_level = num_result.int_value
+				pos = num_result.pos
 			"experience":
 				# Parse colon
 				if pos < text.length() and text[pos] == ":":
 					pos = pos + 1
 				pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
-				var num_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_number(text, pos)
-				if "error" in num_result:
+				var num_result: ProtoCoreUtils.NumberParseResult = ProtoCoreUtils.parse_number(text, pos)
+				if num_result.has_error():
 					return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
-				_experience = int(num_result["value"])
-				pos = num_result["pos"]
+				_experience = num_result.int_value
+				pos = num_result.pos
 			"status":
 				# Parse colon
 				if pos < text.length() and text[pos] == ":":
@@ -569,10 +569,9 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 				pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
 				# Parse enum value (name or number)
-				var enum_result: Dictionary[String, Variant]
 				if pos < text.length() and not text[pos].is_valid_int() and text[pos] != "-":
 					# Parse as identifier (enum name)
-					enum_result = ProtoCoreUtils.parse_identifier(text, pos)
+					var enum_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)
 					if "error" not in enum_result:
 						var enum_name: String = enum_result["value"]
 						var enum_value: int = _parse_enum_value_status(enum_name)
@@ -580,11 +579,11 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 						pos = enum_result["pos"]
 				else:
 					# Parse as number
-					enum_result = ProtoCoreUtils.parse_number(text, pos)
-					if "error" in enum_result:
+					var enum_result: ProtoCoreUtils.NumberParseResult = ProtoCoreUtils.parse_number(text, pos)
+					if enum_result.has_error():
 						return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
-					_status = int(enum_result["value"]) as ExamplePlayerStatus.PlayerStatus
-					pos = enum_result["pos"]
+					_status = enum_result.int_value as ExamplePlayerStatus.PlayerStatus
+					pos = enum_result.pos
 			"inventory":
 				# Parse colon
 				if pos < text.length() and text[pos] == ":":
@@ -680,10 +679,10 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 								map_key = str_result["value"]
 								pos = str_result["pos"]
 						elif entry_field == "value":
-							var num_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_number(text, pos)
-							if "value" in num_result:
-								map_value = int(num_result["value"])
-								pos = num_result["pos"]
+							var num_result: ProtoCoreUtils.NumberParseResult = ProtoCoreUtils.parse_number(text, pos)
+							if not num_result.has_error():
+								map_value = num_result.int_value
+								pos = num_result.pos
 
 						pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
@@ -723,10 +722,10 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 								map_key = str_result["value"]
 								pos = str_result["pos"]
 						elif entry_field == "value":
-							var num_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_number(text, pos)
-							if "value" in num_result:
-								map_value = int(num_result["value"]) as ExamplePlayerStatus.PlayerStatus
-								pos = num_result["pos"]
+							var num_result: ProtoCoreUtils.NumberParseResult = ProtoCoreUtils.parse_number(text, pos)
+							if not num_result.has_error():
+								map_value = num_result.int_value as ExamplePlayerStatus.PlayerStatus
+								pos = num_result.pos
 
 						pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
