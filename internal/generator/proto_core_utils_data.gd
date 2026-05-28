@@ -195,7 +195,7 @@ static func escape_string_text_format(value: String) -> String:
 	"""Escape string for text format output."""
 	var result: String = ""
 	for i in range(value.length()):
-		var ch = value[i]
+		var ch: String = value[i]
 		match ch:
 			"\n": result += "\\n"
 			"\r": result += "\\r"
@@ -203,7 +203,7 @@ static func escape_string_text_format(value: String) -> String:
 			"\"": result += "\\\""
 			"\\": result += "\\\\"
 			_:
-				var code = ch.unicode_at(0)
+				var code: int = ch.unicode_at(0)
 				if code < 32:
 					# Non-printable control characters: use \xHH escape
 					result += "\\x%02x" % code
@@ -227,12 +227,12 @@ static func unescape_string_text_format(value: String) -> String:
 	var result: String = ""
 	var i: int = 0
 	while i < value.length():
-		var ch = value[i]
+		var ch: String = value[i]
 		if ch == "\\":
 			i += 1
 			if i >= value.length():
 				break
-			var next = value[i]
+			var next: String = value[i]
 			match next:
 				"n": result += "\n"
 				"r": result += "\r"
@@ -242,7 +242,7 @@ static func unescape_string_text_format(value: String) -> String:
 				"x":
 					# \xHH hex escape
 					if i + 2 < value.length():
-						var hex = value.substr(i + 1, 2)
+						var hex: String = value.substr(i + 1, 2)
 						result += char(hex.hex_to_int())
 						i += 2
 				_:
@@ -255,15 +255,15 @@ static func unescape_string_text_format(value: String) -> String:
 
 static func unescape_bytes_text_format(value: String) -> PackedByteArray:
 	"""Unescape text format string directly to bytes."""
-	var result := PackedByteArray()
+	var result: PackedByteArray = PackedByteArray()
 	var i: int = 0
 	while i < value.length():
-		var ch = value[i]
+		var ch: String = value[i]
 		if ch == "\\":
 			i += 1
 			if i >= value.length():
 				break
-			var next = value[i]
+			var next: String = value[i]
 			match next:
 				"n": result.append(0x0A)  # \n
 				"r": result.append(0x0D)  # \r
@@ -273,7 +273,7 @@ static func unescape_bytes_text_format(value: String) -> PackedByteArray:
 				"x":
 					# \xHH hex escape - convert directly to byte
 					if i + 2 < value.length():
-						var hex = value.substr(i + 1, 2)
+						var hex: String = value.substr(i + 1, 2)
 						result.append(hex.hex_to_int())
 						i += 2
 				_:
@@ -290,7 +290,7 @@ static func unescape_bytes_text_format(value: String) -> PackedByteArray:
 static func skip_whitespace(text: String, pos: int) -> int:
 	"""Skip whitespace and comments."""
 	while pos < text.length():
-		var ch = text[pos]
+		var ch: String = text[pos]
 		if ch in [" ", "\t", "\n", "\r"]:
 			pos += 1
 		elif ch == "#":
@@ -301,11 +301,11 @@ static func skip_whitespace(text: String, pos: int) -> int:
 			break
 	return pos
 
-static func parse_identifier(text: String, pos: int) -> Dictionary:
+static func parse_identifier(text: String, pos: int) -> Dictionary[String, Variant]:
 	"""Parse identifier (field name or keyword)."""
-	var start = pos
+	var start: int = pos
 	while pos < text.length():
-		var ch = text[pos]
+		var ch: String = text[pos]
 		if ch.is_valid_identifier() or ch == "_" or (pos > start and ch.is_valid_int()):
 			pos += 1
 		else:
@@ -314,14 +314,14 @@ static func parse_identifier(text: String, pos: int) -> Dictionary:
 		return {"error": "Expected identifier"}
 	return {"value": text.substr(start, pos - start), "pos": pos}
 
-static func parse_string_literal(text: String, pos: int) -> Dictionary:
+static func parse_string_literal(text: String, pos: int) -> Dictionary[String, Variant]:
 	"""Parse quoted string literal."""
 	if pos >= text.length() or text[pos] != "\"":
 		return {"error": "Expected string literal"}
 	pos += 1  # Skip opening quote
 	var value: String = ""
 	while pos < text.length():
-		var ch = text[pos]
+		var ch: String = text[pos]
 		if ch == "\"":
 			pos += 1
 			return {"value": value, "pos": pos}
@@ -329,7 +329,7 @@ static func parse_string_literal(text: String, pos: int) -> Dictionary:
 			pos += 1
 			if pos >= text.length():
 				return {"error": "Unterminated string"}
-			var next = text[pos]
+			var next: String = text[pos]
 			match next:
 				"n": value += "\n"
 				"r": value += "\r"
@@ -338,7 +338,7 @@ static func parse_string_literal(text: String, pos: int) -> Dictionary:
 				"\"": value += "\""
 				"x":
 					if pos + 2 < text.length():
-						var hex = text.substr(pos + 1, 2)
+						var hex: String = text.substr(pos + 1, 2)
 						value += char(hex.hex_to_int())
 						pos += 2
 				_:
@@ -349,24 +349,24 @@ static func parse_string_literal(text: String, pos: int) -> Dictionary:
 			pos += 1
 	return {"error": "Unterminated string"}
 
-static func parse_number(text: String, pos: int) -> Dictionary:
+static func parse_number(text: String, pos: int) -> Dictionary[String, Variant]:
 	"""Parse number (int or float)."""
-	var start = pos
+	var start: int = pos
 	# Handle negative sign
 	if pos < text.length() and text[pos] in ["-", "+"]:
 		pos += 1
 	# Check for special float values
 	if pos + 2 < text.length():
-		var substr = text.substr(pos, 3)
+		var substr: String = text.substr(pos, 3)
 		if substr == "inf":
 			return {"value": INF if text[start] != "-" else -INF, "pos": pos + 3, "is_float": true}
 		if substr == "nan":
 			return {"value": NAN, "pos": pos + 3, "is_float": true}
 	# Parse digits
-	var has_dot = false
-	var has_exp = false
+	var has_dot: bool = false
+	var has_exp: bool = false
 	while pos < text.length():
-		var ch = text[pos]
+		var ch: String = text[pos]
 		if ch.is_valid_int():
 			pos += 1
 		elif ch == "." and not has_dot and not has_exp:
@@ -381,7 +381,7 @@ static func parse_number(text: String, pos: int) -> Dictionary:
 			break
 	if pos == start or (pos == start + 1 and text[start] in ["-", "+"]):
 		return {"error": "Expected number"}
-	var num_str = text.substr(start, pos - start)
+	var num_str: String = text.substr(start, pos - start)
 	if has_dot or has_exp:
 		return {"value": float(num_str), "pos": pos, "is_float": true}
 	else:

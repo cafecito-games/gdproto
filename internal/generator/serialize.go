@@ -215,7 +215,7 @@ func (g *generator) mapSerialization(mf *ast.MapField) []gdast.Statement {
 	valueTag := (2 << 3) | g.mapValueWireType(mf)
 
 	forBody := []gdast.Statement{
-		rawf("var value := %s[key]", fieldVar),
+		typedVar("value", g.renderedMapValueType(mf), fmt.Sprintf("%s[key]", fieldVar)),
 		gdast.EmptyLine{},
 		gdast.Comment{Text: "Build map entry"},
 		gdast.VarDeclaration{

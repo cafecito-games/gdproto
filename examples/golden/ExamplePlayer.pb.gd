@@ -190,7 +190,7 @@ func to_bytes() -> PackedByteArray:
 			result.append_array(str_data)
 	# Map field stats
 	for key in _stats:
-		var value := _stats[key]
+		var value: int = _stats[key]
 
 		# Build map entry
 		var entry: PackedByteArray = PackedByteArray()
@@ -211,7 +211,7 @@ func to_bytes() -> PackedByteArray:
 		result.append_array(entry)
 	# Map field status_effects
 	for key in _status_effects:
-		var value := _status_effects[key]
+		var value: ExamplePlayerStatus.PlayerStatus = _status_effects[key]
 
 		# Build map entry
 		var entry: PackedByteArray = PackedByteArray()
@@ -238,11 +238,11 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 
 	while offset < data.size():
 		# Read field tag
-		var tag_result := ProtoCoreUtils.decode_varint(data, offset)
-		if tag_result.size == -1:
+		var tag_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+		if tag_result["size"] == -1:
 			return ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND
-		var tag: int = tag_result.value
-		offset += tag_result.size
+		var tag: int = tag_result["value"]
+		offset += tag_result["size"]
 
 		var field_number: int = ProtoCoreUtils.get_field_number(tag)
 		var wire_type: int = ProtoCoreUtils.get_wire_type(tag)
@@ -250,161 +250,161 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 		match field_number:
 			1:
 				# Field username
-				var length_result := ProtoCoreUtils.decode_varint(data, offset)
-				if length_result.size == -1:
+				var length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+				if length_result["size"] == -1:
 					return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
-				offset += length_result.size
-				var length: int = length_result.value
+				offset += length_result["size"]
+				var length: int = length_result["value"]
 				if offset + length > data.size():
 					return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_MISMATCH
 				_username = ProtoCoreUtils.decode_string(data, offset, length)
 				offset += length
 			2:
 				# Field level
-				var result := ProtoCoreUtils.decode_varint(data, offset)
-				if result.size == -1:
+				var result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+				if result["size"] == -1:
 					return ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND
-				_level = result.value
-				offset += result.size
+				_level = result["value"]
+				offset += result["size"]
 			3:
 				# Field experience
-				var result := ProtoCoreUtils.decode_varint(data, offset)
-				if result.size == -1:
+				var result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+				if result["size"] == -1:
 					return ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND
-				_experience = result.value
-				offset += result.size
+				_experience = result["value"]
+				offset += result["size"]
 			4:
 				# Field status
-				var result := ProtoCoreUtils.decode_varint(data, offset)
-				if result.size == -1:
+				var result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+				if result["size"] == -1:
 					return ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND
-				_status = result.value as ExamplePlayerStatus.PlayerStatus
-				offset += result.size
+				_status = result["value"] as ExamplePlayerStatus.PlayerStatus
+				offset += result["size"]
 			5:
 				# Field inventory
-				var length_result := ProtoCoreUtils.decode_varint(data, offset)
-				if length_result.size == -1:
+				var length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+				if length_result["size"] == -1:
 					return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
-				offset += length_result.size
-				var length: int = length_result.value
+				offset += length_result["size"]
+				var length: int = length_result["value"]
 				if offset + length > data.size():
 					return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_MISMATCH
 				_inventory.append(ProtoCoreUtils.decode_string(data, offset, length))
 				offset += length
 			7:
 				# Field position
-				var length_result := ProtoCoreUtils.decode_varint(data, offset)
-				if length_result.size == -1:
+				var length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+				if length_result["size"] == -1:
 					return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
-				offset += length_result.size
-				var length: int = length_result.value
+				offset += length_result["size"]
+				var length: int = length_result["value"]
 				if offset + length > data.size():
 					return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_MISMATCH
 				var msg_data: PackedByteArray = data.slice(offset, offset + length)
 				_position = ExamplePlayerPosition.new()
-				var msg_result := _position.from_bytes(msg_data)
+				var msg_result: ProtoCoreUtils.ProtobufError = _position.from_bytes(msg_data)
 				if msg_result != ProtoCoreUtils.ProtobufError.NO_ERRORS:
 					return msg_result
 				offset += length
 			6:
 				# Map field stats
-				var length_result := ProtoCoreUtils.decode_varint(data, offset)
-				if length_result.size == -1:
+				var length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+				if length_result["size"] == -1:
 					return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
-				offset += length_result.size
-				var length: int = length_result.value
+				offset += length_result["size"]
+				var length: int = length_result["value"]
 				if offset + length > data.size():
 					return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_MISMATCH
 
 				var entry_data: PackedByteArray = data.slice(offset, offset + length)
 				var entry_offset: int = 0
 
-				var map_key := ""
-				var map_value := 0
+				var map_key: String = ""
+				var map_value: int = 0
 
 				while entry_offset < entry_data.size():
-					var entry_tag_result := ProtoCoreUtils.decode_varint(entry_data, entry_offset)
-					if entry_tag_result.size == -1:
+					var entry_tag_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(entry_data, entry_offset)
+					if entry_tag_result["size"] == -1:
 						return ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND
-					var entry_tag: int = entry_tag_result.value
-					entry_offset += entry_tag_result.size
+					var entry_tag: int = entry_tag_result["value"]
+					entry_offset += entry_tag_result["size"]
 					var entry_field_number: int = ProtoCoreUtils.get_field_number(entry_tag)
 
 					match entry_field_number:
 						1:
 							# Entry key
-							var len_result := ProtoCoreUtils.decode_varint(entry_data, entry_offset)
-							if len_result.size == -1:
+							var len_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(entry_data, entry_offset)
+							if len_result["size"] == -1:
 								return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
-							entry_offset += len_result.size
-							var str_len: int = len_result.value
+							entry_offset += len_result["size"]
+							var str_len: int = len_result["value"]
 							if entry_offset + str_len > entry_data.size():
 								return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_MISMATCH
 							map_key = ProtoCoreUtils.decode_string(entry_data, entry_offset, str_len)
 							entry_offset += str_len
 						2:
 							# Entry value
-							var result := ProtoCoreUtils.decode_varint(entry_data, entry_offset)
-							if result.size == -1:
+							var result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(entry_data, entry_offset)
+							if result["size"] == -1:
 								return ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND
-							map_value = result.value
-							entry_offset += result.size
+							map_value = result["value"]
+							entry_offset += result["size"]
 
 				_stats[map_key] = map_value
 				offset += length
 			10:
 				# Map field status_effects
-				var length_result := ProtoCoreUtils.decode_varint(data, offset)
-				if length_result.size == -1:
+				var length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+				if length_result["size"] == -1:
 					return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
-				offset += length_result.size
-				var length: int = length_result.value
+				offset += length_result["size"]
+				var length: int = length_result["value"]
 				if offset + length > data.size():
 					return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_MISMATCH
 
 				var entry_data: PackedByteArray = data.slice(offset, offset + length)
 				var entry_offset: int = 0
 
-				var map_key := ""
-				var map_value := 0
+				var map_key: String = ""
+				var map_value: ExamplePlayerStatus.PlayerStatus = 0 as ExamplePlayerStatus.PlayerStatus
 
 				while entry_offset < entry_data.size():
-					var entry_tag_result := ProtoCoreUtils.decode_varint(entry_data, entry_offset)
-					if entry_tag_result.size == -1:
+					var entry_tag_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(entry_data, entry_offset)
+					if entry_tag_result["size"] == -1:
 						return ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND
-					var entry_tag: int = entry_tag_result.value
-					entry_offset += entry_tag_result.size
+					var entry_tag: int = entry_tag_result["value"]
+					entry_offset += entry_tag_result["size"]
 					var entry_field_number: int = ProtoCoreUtils.get_field_number(entry_tag)
 
 					match entry_field_number:
 						1:
 							# Entry key
-							var len_result := ProtoCoreUtils.decode_varint(entry_data, entry_offset)
-							if len_result.size == -1:
+							var len_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(entry_data, entry_offset)
+							if len_result["size"] == -1:
 								return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
-							entry_offset += len_result.size
-							var str_len: int = len_result.value
+							entry_offset += len_result["size"]
+							var str_len: int = len_result["value"]
 							if entry_offset + str_len > entry_data.size():
 								return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_MISMATCH
 							map_key = ProtoCoreUtils.decode_string(entry_data, entry_offset, str_len)
 							entry_offset += str_len
 						2:
 							# Entry value
-							var result := ProtoCoreUtils.decode_varint(entry_data, entry_offset)
-							if result.size == -1:
+							var result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(entry_data, entry_offset)
+							if result["size"] == -1:
 								return ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND
-							map_value = result.value
-							entry_offset += result.size
+							map_value = result["value"] as ExamplePlayerStatus.PlayerStatus
+							entry_offset += result["size"]
 
 				_status_effects[map_key] = map_value
 				offset += length
 			8:
 				# Field email
-				var length_result := ProtoCoreUtils.decode_varint(data, offset)
-				if length_result.size == -1:
+				var length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+				if length_result["size"] == -1:
 					return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
-				offset += length_result.size
-				var length: int = length_result.value
+				offset += length_result["size"]
+				var length: int = length_result["value"]
 				if offset + length > data.size():
 					return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_MISMATCH
 				_email = ProtoCoreUtils.decode_string(data, offset, length)
@@ -412,11 +412,11 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 				_oneof_contact = ContactOneOf.EMAIL
 			9:
 				# Field discord
-				var length_result := ProtoCoreUtils.decode_varint(data, offset)
-				if length_result.size == -1:
+				var length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+				if length_result["size"] == -1:
 					return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
-				offset += length_result.size
-				var length: int = length_result.value
+				offset += length_result["size"]
+				var length: int = length_result["value"]
 				if offset + length > data.size():
 					return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_MISMATCH
 				_discord = ProtoCoreUtils.decode_string(data, offset, length)
@@ -426,17 +426,17 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 				# Skip unknown field
 				match wire_type:
 					0:  # Varint
-						var skip_result := ProtoCoreUtils.decode_varint(data, offset)
-						if skip_result.size == -1:
+						var skip_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+						if skip_result["size"] == -1:
 							return ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND
-						offset += skip_result.size
+						offset += skip_result["size"]
 					1:  # Fixed64
 						offset += 8
 					2:  # Length-delimited
-						var skip_length_result := ProtoCoreUtils.decode_varint(data, offset)
-						if skip_length_result.size == -1:
+						var skip_length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+						if skip_length_result["size"] == -1:
 							return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
-						offset += skip_length_result.size + skip_length_result.value
+						offset += skip_length_result["size"] + skip_length_result["value"]
 					5:  # Fixed32
 						offset += 4
 					_:
@@ -484,7 +484,7 @@ func to_text(indent_level: int = 0) -> String:
 
 	# Map field stats
 	for key in _stats:
-		var value := _stats[key]
+		var value: int = _stats[key]
 		result += indent + "stats {\n"
 		var inner_indent: String = "\t".repeat(indent_level + 1)
 
@@ -495,7 +495,7 @@ func to_text(indent_level: int = 0) -> String:
 
 	# Map field status_effects
 	for key in _status_effects:
-		var value := _status_effects[key]
+		var value: ExamplePlayerStatus.PlayerStatus = _status_effects[key]
 		result += indent + "status_effects {\n"
 		var inner_indent: String = "\t".repeat(indent_level + 1)
 
@@ -517,7 +517,7 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 			break
 
 		# Parse field name
-		var name_result := ProtoCoreUtils.parse_identifier(text, pos)
+		var name_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)
 		if "error" in name_result:
 			push_error(name_result["error"])
 			return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
@@ -535,7 +535,7 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = pos + 1
 				pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
-				var str_result := ProtoCoreUtils.parse_string_literal(text, pos)
+				var str_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_string_literal(text, pos)
 				if "error" in str_result:
 					return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
 				_username = str_result["value"]
@@ -546,7 +546,7 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = pos + 1
 				pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
-				var num_result := ProtoCoreUtils.parse_number(text, pos)
+				var num_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_number(text, pos)
 				if "error" in num_result:
 					return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
 				_level = int(num_result["value"])
@@ -557,7 +557,7 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = pos + 1
 				pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
-				var num_result := ProtoCoreUtils.parse_number(text, pos)
+				var num_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_number(text, pos)
 				if "error" in num_result:
 					return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
 				_experience = int(num_result["value"])
@@ -569,7 +569,7 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 				pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
 				# Parse enum value (name or number)
-				var enum_result: Dictionary
+				var enum_result: Dictionary[String, Variant]
 				if pos < text.length() and not text[pos].is_valid_int() and text[pos] != "-":
 					# Parse as identifier (enum name)
 					enum_result = ProtoCoreUtils.parse_identifier(text, pos)
@@ -591,7 +591,7 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = pos + 1
 				pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
-				var str_result := ProtoCoreUtils.parse_string_literal(text, pos)
+				var str_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_string_literal(text, pos)
 				if "error" in str_result:
 					return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
 				_inventory.append(str_result["value"])
@@ -608,8 +608,8 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
 					# Extract message body
-					var msg_start := pos
-					var depth := 1
+					var msg_start: int = pos
+					var depth: int = 1
 					while pos < text.length() and depth > 0:
 						if text[pos] == "{":
 							depth = depth + 1
@@ -619,11 +619,11 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 								break
 						pos = pos + 1
 
-					var msg_text := text.substr(msg_start, pos - msg_start)
+					var msg_text: String = text.substr(msg_start, pos - msg_start)
 					pos = pos + 1  # Skip closing brace
 
 					_position = ExamplePlayerPosition.new()
-					var parse_result := _position.from_text(msg_text)
+					var parse_result: ProtoCoreUtils.ProtobufError = _position.from_text(msg_text)
 					if parse_result != ProtoCoreUtils.ProtobufError.NO_ERRORS:
 						return parse_result
 			"email":
@@ -632,7 +632,7 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = pos + 1
 				pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
-				var str_result := ProtoCoreUtils.parse_string_literal(text, pos)
+				var str_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_string_literal(text, pos)
 				if "error" in str_result:
 					return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
 				_email = str_result["value"]
@@ -644,7 +644,7 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = pos + 1
 				pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
-				var str_result := ProtoCoreUtils.parse_string_literal(text, pos)
+				var str_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_string_literal(text, pos)
 				if "error" in str_result:
 					return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
 				_discord = str_result["value"]
@@ -659,12 +659,12 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos += 1
 					pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
-					var map_key = null
-					var map_value = null
+					var map_key: String = ""
+					var map_value: int = 0
 
 					# Parse key and value
 					while pos < text.length() and text[pos] != "}":
-						var entry_name_result := ProtoCoreUtils.parse_identifier(text, pos)
+						var entry_name_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)
 						if "error" in entry_name_result:
 							break
 						var entry_field: String = entry_name_result["value"]
@@ -675,12 +675,12 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 						pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
 						if entry_field == "key":
-							var str_result := ProtoCoreUtils.parse_string_literal(text, pos)
+							var str_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_string_literal(text, pos)
 							if "value" in str_result:
 								map_key = str_result["value"]
 								pos = str_result["pos"]
 						elif entry_field == "value":
-							var num_result := ProtoCoreUtils.parse_number(text, pos)
+							var num_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_number(text, pos)
 							if "value" in num_result:
 								map_value = int(num_result["value"])
 								pos = num_result["pos"]
@@ -702,12 +702,12 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos += 1
 					pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
-					var map_key = null
-					var map_value = null
+					var map_key: String = ""
+					var map_value: ExamplePlayerStatus.PlayerStatus = 0 as ExamplePlayerStatus.PlayerStatus
 
 					# Parse key and value
 					while pos < text.length() and text[pos] != "}":
-						var entry_name_result := ProtoCoreUtils.parse_identifier(text, pos)
+						var entry_name_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)
 						if "error" in entry_name_result:
 							break
 						var entry_field: String = entry_name_result["value"]
@@ -718,14 +718,14 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 						pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
 						if entry_field == "key":
-							var str_result := ProtoCoreUtils.parse_string_literal(text, pos)
+							var str_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_string_literal(text, pos)
 							if "value" in str_result:
 								map_key = str_result["value"]
 								pos = str_result["pos"]
 						elif entry_field == "value":
-							var num_result := ProtoCoreUtils.parse_number(text, pos)
+							var num_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_number(text, pos)
 							if "value" in num_result:
-								map_value = int(num_result["value"])
+								map_value = int(num_result["value"]) as ExamplePlayerStatus.PlayerStatus
 								pos = num_result["pos"]
 
 						pos = ProtoCoreUtils.skip_whitespace(text, pos)
@@ -746,7 +746,7 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = ProtoCoreUtils.skip_whitespace(text, pos)
 					if pos < text.length() and text[pos] == "{":
 						# Skip message body
-						var depth := 1
+						var depth: int = 1
 						pos = pos + 1
 						while pos < text.length() and depth > 0:
 							if text[pos] == "{":

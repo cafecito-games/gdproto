@@ -48,10 +48,41 @@ protoc \
     -I "$PROTO_ROOT" \
     "${PROTO_FILES[@]}"
 
+if ! grep -q '^gdscript/warnings/treat_warnings_as_errors=true$' "$GODOT_PROJECT/project.godot"; then
+    echo "error: test Godot project must keep strict GDScript warnings enabled" >&2
+    exit 1
+fi
+
+project_backup="$(mktemp)"
+cp "$GODOT_PROJECT/project.godot" "$project_backup"
+vest_log=""
+cleanup() {
+    if [[ -f "$project_backup" ]]; then
+        cp "$project_backup" "$GODOT_PROJECT/project.godot"
+        rm -f "$project_backup"
+    fi
+    if [[ -n "${vest_log:-}" ]]; then
+        rm -f "$vest_log"
+    fi
+}
+trap cleanup EXIT
+
+# The checked-in project.godot keeps strict warnings enabled so generated
+# scripts fail during import if they are not strict-clean.
+"$GODOT" --headless --path "$GODOT_PROJECT" --import
+
+# Vest and the handwritten fixture tests are not strict-clean. Keep the strict
+# import above as the generated-code gate, then temporarily relax the project
+# for the existing runtime round-trip suite.
+awk '
+    /^\[debug\]$/ { skip = 1; next }
+    /^\[/ { skip = 0 }
+    skip != 1 { print }
+' "$project_backup" > "$GODOT_PROJECT/project.godot"
+rm -rf "$GODOT_PROJECT/.godot"
 "$GODOT" --headless --path "$GODOT_PROJECT" --import
 
 vest_log="$(mktemp)"
-trap 'rm -f "$vest_log"' EXIT
 "$GODOT" --headless --path "$GODOT_PROJECT" \
     -s addons/vest/cli/vest-cli.gd \
     --vest-glob 'res://tests/**/test_*.gd' \
@@ -66,3 +97,6 @@ if ! grep -E '^ok ' "$vest_log" >/dev/null; then
     echo "error: no Vest tests ran" >&2
     exit 1
 fi
+
+cleanup
+trap - EXIT

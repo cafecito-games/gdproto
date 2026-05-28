@@ -32,7 +32,7 @@ func (g *generator) generateToText(m *ast.Message) gdast.Function {
 	}
 	for _, mf := range m.Maps {
 		b.WriteString("\n")
-		b.WriteString(toTextMapBlock(mf))
+		b.WriteString(g.toTextMapBlock(mf))
 	}
 
 	b.WriteString("\n")
@@ -139,12 +139,12 @@ func (g *generator) toTextOneofBlock(oneof *ast.Oneof) string {
 
 // toTextMapBlock renders the for-loop that serializes a map field as a series
 // of `name { key: ..., value: ... }` entries.
-func toTextMapBlock(mf *ast.MapField) string {
+func (g *generator) toTextMapBlock(mf *ast.MapField) string {
 	fieldVar := "_" + mf.Name
 	var b strings.Builder
 	b.WriteString("# Map field " + mf.Name + "\n")
 	b.WriteString("for key in " + fieldVar + ":\n")
-	b.WriteString("\tvar value := " + fieldVar + "[key]\n")
+	b.WriteString("\tvar value: " + g.renderedMapValueType(mf) + " = " + fieldVar + "[key]\n")
 	b.WriteString("\tresult += indent + \"" + mf.Name + " {\\n\"\n")
 	b.WriteString("\tvar inner_indent: String = \"\\t\".repeat(indent_level + 1)\n")
 	b.WriteString("\n")

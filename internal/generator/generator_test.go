@@ -3,6 +3,7 @@ package generator_test
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -12,6 +13,8 @@ import (
 	"github.com/cafecito-games/gdproto/internal/lexer"
 	"github.com/cafecito-games/gdproto/internal/parser"
 	"github.com/cafecito-games/gdproto/internal/validator"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // findFile returns the GeneratedFile in files whose ClassName matches name,
@@ -339,7 +342,7 @@ func TestGenerateToBytesStringRepeatedMessageOneofMap(t *testing.T) {
 		`if _email != "":`,
 		"# Map field stats",
 		"for key in _stats:",
-		"var value := _stats[key]",
+		"var value: int = _stats[key]",
 		"# Build map entry",
 		"var entry: PackedByteArray = PackedByteArray()",
 		"# Entry field 1: key",
@@ -382,8 +385,8 @@ func TestGenerateFromBytesScalar(t *testing.T) {
 		"var offset: int = 0",
 		"while offset < data.size():",
 		"# Read field tag",
-		"var tag_result := ProtoCoreUtils.decode_varint(data, offset)",
-		"if tag_result.size == -1:",
+		"var tag_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)",
+		`if tag_result["size"] == -1:`,
 		"return ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND",
 		"var field_number: int = ProtoCoreUtils.get_field_number(tag)",
 		"var wire_type: int = ProtoCoreUtils.get_wire_type(tag)",
@@ -443,33 +446,86 @@ func TestGenerateFromBytesComplex(t *testing.T) {
 		"# Field username",
 		"_username = ProtoCoreUtils.decode_string(data, offset, length)",
 		"# Field level",
-		"var result := ProtoCoreUtils.decode_varint(data, offset)",
-		"_level = result.value",
+		"var result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)",
+		`_level = result["value"]`,
 		"# Field position",
 		"_position = ExamplePosition.new()",
-		"var msg_result := _position.from_bytes(msg_data)",
+		"var msg_result: ProtoCoreUtils.ProtobufError = _position.from_bytes(msg_data)",
 		"if msg_result != ProtoCoreUtils.ProtobufError.NO_ERRORS:",
 		"# Field inventory",
 		"_inventory.append(ProtoCoreUtils.decode_string(data, offset, length))",
 		"# Field friends",
-		"var msg_item := ExamplePlayer.new()",
+		"var msg_item: ExamplePlayer = ExamplePlayer.new()",
 		"_friends.append(msg_item)",
 		"# Map field stats",
 		"var entry_data: PackedByteArray = data.slice(offset, offset + length)",
 		"var entry_offset: int = 0",
-		`var map_key := ""`,
-		"var map_value := 0",
+		`var map_key: String = ""`,
+		"var map_value: int = 0",
 		"match entry_field_number:",
 		"# Entry key",
 		"map_key = ProtoCoreUtils.decode_string(entry_data, entry_offset, str_len)",
 		"# Entry value",
-		"map_value = result.value",
+		`map_value = result["value"]`,
 		"_stats[map_key] = map_value",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("from_bytes complex output missing fragment %q\n--- full output ---\n%s", want, out)
 		}
 	}
+}
+
+func TestGenerateExampleStrictGDScriptShape(t *testing.T) {
+	src, err := os.ReadFile("../../examples/example.proto")
+	require.NoError(t, err)
+	tokens, err := lexer.Tokenize(string(src), "example.proto")
+	require.NoError(t, err)
+	file, err := parser.Parse(tokens, "example.proto")
+	require.NoError(t, err)
+	require.Empty(t, validator.Validate(file, "example.proto"))
+	files, err := generator.Generate(file, "example.proto", nil)
+	require.NoError(t, err)
+
+	untypedVar := regexp.MustCompile(`(?m)^\s*var\s+[A-Za-z_][A-Za-z0-9_]*\s*=`)
+	bareDictionaryVar := regexp.MustCompile(`(?m)^\s*var\s+[A-Za-z_][A-Za-z0-9_]*:\s*Dictionary(\s|$)`)
+	for _, f := range files {
+		out := f.Source()
+		assert.NotContains(t, out, ":=", "%s contains inferred declaration operator :=\n%s", f.Filename, firstMatchingLine(out, ":="))
+		assert.Empty(t, untypedVar.FindString(out), "%s contains untyped local declaration", f.Filename)
+		assert.Empty(t, bareDictionaryVar.FindString(out), "%s contains bare Dictionary local declaration", f.Filename)
+		for _, forbidden := range []string{
+			"result.size",
+			"result.value",
+			"tag_result.size",
+			"tag_result.value",
+			"length_result.size",
+			"length_result.value",
+			"entry_tag_result.size",
+			"entry_tag_result.value",
+			"len_result.size",
+			"len_result.value",
+		} {
+			assert.NotContains(t, out, forbidden, "%s contains unsafe decode dictionary property access", f.Filename)
+		}
+	}
+}
+
+func TestProtoCoreUtilsStrictShape(t *testing.T) {
+	out := generator.GenerateProtoCoreUtilsRaw()
+	assert.NotContains(t, out, ":=", "proto_core_utils contains inferred declaration operator :=\n%s", firstMatchingLine(out, ":="))
+	untypedVar := regexp.MustCompile(`(?m)^\s*var\s+[A-Za-z_][A-Za-z0-9_]*\s*=`)
+	assert.Empty(t, untypedVar.FindString(out), "proto_core_utils contains untyped local declaration")
+	bareDictionaryReturn := regexp.MustCompile(`(?m)->\s*Dictionary:`)
+	assert.Empty(t, bareDictionaryReturn.FindString(out), "proto_core_utils contains bare Dictionary return type")
+}
+
+func firstMatchingLine(src, needle string) string {
+	for _, line := range strings.Split(src, "\n") {
+		if strings.Contains(line, needle) {
+			return line
+		}
+	}
+	return ""
 }
 
 func TestEnumFieldWireTypeIsVarint(t *testing.T) {
@@ -655,7 +711,7 @@ func TestGenerateMapEnumUsesVarintPaths(t *testing.T) {
 	if strings.Contains(got, "var value_msg_data: PackedByteArray = value.to_bytes()") {
 		t.Fatalf("map enum value incorrectly serialized as message:\n%s", got)
 	}
-	if !strings.Contains(got, "map_value = result.value") {
+	if !strings.Contains(got, `map_value = result["value"] as MapEnumColor.Color`) {
 		t.Fatalf("missing enum varint deserialization path:\n%s", got)
 	}
 }

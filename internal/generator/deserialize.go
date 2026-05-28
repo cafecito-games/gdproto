@@ -8,11 +8,17 @@ import (
 	"github.com/cafecito-games/gdproto/internal/gdast"
 )
 
-// inferredVar emits `var name := <code>` (walrus form) as a RawStatement,
-// matching the reference generator's local-variable declarations inside
-// from_bytes/decode helpers.
-func inferredVar(name, code string) gdast.RawStatement {
-	return gdast.RawStatement{Code: "var " + name + " := " + code}
+// typedVar emits a strict-friendly typed local declaration.
+func typedVar(name, typeHint, code string) gdast.VarDeclaration {
+	return gdast.VarDeclaration{
+		Name:         name,
+		TypeHint:     typeHint,
+		InitialValue: gdast.RawExpression{Code: code},
+	}
+}
+
+func varintResultVar(name, code string) gdast.VarDeclaration {
+	return typedVar(name, "Dictionary[String, int]", code)
 }
 
 // generateFromBytes builds the `from_bytes` method that deserializes a
@@ -102,9 +108,9 @@ func (g *generator) generateFromBytes(m *ast.Message) gdast.Function {
 func tagReadingStatements() []gdast.Statement {
 	return []gdast.Statement{
 		gdast.Comment{Text: "Read field tag"},
-		inferredVar("tag_result", "ProtoCoreUtils.decode_varint(data, offset)"),
+		varintResultVar("tag_result", "ProtoCoreUtils.decode_varint(data, offset)"),
 		gdast.IfStatement{
-			Condition: gdast.Eq(gdast.RawExpression{Code: "tag_result.size"}, gdast.Lit(-1)),
+			Condition: gdast.Eq(gdast.RawExpression{Code: `tag_result["size"]`}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
 				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND"}),
 			},
@@ -112,9 +118,9 @@ func tagReadingStatements() []gdast.Statement {
 		gdast.VarDeclaration{
 			Name:         "tag",
 			TypeHint:     "int",
-			InitialValue: gdast.RawExpression{Code: "tag_result.value"},
+			InitialValue: gdast.RawExpression{Code: `tag_result["value"]`},
 		},
-		rawf("offset += tag_result.size"),
+		rawf(`offset += tag_result["size"]`),
 		gdast.EmptyLine{},
 		gdast.VarDeclaration{
 			Name:         "field_number",
@@ -140,14 +146,14 @@ func skipUnknownFieldMatch() gdast.MatchStatement {
 				Pattern: "0",
 				Comment: "Varint",
 				Body: []gdast.Statement{
-					inferredVar("skip_result", "ProtoCoreUtils.decode_varint(data, offset)"),
+					varintResultVar("skip_result", "ProtoCoreUtils.decode_varint(data, offset)"),
 					gdast.IfStatement{
-						Condition: gdast.Eq(gdast.RawExpression{Code: "skip_result.size"}, gdast.Lit(-1)),
+						Condition: gdast.Eq(gdast.RawExpression{Code: `skip_result["size"]`}, gdast.Lit(-1)),
 						Body: []gdast.Statement{
 							gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND"}),
 						},
 					},
-					rawf("offset += skip_result.size"),
+					rawf(`offset += skip_result["size"]`),
 				},
 			},
 			{
@@ -159,14 +165,14 @@ func skipUnknownFieldMatch() gdast.MatchStatement {
 				Pattern: "2",
 				Comment: "Length-delimited",
 				Body: []gdast.Statement{
-					inferredVar("skip_length_result", "ProtoCoreUtils.decode_varint(data, offset)"),
+					varintResultVar("skip_length_result", "ProtoCoreUtils.decode_varint(data, offset)"),
 					gdast.IfStatement{
-						Condition: gdast.Eq(gdast.RawExpression{Code: "skip_length_result.size"}, gdast.Lit(-1)),
+						Condition: gdast.Eq(gdast.RawExpression{Code: `skip_length_result["size"]`}, gdast.Lit(-1)),
 						Body: []gdast.Statement{
 							gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND"}),
 						},
 					},
-					rawf("offset += skip_length_result.size + skip_length_result.value"),
+					rawf(`offset += skip_length_result["size"] + skip_length_result["value"]`),
 				},
 			},
 			{
@@ -267,15 +273,15 @@ func (g *generator) repeatedFieldDeserialization(f *ast.Field) []gdast.Statement
 // silent.
 func enumVarintAssign(fieldVar, enumType string) []gdast.Statement {
 	return []gdast.Statement{
-		inferredVar("result", "ProtoCoreUtils.decode_varint(data, offset)"),
+		varintResultVar("result", "ProtoCoreUtils.decode_varint(data, offset)"),
 		gdast.IfStatement{
-			Condition: gdast.Eq(gdast.RawExpression{Code: "result.size"}, gdast.Lit(-1)),
+			Condition: gdast.Eq(gdast.RawExpression{Code: `result["size"]`}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
 				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND"}),
 			},
 		},
-		rawf("%s = result.value as %s", fieldVar, enumType),
-		rawf("offset += result.size"),
+		rawf(`%s = result["value"] as %s`, fieldVar, enumType),
+		rawf(`offset += result["size"]`),
 	}
 }
 
@@ -283,20 +289,20 @@ func enumVarintAssign(fieldVar, enumType string) []gdast.Statement {
 // converts the integer to a bool via `!= 0`.
 func varintAssign(fieldVar string, asBool bool) []gdast.Statement {
 	stmts := []gdast.Statement{
-		inferredVar("result", "ProtoCoreUtils.decode_varint(data, offset)"),
+		varintResultVar("result", "ProtoCoreUtils.decode_varint(data, offset)"),
 		gdast.IfStatement{
-			Condition: gdast.Eq(gdast.RawExpression{Code: "result.size"}, gdast.Lit(-1)),
+			Condition: gdast.Eq(gdast.RawExpression{Code: `result["size"]`}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
 				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND"}),
 			},
 		},
 	}
 	if asBool {
-		stmts = append(stmts, rawf("%s = result.value != 0", fieldVar))
+		stmts = append(stmts, rawf(`%s = result["value"] != 0`, fieldVar))
 	} else {
-		stmts = append(stmts, rawf("%s = result.value", fieldVar))
+		stmts = append(stmts, rawf(`%s = result["value"]`, fieldVar))
 	}
-	stmts = append(stmts, rawf("offset += result.size"))
+	stmts = append(stmts, rawf(`offset += result["size"]`))
 	return stmts
 }
 
@@ -304,15 +310,15 @@ func varintAssign(fieldVar string, asBool bool) []gdast.Statement {
 // the signed value before assigning into fieldVar.
 func zigzagAssign(fieldVar, decodeFunc string) []gdast.Statement {
 	return []gdast.Statement{
-		inferredVar("result", "ProtoCoreUtils.decode_varint(data, offset)"),
+		varintResultVar("result", "ProtoCoreUtils.decode_varint(data, offset)"),
 		gdast.IfStatement{
-			Condition: gdast.Eq(gdast.RawExpression{Code: "result.size"}, gdast.Lit(-1)),
+			Condition: gdast.Eq(gdast.RawExpression{Code: `result["size"]`}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
 				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND"}),
 			},
 		},
-		rawf("%s = %s(result.value)", fieldVar, decodeFunc),
-		rawf("offset += result.size"),
+		rawf(`%s = %s(result["value"])`, fieldVar, decodeFunc),
+		rawf(`offset += result["size"]`),
 	}
 }
 
@@ -363,7 +369,7 @@ func messageAssign(fieldVar, typeName string) []gdast.Statement {
 			InitialValue: gdast.RawExpression{Code: "data.slice(offset, offset + length)"},
 		},
 		rawf("%s = %s.new()", fieldVar, typeName),
-		inferredVar("msg_result", fmt.Sprintf("%s.from_bytes(msg_data)", fieldVar)),
+		typedVar("msg_result", "ProtoCoreUtils.ProtobufError", fmt.Sprintf("%s.from_bytes(msg_data)", fieldVar)),
 		gdast.IfStatement{
 			Condition: gdast.Ne(gdast.V("msg_result"), gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.NO_ERRORS"}),
 			Body: []gdast.Statement{
@@ -379,18 +385,18 @@ func messageAssign(fieldVar, typeName string) []gdast.Statement {
 // prefix and validates it against the remaining buffer size.
 func lengthPrefixDecode() []gdast.Statement {
 	return []gdast.Statement{
-		inferredVar("length_result", "ProtoCoreUtils.decode_varint(data, offset)"),
+		varintResultVar("length_result", "ProtoCoreUtils.decode_varint(data, offset)"),
 		gdast.IfStatement{
-			Condition: gdast.Eq(gdast.RawExpression{Code: "length_result.size"}, gdast.Lit(-1)),
+			Condition: gdast.Eq(gdast.RawExpression{Code: `length_result["size"]`}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
 				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND"}),
 			},
 		},
-		rawf("offset += length_result.size"),
+		rawf(`offset += length_result["size"]`),
 		gdast.VarDeclaration{
 			Name:         "length",
 			TypeHint:     "int",
-			InitialValue: gdast.RawExpression{Code: "length_result.value"},
+			InitialValue: gdast.RawExpression{Code: `length_result["value"]`},
 		},
 		gdast.IfStatement{
 			Condition: gdast.RawExpression{Code: "offset + length > data.size()"},
@@ -435,8 +441,8 @@ func repeatedMessageAppend(fieldVar, typeName string) []gdast.Statement {
 			TypeHint:     "PackedByteArray",
 			InitialValue: gdast.RawExpression{Code: "data.slice(offset, offset + length)"},
 		},
-		inferredVar("msg_item", fmt.Sprintf("%s.new()", typeName)),
-		inferredVar("msg_result", "msg_item.from_bytes(msg_data)"),
+		typedVar("msg_item", typeName, fmt.Sprintf("%s.new()", typeName)),
+		typedVar("msg_result", "ProtoCoreUtils.ProtobufError", "msg_item.from_bytes(msg_data)"),
 		gdast.IfStatement{
 			Condition: gdast.Ne(gdast.V("msg_result"), gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.NO_ERRORS"}),
 			Body: []gdast.Statement{
@@ -456,18 +462,18 @@ func repeatedMessageAppend(fieldVar, typeName string) []gdast.Statement {
 func repeatedEnumPackedOrUnpacked(fieldVar, enumType string) []gdast.Statement {
 	element := enumVarintAppend(fieldVar, enumType)
 	packedBody := []gdast.Statement{
-		inferredVar("length_result", "ProtoCoreUtils.decode_varint(data, offset)"),
+		varintResultVar("length_result", "ProtoCoreUtils.decode_varint(data, offset)"),
 		gdast.IfStatement{
-			Condition: gdast.Eq(gdast.RawExpression{Code: "length_result.size"}, gdast.Lit(-1)),
+			Condition: gdast.Eq(gdast.RawExpression{Code: `length_result["size"]`}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
 				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND"}),
 			},
 		},
-		rawf("offset += length_result.size"),
+		rawf(`offset += length_result["size"]`),
 		gdast.VarDeclaration{
 			Name:         "length",
 			TypeHint:     "int",
-			InitialValue: gdast.RawExpression{Code: "length_result.value"},
+			InitialValue: gdast.RawExpression{Code: `length_result["value"]`},
 		},
 		gdast.VarDeclaration{
 			Name:         "end_offset",
@@ -492,15 +498,15 @@ func repeatedEnumPackedOrUnpacked(fieldVar, enumType string) []gdast.Statement {
 // the enum type.
 func enumVarintAppend(fieldVar, enumType string) []gdast.Statement {
 	return []gdast.Statement{
-		inferredVar("result", "ProtoCoreUtils.decode_varint(data, offset)"),
+		varintResultVar("result", "ProtoCoreUtils.decode_varint(data, offset)"),
 		gdast.IfStatement{
-			Condition: gdast.Eq(gdast.RawExpression{Code: "result.size"}, gdast.Lit(-1)),
+			Condition: gdast.Eq(gdast.RawExpression{Code: `result["size"]`}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
 				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND"}),
 			},
 		},
-		rawf("%s.append(result.value as %s)", fieldVar, enumType),
-		rawf("offset += result.size"),
+		rawf(`%s.append(result["value"] as %s)`, fieldVar, enumType),
+		rawf(`offset += result["size"]`),
 	}
 }
 
@@ -510,18 +516,18 @@ func enumVarintAppend(fieldVar, enumType string) []gdast.Statement {
 // means a single unpacked value matching the element type.
 func repeatedNumericPackedOrUnpacked(fieldVar, protoType string) []gdast.Statement {
 	packedBody := []gdast.Statement{
-		inferredVar("length_result", "ProtoCoreUtils.decode_varint(data, offset)"),
+		varintResultVar("length_result", "ProtoCoreUtils.decode_varint(data, offset)"),
 		gdast.IfStatement{
-			Condition: gdast.Eq(gdast.RawExpression{Code: "length_result.size"}, gdast.Lit(-1)),
+			Condition: gdast.Eq(gdast.RawExpression{Code: `length_result["size"]`}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
 				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND"}),
 			},
 		},
-		rawf("offset += length_result.size"),
+		rawf(`offset += length_result["size"]`),
 		gdast.VarDeclaration{
 			Name:         "length",
 			TypeHint:     "int",
-			InitialValue: gdast.RawExpression{Code: "length_result.value"},
+			InitialValue: gdast.RawExpression{Code: `length_result["value"]`},
 		},
 		gdast.VarDeclaration{
 			Name:         "end_offset",
@@ -581,20 +587,20 @@ func singleNumericAppend(fieldVar, protoType string) []gdast.Statement {
 // asBool, the value is converted with `!= 0`.
 func varintAppend(fieldVar string, asBool bool) []gdast.Statement {
 	stmts := []gdast.Statement{
-		inferredVar("result", "ProtoCoreUtils.decode_varint(data, offset)"),
+		varintResultVar("result", "ProtoCoreUtils.decode_varint(data, offset)"),
 		gdast.IfStatement{
-			Condition: gdast.Eq(gdast.RawExpression{Code: "result.size"}, gdast.Lit(-1)),
+			Condition: gdast.Eq(gdast.RawExpression{Code: `result["size"]`}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
 				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND"}),
 			},
 		},
 	}
 	if asBool {
-		stmts = append(stmts, rawf("%s.append(result.value != 0)", fieldVar))
+		stmts = append(stmts, rawf(`%s.append(result["value"] != 0)`, fieldVar))
 	} else {
-		stmts = append(stmts, rawf("%s.append(result.value)", fieldVar))
+		stmts = append(stmts, rawf(`%s.append(result["value"])`, fieldVar))
 	}
-	stmts = append(stmts, rawf("offset += result.size"))
+	stmts = append(stmts, rawf(`offset += result["size"]`))
 	return stmts
 }
 
@@ -602,15 +608,15 @@ func varintAppend(fieldVar string, asBool bool) []gdast.Statement {
 // the result to fieldVar.
 func zigzagAppend(fieldVar, decodeFunc string) []gdast.Statement {
 	return []gdast.Statement{
-		inferredVar("result", "ProtoCoreUtils.decode_varint(data, offset)"),
+		varintResultVar("result", "ProtoCoreUtils.decode_varint(data, offset)"),
 		gdast.IfStatement{
-			Condition: gdast.Eq(gdast.RawExpression{Code: "result.size"}, gdast.Lit(-1)),
+			Condition: gdast.Eq(gdast.RawExpression{Code: `result["size"]`}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
 				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND"}),
 			},
 		},
-		rawf("%s.append(%s(result.value))", fieldVar, decodeFunc),
-		rawf("offset += result.size"),
+		rawf(`%s.append(%s(result["value"]))`, fieldVar, decodeFunc),
+		rawf(`offset += result["size"]`),
 	}
 }
 
@@ -646,7 +652,7 @@ func (g *generator) mapFieldDeserialization(mf *ast.MapField) []gdast.Statement 
 			InitialValue: gdast.Lit(0),
 		},
 		gdast.EmptyLine{},
-		inferredVar("map_key", mapDefault(mf.KeyType, false)),
+		typedVar("map_key", gdscriptScalarType(mf.KeyType), mapDefault(mf.KeyType, false)),
 		g.mapValueDecl(mf),
 		gdast.EmptyLine{},
 		gdast.WhileStatement{
@@ -664,9 +670,9 @@ func (g *generator) mapFieldDeserialization(mf *ast.MapField) []gdast.Statement 
 // from `entry_data` and dispatches to either the key or value decoder.
 func (g *generator) mapEntryLoopBody(mf *ast.MapField) []gdast.Statement {
 	return []gdast.Statement{
-		inferredVar("entry_tag_result", "ProtoCoreUtils.decode_varint(entry_data, entry_offset)"),
+		varintResultVar("entry_tag_result", "ProtoCoreUtils.decode_varint(entry_data, entry_offset)"),
 		gdast.IfStatement{
-			Condition: gdast.Eq(gdast.RawExpression{Code: "entry_tag_result.size"}, gdast.Lit(-1)),
+			Condition: gdast.Eq(gdast.RawExpression{Code: `entry_tag_result["size"]`}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
 				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND"}),
 			},
@@ -674,9 +680,9 @@ func (g *generator) mapEntryLoopBody(mf *ast.MapField) []gdast.Statement {
 		gdast.VarDeclaration{
 			Name:         "entry_tag",
 			TypeHint:     "int",
-			InitialValue: gdast.RawExpression{Code: "entry_tag_result.value"},
+			InitialValue: gdast.RawExpression{Code: `entry_tag_result["value"]`},
 		},
-		rawf("entry_offset += entry_tag_result.size"),
+		rawf(`entry_offset += entry_tag_result["size"]`),
 		gdast.VarDeclaration{
 			Name:         "entry_field_number",
 			TypeHint:     "int",
@@ -709,7 +715,17 @@ func (g *generator) mapEntryLoopBody(mf *ast.MapField) []gdast.Statement {
 // reading from `entry_data`/`entry_offset` and assigning into target.
 func mapEntryDecode(target, protoType string, isEnum bool, renderedType string) []gdast.Statement {
 	if isEnum {
-		return mapVarintAssign(target, false)
+		return []gdast.Statement{
+			varintResultVar("result", "ProtoCoreUtils.decode_varint(entry_data, entry_offset)"),
+			gdast.IfStatement{
+				Condition: gdast.Eq(gdast.RawExpression{Code: `result["size"]`}, gdast.Lit(-1)),
+				Body: []gdast.Statement{
+					gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND"}),
+				},
+			},
+			rawf(`%s = result["value"] as %s`, target, renderedType),
+			rawf(`entry_offset += result["size"]`),
+		}
 	}
 	switch protoType {
 	case "int32", "int64", "uint32", "uint64", "bool":
@@ -743,35 +759,35 @@ func mapEntryDecode(target, protoType string, isEnum bool, renderedType string) 
 // mapVarintAssign decodes a varint from the entry buffer into target.
 func mapVarintAssign(target string, asBool bool) []gdast.Statement {
 	stmts := []gdast.Statement{
-		inferredVar("result", "ProtoCoreUtils.decode_varint(entry_data, entry_offset)"),
+		varintResultVar("result", "ProtoCoreUtils.decode_varint(entry_data, entry_offset)"),
 		gdast.IfStatement{
-			Condition: gdast.Eq(gdast.RawExpression{Code: "result.size"}, gdast.Lit(-1)),
+			Condition: gdast.Eq(gdast.RawExpression{Code: `result["size"]`}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
 				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND"}),
 			},
 		},
 	}
 	if asBool {
-		stmts = append(stmts, rawf("%s = result.value != 0", target))
+		stmts = append(stmts, rawf(`%s = result["value"] != 0`, target))
 	} else {
-		stmts = append(stmts, rawf("%s = result.value", target))
+		stmts = append(stmts, rawf(`%s = result["value"]`, target))
 	}
-	stmts = append(stmts, rawf("entry_offset += result.size"))
+	stmts = append(stmts, rawf(`entry_offset += result["size"]`))
 	return stmts
 }
 
 // mapZigzagAssign decodes a zig-zag varint from the entry buffer into target.
 func mapZigzagAssign(target, decodeFunc string) []gdast.Statement {
 	return []gdast.Statement{
-		inferredVar("result", "ProtoCoreUtils.decode_varint(entry_data, entry_offset)"),
+		varintResultVar("result", "ProtoCoreUtils.decode_varint(entry_data, entry_offset)"),
 		gdast.IfStatement{
-			Condition: gdast.Eq(gdast.RawExpression{Code: "result.size"}, gdast.Lit(-1)),
+			Condition: gdast.Eq(gdast.RawExpression{Code: `result["size"]`}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
 				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND"}),
 			},
 		},
-		rawf("%s = %s(result.value)", target, decodeFunc),
-		rawf("entry_offset += result.size"),
+		rawf(`%s = %s(result["value"])`, target, decodeFunc),
+		rawf(`entry_offset += result["size"]`),
 	}
 }
 
@@ -794,18 +810,18 @@ func mapFixedAssign(target, decodeFunc string, width int) []gdast.Statement {
 // target.
 func mapStringAssign(target string) []gdast.Statement {
 	return []gdast.Statement{
-		inferredVar("len_result", "ProtoCoreUtils.decode_varint(entry_data, entry_offset)"),
+		varintResultVar("len_result", "ProtoCoreUtils.decode_varint(entry_data, entry_offset)"),
 		gdast.IfStatement{
-			Condition: gdast.Eq(gdast.RawExpression{Code: "len_result.size"}, gdast.Lit(-1)),
+			Condition: gdast.Eq(gdast.RawExpression{Code: `len_result["size"]`}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
 				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND"}),
 			},
 		},
-		rawf("entry_offset += len_result.size"),
+		rawf(`entry_offset += len_result["size"]`),
 		gdast.VarDeclaration{
 			Name:         "str_len",
 			TypeHint:     "int",
-			InitialValue: gdast.RawExpression{Code: "len_result.value"},
+			InitialValue: gdast.RawExpression{Code: `len_result["value"]`},
 		},
 		gdast.IfStatement{
 			Condition: gdast.RawExpression{Code: "entry_offset + str_len > entry_data.size()"},
@@ -822,18 +838,18 @@ func mapStringAssign(target string) []gdast.Statement {
 // into target.
 func mapBytesAssign(target string) []gdast.Statement {
 	return []gdast.Statement{
-		inferredVar("len_result", "ProtoCoreUtils.decode_varint(entry_data, entry_offset)"),
+		varintResultVar("len_result", "ProtoCoreUtils.decode_varint(entry_data, entry_offset)"),
 		gdast.IfStatement{
-			Condition: gdast.Eq(gdast.RawExpression{Code: "len_result.size"}, gdast.Lit(-1)),
+			Condition: gdast.Eq(gdast.RawExpression{Code: `len_result["size"]`}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
 				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND"}),
 			},
 		},
-		rawf("entry_offset += len_result.size"),
+		rawf(`entry_offset += len_result["size"]`),
 		gdast.VarDeclaration{
 			Name:         "byte_len",
 			TypeHint:     "int",
-			InitialValue: gdast.RawExpression{Code: "len_result.value"},
+			InitialValue: gdast.RawExpression{Code: `len_result["value"]`},
 		},
 		gdast.IfStatement{
 			Condition: gdast.RawExpression{Code: "entry_offset + byte_len > entry_data.size()"},
@@ -851,18 +867,18 @@ func mapBytesAssign(target string) []gdast.Statement {
 // calling from_bytes; nested errors are propagated.
 func mapMessageAssign(target, typeName string) []gdast.Statement {
 	return []gdast.Statement{
-		inferredVar("len_result", "ProtoCoreUtils.decode_varint(entry_data, entry_offset)"),
+		varintResultVar("len_result", "ProtoCoreUtils.decode_varint(entry_data, entry_offset)"),
 		gdast.IfStatement{
-			Condition: gdast.Eq(gdast.RawExpression{Code: "len_result.size"}, gdast.Lit(-1)),
+			Condition: gdast.Eq(gdast.RawExpression{Code: `len_result["size"]`}, gdast.Lit(-1)),
 			Body: []gdast.Statement{
 				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND"}),
 			},
 		},
-		rawf("entry_offset += len_result.size"),
+		rawf(`entry_offset += len_result["size"]`),
 		gdast.VarDeclaration{
 			Name:         "msg_len",
 			TypeHint:     "int",
-			InitialValue: gdast.RawExpression{Code: "len_result.value"},
+			InitialValue: gdast.RawExpression{Code: `len_result["value"]`},
 		},
 		gdast.IfStatement{
 			Condition: gdast.RawExpression{Code: "entry_offset + msg_len > entry_data.size()"},
@@ -876,7 +892,7 @@ func mapMessageAssign(target, typeName string) []gdast.Statement {
 			InitialValue: gdast.RawExpression{Code: "entry_data.slice(entry_offset, entry_offset + msg_len)"},
 		},
 		rawf("%s = %s.new()", target, typeName),
-		inferredVar("entry_msg_result", fmt.Sprintf("%s.from_bytes(entry_msg_data)", target)),
+		typedVar("entry_msg_result", "ProtoCoreUtils.ProtobufError", fmt.Sprintf("%s.from_bytes(entry_msg_data)", target)),
 		gdast.IfStatement{
 			Condition: gdast.Ne(gdast.V("entry_msg_result"), gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.NO_ERRORS"}),
 			Body: []gdast.Statement{
@@ -893,6 +909,9 @@ func mapMessageAssign(target, typeName string) []gdast.Statement {
 // infer a type for, so we emit a typed declaration to keep the script
 // compiling on Godot 4.6+.
 func (g *generator) mapValueDecl(mf *ast.MapField) gdast.Statement {
+	if mf.ValueIsEnum {
+		return typedVar("map_value", g.gRenderedMapType(mf), "0 as "+g.gRenderedMapType(mf))
+	}
 	if !mf.ValueIsEnum {
 		if _, ok := scalarTypeMap[mf.ValueType]; !ok {
 			return gdast.VarDeclaration{
@@ -902,7 +921,7 @@ func (g *generator) mapValueDecl(mf *ast.MapField) gdast.Statement {
 			}
 		}
 	}
-	return inferredVar("map_value", mapDefault(mf.ValueType, mf.ValueIsEnum))
+	return typedVar("map_value", g.gRenderedMapType(mf), mapDefault(mf.ValueType, mf.ValueIsEnum))
 }
 
 // mapDefault returns the literal zero value used to initialize the running
