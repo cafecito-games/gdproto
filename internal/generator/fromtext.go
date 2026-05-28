@@ -178,42 +178,42 @@ func fromTextBytesBody(f *ast.Field, oneofGroup string) string {
 
 func fromTextScalarBody(f *ast.Field, oneofGroup string, repeated bool) string {
 	var b strings.Builder
-	b.WriteString("\t\t\tvar num_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_number(text, pos)\n")
-	b.WriteString("\t\t\tif \"error\" in num_result:\n")
+	b.WriteString("\t\t\tvar num_result: ProtoCoreUtils.NumberParseResult = ProtoCoreUtils.parse_number(text, pos)\n")
+	b.WriteString("\t\t\tif num_result.has_error():\n")
 	b.WriteString("\t\t\t\treturn ProtoCoreUtils.ProtobufError.UNDEFINED_STATE\n")
 	if repeated {
-		b.WriteString("\t\t\t_" + f.Name + ".append(int(num_result[\"value\"]))\n")
+		b.WriteString("\t\t\t_" + f.Name + ".append(num_result.int_value)\n")
 	} else {
-		b.WriteString("\t\t\t_" + f.Name + " = int(num_result[\"value\"])\n")
+		b.WriteString("\t\t\t_" + f.Name + " = num_result.int_value\n")
 	}
 	b.WriteString(oneofAssignment(oneofGroup, f.Name))
-	b.WriteString("\t\t\tpos = num_result[\"pos\"]\n")
+	b.WriteString("\t\t\tpos = num_result.pos\n")
 	return b.String()
 }
 
 func fromTextFloatBody(f *ast.Field, oneofGroup string) string {
 	var b strings.Builder
-	b.WriteString("\t\t\tvar float_result: Dictionary[String, Variant]\n")
+	b.WriteString("\t\t\tvar float_result: ProtoCoreUtils.NumberParseResult\n")
 	b.WriteString("\t\t\t# Check for special values or identifiers\n")
-	b.WriteString("\t\t\tif pos < text.length() and text[pos] in [\"i\", \"n\", \"-\", \"+\"] or not text[pos].is_valid_int():\n")
+	b.WriteString("\t\t\tif pos < text.length() and (text[pos] in [\"i\", \"n\", \"-\", \"+\"] or not text[pos].is_valid_int()):\n")
 	b.WriteString("\t\t\t\tvar id_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)\n")
 	b.WriteString("\t\t\t\tif \"value\" in id_result:\n")
 	b.WriteString("\t\t\t\t\tmatch id_result[\"value\"]:\n")
 	b.WriteString("\t\t\t\t\t\t\"inf\":\n")
-	b.WriteString("\t\t\t\t\t\t\tfloat_result = {\"value\": INF, \"pos\": id_result[\"pos\"]}\n")
+	b.WriteString("\t\t\t\t\t\t\tfloat_result = ProtoCoreUtils.NumberParseResult.from_float(INF, id_result[\"pos\"])\n")
 	b.WriteString("\t\t\t\t\t\t\"nan\":\n")
-	b.WriteString("\t\t\t\t\t\t\tfloat_result = {\"value\": NAN, \"pos\": id_result[\"pos\"]}\n")
+	b.WriteString("\t\t\t\t\t\t\tfloat_result = ProtoCoreUtils.NumberParseResult.from_float(NAN, id_result[\"pos\"])\n")
 	b.WriteString("\t\t\t\t\t\t_:\n")
 	b.WriteString("\t\t\t\t\t\t\tfloat_result = ProtoCoreUtils.parse_number(text, pos)\n")
 	b.WriteString("\t\t\t\telse:\n")
 	b.WriteString("\t\t\t\t\tfloat_result = ProtoCoreUtils.parse_number(text, pos)\n")
 	b.WriteString("\t\t\telse:\n")
 	b.WriteString("\t\t\t\tfloat_result = ProtoCoreUtils.parse_number(text, pos)\n")
-	b.WriteString("\t\t\tif \"error\" in float_result:\n")
+	b.WriteString("\t\t\tif float_result.has_error():\n")
 	b.WriteString("\t\t\t\treturn ProtoCoreUtils.ProtobufError.UNDEFINED_STATE\n")
-	b.WriteString("\t\t\t_" + f.Name + " = float(float_result[\"value\"])\n")
+	b.WriteString("\t\t\t_" + f.Name + " = float_result.float_value\n")
 	b.WriteString(oneofAssignment(oneofGroup, f.Name))
-	b.WriteString("\t\t\tpos = float_result[\"pos\"]\n")
+	b.WriteString("\t\t\tpos = float_result.pos\n")
 	return b.String()
 }
 
@@ -231,10 +231,9 @@ func fromTextBoolBody(f *ast.Field, oneofGroup string) string {
 func fromTextEnumBody(f *ast.Field, oneofGroup, enumType string) string {
 	var b strings.Builder
 	b.WriteString("\t\t\t# Parse enum value (name or number)\n")
-	b.WriteString("\t\t\tvar enum_result: Dictionary[String, Variant]\n")
 	b.WriteString("\t\t\tif pos < text.length() and not text[pos].is_valid_int() and text[pos] != \"-\":\n")
 	b.WriteString("\t\t\t\t# Parse as identifier (enum name)\n")
-	b.WriteString("\t\t\t\tenum_result = ProtoCoreUtils.parse_identifier(text, pos)\n")
+	b.WriteString("\t\t\t\tvar enum_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)\n")
 	b.WriteString("\t\t\t\tif \"error\" not in enum_result:\n")
 	b.WriteString("\t\t\t\t\tvar enum_name: String = enum_result[\"value\"]\n")
 	b.WriteString("\t\t\t\t\tvar enum_value: int = _parse_enum_value_" + f.Name + "(enum_name)\n")
@@ -243,12 +242,12 @@ func fromTextEnumBody(f *ast.Field, oneofGroup, enumType string) string {
 	b.WriteString("\t\t\t\t\tpos = enum_result[\"pos\"]\n")
 	b.WriteString("\t\t\telse:\n")
 	b.WriteString("\t\t\t\t# Parse as number\n")
-	b.WriteString("\t\t\t\tenum_result = ProtoCoreUtils.parse_number(text, pos)\n")
-	b.WriteString("\t\t\t\tif \"error\" in enum_result:\n")
+	b.WriteString("\t\t\t\tvar enum_result: ProtoCoreUtils.NumberParseResult = ProtoCoreUtils.parse_number(text, pos)\n")
+	b.WriteString("\t\t\t\tif enum_result.has_error():\n")
 	b.WriteString("\t\t\t\t\treturn ProtoCoreUtils.ProtobufError.UNDEFINED_STATE\n")
-	b.WriteString("\t\t\t\t_" + f.Name + " = int(enum_result[\"value\"]) as " + enumType + "\n")
+	b.WriteString("\t\t\t\t_" + f.Name + " = enum_result.int_value as " + enumType + "\n")
 	b.WriteString(oneofAssignmentExtraIndent(oneofGroup, f.Name, "\t\t\t\t"))
-	b.WriteString("\t\t\t\tpos = enum_result[\"pos\"]\n")
+	b.WriteString("\t\t\t\tpos = enum_result.pos\n")
 	return b.String()
 }
 
@@ -373,10 +372,10 @@ func (g *generator) mapTextDefault(mf *ast.MapField) string {
 func fromTextMapEntryParser(protoType, target, indent string, isEnum bool, enumType, renderedType string) string {
 	var b strings.Builder
 	if isEnum {
-		b.WriteString(indent + "var num_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_number(text, pos)\n")
-		b.WriteString(indent + "if \"value\" in num_result:\n")
-		b.WriteString(indent + "\t" + target + " = int(num_result[\"value\"]) as " + enumType + "\n")
-		b.WriteString(indent + "\tpos = num_result[\"pos\"]\n")
+		b.WriteString(indent + "var num_result: ProtoCoreUtils.NumberParseResult = ProtoCoreUtils.parse_number(text, pos)\n")
+		b.WriteString(indent + "if not num_result.has_error():\n")
+		b.WriteString(indent + "\t" + target + " = num_result.int_value as " + enumType + "\n")
+		b.WriteString(indent + "\tpos = num_result.pos\n")
 		return b.String()
 	}
 	if _, ok := scalarTypeMap[protoType]; !ok {
@@ -408,20 +407,20 @@ func fromTextMapEntryParser(protoType, target, indent string, isEnum bool, enumT
 		b.WriteString(indent + "\t" + target + " = str_result[\"value\"]\n")
 		b.WriteString(indent + "\tpos = str_result[\"pos\"]\n")
 	case "float", "double":
-		b.WriteString(indent + "var num_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_number(text, pos)\n")
-		b.WriteString(indent + "if \"value\" in num_result:\n")
-		b.WriteString(indent + "\t" + target + " = float(num_result[\"value\"])\n")
-		b.WriteString(indent + "\tpos = num_result[\"pos\"]\n")
+		b.WriteString(indent + "var num_result: ProtoCoreUtils.NumberParseResult = ProtoCoreUtils.parse_number(text, pos)\n")
+		b.WriteString(indent + "if not num_result.has_error():\n")
+		b.WriteString(indent + "\t" + target + " = num_result.float_value\n")
+		b.WriteString(indent + "\tpos = num_result.pos\n")
 	case "bool":
 		b.WriteString(indent + "var id_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)\n")
 		b.WriteString(indent + "if \"value\" in id_result:\n")
 		b.WriteString(indent + "\t" + target + " = id_result[\"value\"] == \"true\"\n")
 		b.WriteString(indent + "\tpos = id_result[\"pos\"]\n")
 	default:
-		b.WriteString(indent + "var num_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_number(text, pos)\n")
-		b.WriteString(indent + "if \"value\" in num_result:\n")
-		b.WriteString(indent + "\t" + target + " = int(num_result[\"value\"])\n")
-		b.WriteString(indent + "\tpos = num_result[\"pos\"]\n")
+		b.WriteString(indent + "var num_result: ProtoCoreUtils.NumberParseResult = ProtoCoreUtils.parse_number(text, pos)\n")
+		b.WriteString(indent + "if not num_result.has_error():\n")
+		b.WriteString(indent + "\t" + target + " = num_result.int_value\n")
+		b.WriteString(indent + "\tpos = num_result.pos\n")
 	}
 	return b.String()
 }

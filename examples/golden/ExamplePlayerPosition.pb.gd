@@ -169,78 +169,78 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = pos + 1
 				pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
-				var float_result: Dictionary[String, Variant]
+				var float_result: ProtoCoreUtils.NumberParseResult
 				# Check for special values or identifiers
-				if pos < text.length() and text[pos] in ["i", "n", "-", "+"] or not text[pos].is_valid_int():
+				if pos < text.length() and (text[pos] in ["i", "n", "-", "+"] or not text[pos].is_valid_int()):
 					var id_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)
 					if "value" in id_result:
 						match id_result["value"]:
 							"inf":
-								float_result = {"value": INF, "pos": id_result["pos"]}
+								float_result = ProtoCoreUtils.NumberParseResult.from_float(INF, id_result["pos"])
 							"nan":
-								float_result = {"value": NAN, "pos": id_result["pos"]}
+								float_result = ProtoCoreUtils.NumberParseResult.from_float(NAN, id_result["pos"])
 							_:
 								float_result = ProtoCoreUtils.parse_number(text, pos)
 					else:
 						float_result = ProtoCoreUtils.parse_number(text, pos)
 				else:
 					float_result = ProtoCoreUtils.parse_number(text, pos)
-				if "error" in float_result:
+				if float_result.has_error():
 					return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
-				_x = float(float_result["value"])
-				pos = float_result["pos"]
+				_x = float_result.float_value
+				pos = float_result.pos
 			"y":
 				# Parse colon
 				if pos < text.length() and text[pos] == ":":
 					pos = pos + 1
 				pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
-				var float_result: Dictionary[String, Variant]
+				var float_result: ProtoCoreUtils.NumberParseResult
 				# Check for special values or identifiers
-				if pos < text.length() and text[pos] in ["i", "n", "-", "+"] or not text[pos].is_valid_int():
+				if pos < text.length() and (text[pos] in ["i", "n", "-", "+"] or not text[pos].is_valid_int()):
 					var id_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)
 					if "value" in id_result:
 						match id_result["value"]:
 							"inf":
-								float_result = {"value": INF, "pos": id_result["pos"]}
+								float_result = ProtoCoreUtils.NumberParseResult.from_float(INF, id_result["pos"])
 							"nan":
-								float_result = {"value": NAN, "pos": id_result["pos"]}
+								float_result = ProtoCoreUtils.NumberParseResult.from_float(NAN, id_result["pos"])
 							_:
 								float_result = ProtoCoreUtils.parse_number(text, pos)
 					else:
 						float_result = ProtoCoreUtils.parse_number(text, pos)
 				else:
 					float_result = ProtoCoreUtils.parse_number(text, pos)
-				if "error" in float_result:
+				if float_result.has_error():
 					return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
-				_y = float(float_result["value"])
-				pos = float_result["pos"]
+				_y = float_result.float_value
+				pos = float_result.pos
 			"z":
 				# Parse colon
 				if pos < text.length() and text[pos] == ":":
 					pos = pos + 1
 				pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
-				var float_result: Dictionary[String, Variant]
+				var float_result: ProtoCoreUtils.NumberParseResult
 				# Check for special values or identifiers
-				if pos < text.length() and text[pos] in ["i", "n", "-", "+"] or not text[pos].is_valid_int():
+				if pos < text.length() and (text[pos] in ["i", "n", "-", "+"] or not text[pos].is_valid_int()):
 					var id_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)
 					if "value" in id_result:
 						match id_result["value"]:
 							"inf":
-								float_result = {"value": INF, "pos": id_result["pos"]}
+								float_result = ProtoCoreUtils.NumberParseResult.from_float(INF, id_result["pos"])
 							"nan":
-								float_result = {"value": NAN, "pos": id_result["pos"]}
+								float_result = ProtoCoreUtils.NumberParseResult.from_float(NAN, id_result["pos"])
 							_:
 								float_result = ProtoCoreUtils.parse_number(text, pos)
 					else:
 						float_result = ProtoCoreUtils.parse_number(text, pos)
 				else:
 					float_result = ProtoCoreUtils.parse_number(text, pos)
-				if "error" in float_result:
+				if float_result.has_error():
 					return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
-				_z = float(float_result["value"])
-				pos = float_result["pos"]
+				_z = float_result.float_value
+				pos = float_result.pos
 			_:
 				# Unknown field - skip it
 				push_warning("Unknown field: " + field_name)

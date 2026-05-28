@@ -21,9 +21,50 @@ enum ProtobufError {
 	REQUIRED_FIELDS = -9,
 }
 
+class NumberParseResult extends RefCounted:
+	var int_value: int = 0
+	var float_value: float = 0.0
+	var pos: int = 0
+	var is_float: bool = false
+	var error: String = ""
+
+	static func from_int(value: int, next_pos: int) -> NumberParseResult:
+		var result: NumberParseResult = NumberParseResult.new()
+		result.int_value = value
+		result.float_value = float(value)
+		result.pos = next_pos
+		result.is_float = false
+		return result
+
+	static func from_float(value: float, next_pos: int) -> NumberParseResult:
+		var result: NumberParseResult = NumberParseResult.new()
+		result.float_value = value
+		result.int_value = int(value)
+		result.pos = next_pos
+		result.is_float = true
+		return result
+
+	static func from_error(message: String) -> NumberParseResult:
+		var result: NumberParseResult = NumberParseResult.new()
+		result.error = message
+		return result
+
+	func has_error() -> bool:
+		return error != ""
+
 
 
 const PROTO_VERSION: int = 3
+
+static func _append_byte(result: PackedByteArray, value: int) -> void:
+	var err: int = result.append(value)
+	if err != OK:
+		push_error("PackedByteArray append failed")
+
+static func _resize_bytes(result: PackedByteArray, size: int) -> void:
+	var err: int = result.resize(size)
+	if err != OK:
+		push_error("PackedByteArray resize failed")
 
 
 
@@ -35,9 +76,9 @@ static func encode_varint(value: int) -> PackedByteArray:
 	# Negative values will be encoded as large unsigned values (10 bytes)
 	var unsigned_value: int = value
 	while unsigned_value > 0x7F or unsigned_value < 0:
-		result.append((unsigned_value & 0x7F) | 0x80)
+		_append_byte(result, (unsigned_value & 0x7F) | 0x80)
 		unsigned_value = (unsigned_value >> 7) & 0x01FFFFFFFFFFFFFF  # Unsigned right shift
-	result.append(unsigned_value & 0x7F)
+	_append_byte(result, unsigned_value & 0x7F)
 	return result
 
 static func decode_varint(data: PackedByteArray, offset: int) -> Dictionary[String, int]:
@@ -94,14 +135,14 @@ static func decode_zigzag64(value: int) -> int:
 static func encode_fixed32(value: int) -> PackedByteArray:
 	"""Encode 32-bit fixed integer."""
 	var result: PackedByteArray = PackedByteArray()
-	result.resize(4)
+	_resize_bytes(result, 4)
 	result.encode_u32(0, value)
 	return result
 
 static func encode_fixed64(value: int) -> PackedByteArray:
 	"""Encode 64-bit fixed integer."""
 	var result: PackedByteArray = PackedByteArray()
-	result.resize(8)
+	_resize_bytes(result, 8)
 	result.encode_u64(0, value)
 	return result
 
@@ -116,14 +157,14 @@ static func decode_fixed64(data: PackedByteArray, offset: int) -> int:
 static func encode_sfixed32(value: int) -> PackedByteArray:
 	"""Encode 32-bit signed fixed integer."""
 	var result: PackedByteArray = PackedByteArray()
-	result.resize(4)
+	_resize_bytes(result, 4)
 	result.encode_s32(0, value)
 	return result
 
 static func encode_sfixed64(value: int) -> PackedByteArray:
 	"""Encode 64-bit signed fixed integer."""
 	var result: PackedByteArray = PackedByteArray()
-	result.resize(8)
+	_resize_bytes(result, 8)
 	result.encode_s64(0, value)
 	return result
 
@@ -139,14 +180,14 @@ static func decode_sfixed64(data: PackedByteArray, offset: int) -> int:
 static func encode_float(value: float) -> PackedByteArray:
 	"""Encode 32-bit float."""
 	var result: PackedByteArray = PackedByteArray()
-	result.resize(4)
+	_resize_bytes(result, 4)
 	result.encode_float(0, value)
 	return result
 
 static func encode_double(value: float) -> PackedByteArray:
 	"""Encode 64-bit double."""
 	var result: PackedByteArray = PackedByteArray()
-	result.resize(8)
+	_resize_bytes(result, 8)
 	result.encode_double(0, value)
 	return result
 
@@ -265,24 +306,24 @@ static func unescape_bytes_text_format(value: String) -> PackedByteArray:
 				break
 			var next: String = value[i]
 			match next:
-				"n": result.append(0x0A)  # \n
-				"r": result.append(0x0D)  # \r
-				"t": result.append(0x09)  # \t
-				"\\": result.append(0x5C)  # \
-				"\"": result.append(0x22)  # "
+				"n": _append_byte(result, 0x0A)  # \n
+				"r": _append_byte(result, 0x0D)  # \r
+				"t": _append_byte(result, 0x09)  # \t
+				"\\": _append_byte(result, 0x5C)  # \
+				"\"": _append_byte(result, 0x22)  # "
 				"x":
 					# \xHH hex escape - convert directly to byte
 					if i + 2 < value.length():
 						var hex: String = value.substr(i + 1, 2)
-						result.append(hex.hex_to_int())
+						_append_byte(result, hex.hex_to_int())
 						i += 2
 				_:
 					# Unknown escape, just use the byte value of the character
-					result.append(next.unicode_at(0))
+					_append_byte(result, next.unicode_at(0))
 			i += 1
 		else:
 			# Regular character - append its byte value
-			result.append(ch.unicode_at(0))
+			_append_byte(result, ch.unicode_at(0))
 			i += 1
 	return result
 
@@ -349,7 +390,7 @@ static func parse_string_literal(text: String, pos: int) -> Dictionary[String, V
 			pos += 1
 	return {"error": "Unterminated string"}
 
-static func parse_number(text: String, pos: int) -> Dictionary[String, Variant]:
+static func parse_number(text: String, pos: int) -> NumberParseResult:
 	"""Parse number (int or float)."""
 	var start: int = pos
 	# Handle negative sign
@@ -359,9 +400,9 @@ static func parse_number(text: String, pos: int) -> Dictionary[String, Variant]:
 	if pos + 2 < text.length():
 		var substr: String = text.substr(pos, 3)
 		if substr == "inf":
-			return {"value": INF if text[start] != "-" else -INF, "pos": pos + 3, "is_float": true}
+			return NumberParseResult.from_float(INF if text[start] != "-" else -INF, pos + 3)
 		if substr == "nan":
-			return {"value": NAN, "pos": pos + 3, "is_float": true}
+			return NumberParseResult.from_float(NAN, pos + 3)
 	# Parse digits
 	var has_dot: bool = false
 	var has_exp: bool = false
@@ -380,9 +421,9 @@ static func parse_number(text: String, pos: int) -> Dictionary[String, Variant]:
 		else:
 			break
 	if pos == start or (pos == start + 1 and text[start] in ["-", "+"]):
-		return {"error": "Expected number"}
+		return NumberParseResult.from_error("Expected number")
 	var num_str: String = text.substr(start, pos - start)
 	if has_dot or has_exp:
-		return {"value": float(num_str), "pos": pos, "is_float": true}
+		return NumberParseResult.from_float(float(num_str), pos)
 	else:
-		return {"value": int(num_str), "pos": pos, "is_float": false}
+		return NumberParseResult.from_int(int(num_str), pos)

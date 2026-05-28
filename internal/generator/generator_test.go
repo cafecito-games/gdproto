@@ -507,6 +507,12 @@ func TestGenerateExampleStrictGDScriptShape(t *testing.T) {
 		} {
 			assert.NotContains(t, out, forbidden, "%s contains unsafe decode dictionary property access", f.Filename)
 		}
+		for _, forbidden := range []string{
+			`int(num_result["value"])`,
+			`int(enum_result["value"])`,
+		} {
+			assert.NotContains(t, out, forbidden, "%s passes Variant dictionary values directly to int()", f.Filename)
+		}
 	}
 }
 
@@ -517,6 +523,8 @@ func TestProtoCoreUtilsStrictShape(t *testing.T) {
 	assert.Empty(t, untypedVar.FindString(out), "proto_core_utils contains untyped local declaration")
 	bareDictionaryReturn := regexp.MustCompile(`(?m)->\s*Dictionary:`)
 	assert.Empty(t, bareDictionaryReturn.FindString(out), "proto_core_utils contains bare Dictionary return type")
+	discardedPackedByteArrayMutation := regexp.MustCompile(`(?m)^\s*result\.(append|resize)\(`)
+	assert.Empty(t, discardedPackedByteArrayMutation.FindString(out), "proto_core_utils discards PackedByteArray mutation return value")
 }
 
 func firstMatchingLine(src, needle string) string {
