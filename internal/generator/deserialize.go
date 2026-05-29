@@ -27,6 +27,18 @@ func varintResultVar(name, code string) gdast.VarDeclaration {
 // dispatches on field number via a match statement; each case implements the
 // per-field decode for its wire format.
 func (g *generator) generateFromBytes(m *ast.Message) gdast.Function {
+	if isEmptyMessage(m) {
+		return gdast.Function{
+			Name:       "from_bytes",
+			Parameters: []gdast.Parameter{{Name: "_data", TypeHint: "PackedByteArray"}},
+			ReturnType: "ProtoCoreUtils.ProtobufError",
+			Body: []gdast.Statement{
+				gdast.DocString{Text: "Deserialize message from bytes."},
+				gdast.Ret(gdast.RawExpression{Code: "ProtoCoreUtils.ProtobufError.NO_ERRORS"}),
+			},
+		}
+	}
+
 	body := []gdast.Statement{
 		gdast.DocString{Text: "Deserialize message from bytes."},
 		gdast.VarDeclaration{

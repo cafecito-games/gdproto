@@ -60,8 +60,10 @@ func (g *generator) generateMessageClass(m *ast.Message, className, scope string
 		)
 	}
 
-	statements = append(statements, gdast.Comment{Text: "Fields"})
-	statements = append(statements, g.generateFieldDeclarations(m)...)
+	if declarations := g.generateFieldDeclarations(m); len(declarations) > 0 {
+		statements = append(statements, gdast.Comment{Text: "Fields"})
+		statements = append(statements, declarations...)
+	}
 
 	if len(m.Oneofs) > 0 {
 		statements = append(statements, gdast.Comment{Text: "Oneof enums"})
@@ -79,8 +81,10 @@ func (g *generator) generateMessageClass(m *ast.Message, className, scope string
 		}
 	}
 
-	statements = append(statements, gdast.Comment{Text: "Accessors"})
-	statements = append(statements, g.generateAccessors(m)...)
+	if accessors := g.generateAccessors(m); len(accessors) > 0 {
+		statements = append(statements, gdast.Comment{Text: "Accessors"})
+		statements = append(statements, accessors...)
+	}
 
 	if len(m.Oneofs) > 0 {
 		statements = append(statements, gdast.Comment{Text: "Oneof case getters"})
@@ -109,6 +113,13 @@ func (g *generator) generateMessageClass(m *ast.Message, className, scope string
 		HeaderComment:      headerCommentText(filepath.Base(g.sourceName)),
 		Statements:         statements,
 	}
+}
+
+// isEmptyMessage reports whether a message declares no serializable members
+// (no regular fields, oneofs, or maps). Such messages generate collapsed,
+// single-line serialization method bodies.
+func isEmptyMessage(m *ast.Message) bool {
+	return len(m.Fields) == 0 && len(m.Oneofs) == 0 && len(m.Maps) == 0
 }
 
 // generateFieldDeclarations emits the `var _name: Type = default` declarations

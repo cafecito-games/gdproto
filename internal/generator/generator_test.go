@@ -49,6 +49,43 @@ func TestGenerateEmptyProto(t *testing.T) {
 	}
 }
 
+func TestGenerateFieldlessMessageCollapsesMethods(t *testing.T) {
+	file := &ast.ProtoFile{
+		Syntax:   "proto3",
+		Messages: []*ast.Message{{Name: "LeaveParty"}},
+	}
+	files, err := generator.Generate(file, "party.proto", nil)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	f := findFile(files, "PartyLeaveParty")
+	if f == nil {
+		t.Fatalf("missing PartyLeaveParty class; got %v", classNames(files))
+	}
+	out := f.Source()
+
+	for _, want := range []string{
+		"func to_bytes() -> PackedByteArray:",
+		"\treturn PackedByteArray()",
+		"func from_bytes(_data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:",
+		"func to_text(_indent_level: int = 0) -> String:",
+		"\treturn \"\"",
+		"func from_text(_text: String) -> ProtoCoreUtils.ProtobufError:",
+		"\treturn ProtoCoreUtils.ProtobufError.NO_ERRORS",
+		"return \"LeaveParty {}\"",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("fieldless message output missing fragment %q\n--- full output ---\n%s", want, out)
+		}
+	}
+
+	for _, unwanted := range []string{"# Fields", "# Accessors", "while ", "var result", "var parts"} {
+		if strings.Contains(out, unwanted) {
+			t.Errorf("fieldless message output should not contain %q\n--- full output ---\n%s", unwanted, out)
+		}
+	}
+}
+
 func TestGenerateHeaderUsesBasename(t *testing.T) {
 	file := &ast.ProtoFile{
 		Syntax: "proto3",

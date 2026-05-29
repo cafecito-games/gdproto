@@ -10,6 +10,17 @@ import (
 // generateToBytes builds the `to_bytes` method that serializes a message
 // instance to a PackedByteArray using the proto wire format.
 func (g *generator) generateToBytes(m *ast.Message) gdast.Function {
+	if isEmptyMessage(m) {
+		return gdast.Function{
+			Name:       "to_bytes",
+			ReturnType: "PackedByteArray",
+			Body: []gdast.Statement{
+				gdast.DocString{Text: "Serialize message to bytes."},
+				gdast.Ret(gdast.Call("PackedByteArray")),
+			},
+		}
+	}
+
 	body := []gdast.Statement{
 		gdast.DocString{Text: "Serialize message to bytes."},
 		gdast.VarDeclaration{

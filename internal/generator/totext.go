@@ -14,6 +14,15 @@ import (
 // highly text-driven and byte-identity to the reference output is the primary
 // correctness criterion.
 func (g *generator) generateToText(m *ast.Message) gdast.Function {
+	if isEmptyMessage(m) {
+		return gdast.Function{
+			Name:       "to_text",
+			Parameters: []gdast.Parameter{{Name: "_indent_level", TypeHint: "int", Default: gdast.Lit(0)}},
+			ReturnType: "String",
+			Body:       []gdast.Statement{gdast.RawStatement{Code: `"""Serialize message to protobuf text format."""` + "\n" + `return ""`}},
+		}
+	}
+
 	var b strings.Builder
 	b.WriteString(`"""Serialize message to protobuf text format."""` + "\n")
 	b.WriteString("var result: String = \"\"\n")
