@@ -16,6 +16,16 @@ import (
 // snippets are highly templated and byte-identity to the upstream Python
 // generator is the primary correctness criterion for this method.
 func (g *generator) generateFromText(m *ast.Message) gdast.Function {
+	if isEmptyMessage(m) {
+		return gdast.Function{
+			Name:       "from_text",
+			Parameters: []gdast.Parameter{{Name: "_text", TypeHint: "String"}},
+			ReturnType: "ProtoCoreUtils.ProtobufError",
+			Body: []gdast.Statement{gdast.RawStatement{Code: `"""Deserialize message from protobuf text format."""` + "\n" +
+				"return ProtoCoreUtils.ProtobufError.NO_ERRORS"}},
+		}
+	}
+
 	var b strings.Builder
 	b.WriteString(`"""Deserialize message from protobuf text format."""` + "\n")
 	b.WriteString("var pos: int = 0\n")

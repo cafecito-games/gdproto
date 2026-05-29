@@ -11,6 +11,17 @@ import (
 // are skipped. Regular fields are emitted in source order, followed by map
 // fields, followed by oneof fields.
 func (g *generator) generateToString(m *ast.Message) gdast.Function {
+	if isEmptyMessage(m) {
+		return gdast.Function{
+			Name:       "_to_string",
+			ReturnType: "String",
+			Body: []gdast.Statement{
+				gdast.DocString{Text: "Generate debug string representation."},
+				gdast.Ret(gdast.Lit(m.Name + " {}")),
+			},
+		}
+	}
+
 	body := []gdast.Statement{
 		gdast.DocString{Text: "Generate debug string representation."},
 		gdast.VarDeclaration{
