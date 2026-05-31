@@ -512,6 +512,44 @@ func TestGenerateFromBytesComplex(t *testing.T) {
 	}
 }
 
+func TestGenerateFromTextFloatSpecialValuesCastIdentifierPosition(t *testing.T) {
+	file := &ast.ProtoFile{
+		Syntax: "proto3",
+		Messages: []*ast.Message{{
+			Name: "Reading",
+			Fields: []*ast.Field{
+				{FieldType: "float", Name: "speed", Number: 1},
+				{FieldType: "double", Name: "ratio", Number: 2},
+			},
+		}},
+	}
+	files, err := generator.Generate(file, "example.proto", nil)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	f := findFile(files, "ExampleReading")
+	if f == nil {
+		t.Fatalf("missing ExampleReading; got %v", classNames(files))
+	}
+	got := f.Source()
+	for _, want := range []string{
+		`float_result = ProtoCoreUtils.NumberParseResult.from_float(INF, int(id_result["pos"]))`,
+		`float_result = ProtoCoreUtils.NumberParseResult.from_float(NAN, int(id_result["pos"]))`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("float special-value parser should cast identifier pos to int; missing %q\n%s", want, got)
+		}
+	}
+	for _, bad := range []string{
+		`float_result = ProtoCoreUtils.NumberParseResult.from_float(INF, id_result["pos"])`,
+		`float_result = ProtoCoreUtils.NumberParseResult.from_float(NAN, id_result["pos"])`,
+	} {
+		if strings.Contains(got, bad) {
+			t.Fatalf("float special-value parser passes Variant pos to from_float: %q\n%s", bad, got)
+		}
+	}
+}
+
 func TestGenerateExampleStrictGDScriptShape(t *testing.T) {
 	src, err := os.ReadFile("../../examples/example.proto")
 	require.NoError(t, err)
