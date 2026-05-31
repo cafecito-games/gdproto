@@ -176,9 +176,9 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					if "value" in id_result:
 						match id_result["value"]:
 							"inf":
-								float_result = ProtoCoreUtils.NumberParseResult.from_float(INF, id_result["pos"])
+								float_result = ProtoCoreUtils.NumberParseResult.from_float(INF, int(id_result["pos"]))
 							"nan":
-								float_result = ProtoCoreUtils.NumberParseResult.from_float(NAN, id_result["pos"])
+								float_result = ProtoCoreUtils.NumberParseResult.from_float(NAN, int(id_result["pos"]))
 							_:
 								float_result = ProtoCoreUtils.parse_number(text, pos)
 					else:
@@ -202,9 +202,9 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					if "value" in id_result:
 						match id_result["value"]:
 							"inf":
-								float_result = ProtoCoreUtils.NumberParseResult.from_float(INF, id_result["pos"])
+								float_result = ProtoCoreUtils.NumberParseResult.from_float(INF, int(id_result["pos"]))
 							"nan":
-								float_result = ProtoCoreUtils.NumberParseResult.from_float(NAN, id_result["pos"])
+								float_result = ProtoCoreUtils.NumberParseResult.from_float(NAN, int(id_result["pos"]))
 							_:
 								float_result = ProtoCoreUtils.parse_number(text, pos)
 					else:
@@ -228,9 +228,9 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					if "value" in id_result:
 						match id_result["value"]:
 							"inf":
-								float_result = ProtoCoreUtils.NumberParseResult.from_float(INF, id_result["pos"])
+								float_result = ProtoCoreUtils.NumberParseResult.from_float(INF, int(id_result["pos"]))
 							"nan":
-								float_result = ProtoCoreUtils.NumberParseResult.from_float(NAN, id_result["pos"])
+								float_result = ProtoCoreUtils.NumberParseResult.from_float(NAN, int(id_result["pos"]))
 							_:
 								float_result = ProtoCoreUtils.parse_number(text, pos)
 					else:
