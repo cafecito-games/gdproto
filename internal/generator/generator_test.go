@@ -533,19 +533,25 @@ func TestGenerateFromTextFloatSpecialValuesCastIdentifierPosition(t *testing.T) 
 	}
 	got := f.Source()
 	for _, want := range []string{
-		`float_result = ProtoCoreUtils.NumberParseResult.from_float(INF, int(id_result["pos"]))`,
-		`float_result = ProtoCoreUtils.NumberParseResult.from_float(NAN, int(id_result["pos"]))`,
+		`var id_value: String = id_result["value"]`,
+		`var id_pos: int = id_result["pos"]`,
+		`match id_value:`,
+		`float_result = ProtoCoreUtils.NumberParseResult.from_float(INF, id_pos)`,
+		`float_result = ProtoCoreUtils.NumberParseResult.from_float(NAN, id_pos)`,
 	} {
 		if !strings.Contains(got, want) {
-			t.Fatalf("float special-value parser should cast identifier pos to int; missing %q\n%s", want, got)
+			t.Fatalf("float special-value parser should narrow identifier values into typed locals; missing %q\n%s", want, got)
 		}
 	}
 	for _, bad := range []string{
+		`match id_result["value"]:`,
 		`float_result = ProtoCoreUtils.NumberParseResult.from_float(INF, id_result["pos"])`,
 		`float_result = ProtoCoreUtils.NumberParseResult.from_float(NAN, id_result["pos"])`,
+		`float_result = ProtoCoreUtils.NumberParseResult.from_float(INF, int(id_result["pos"]))`,
+		`float_result = ProtoCoreUtils.NumberParseResult.from_float(NAN, int(id_result["pos"]))`,
 	} {
 		if strings.Contains(got, bad) {
-			t.Fatalf("float special-value parser passes Variant pos to from_float: %q\n%s", bad, got)
+			t.Fatalf("float special-value parser uses unsafe Variant at a call site: %q\n%s", bad, got)
 		}
 	}
 }
