@@ -174,11 +174,13 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 				if pos < text.length() and (text[pos] in ["i", "n", "-", "+"] or not text[pos].is_valid_int()):
 					var id_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)
 					if "value" in id_result:
-						match id_result["value"]:
+						var id_value: String = id_result["value"]
+						var id_pos: int = id_result["pos"]
+						match id_value:
 							"inf":
-								float_result = ProtoCoreUtils.NumberParseResult.from_float(INF, int(id_result["pos"]))
+								float_result = ProtoCoreUtils.NumberParseResult.from_float(INF, id_pos)
 							"nan":
-								float_result = ProtoCoreUtils.NumberParseResult.from_float(NAN, int(id_result["pos"]))
+								float_result = ProtoCoreUtils.NumberParseResult.from_float(NAN, id_pos)
 							_:
 								float_result = ProtoCoreUtils.parse_number(text, pos)
 					else:
@@ -200,11 +202,13 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 				if pos < text.length() and (text[pos] in ["i", "n", "-", "+"] or not text[pos].is_valid_int()):
 					var id_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)
 					if "value" in id_result:
-						match id_result["value"]:
+						var id_value: String = id_result["value"]
+						var id_pos: int = id_result["pos"]
+						match id_value:
 							"inf":
-								float_result = ProtoCoreUtils.NumberParseResult.from_float(INF, int(id_result["pos"]))
+								float_result = ProtoCoreUtils.NumberParseResult.from_float(INF, id_pos)
 							"nan":
-								float_result = ProtoCoreUtils.NumberParseResult.from_float(NAN, int(id_result["pos"]))
+								float_result = ProtoCoreUtils.NumberParseResult.from_float(NAN, id_pos)
 							_:
 								float_result = ProtoCoreUtils.parse_number(text, pos)
 					else:
@@ -226,11 +230,13 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 				if pos < text.length() and (text[pos] in ["i", "n", "-", "+"] or not text[pos].is_valid_int()):
 					var id_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)
 					if "value" in id_result:
-						match id_result["value"]:
+						var id_value: String = id_result["value"]
+						var id_pos: int = id_result["pos"]
+						match id_value:
 							"inf":
-								float_result = ProtoCoreUtils.NumberParseResult.from_float(INF, int(id_result["pos"]))
+								float_result = ProtoCoreUtils.NumberParseResult.from_float(INF, id_pos)
 							"nan":
-								float_result = ProtoCoreUtils.NumberParseResult.from_float(NAN, int(id_result["pos"]))
+								float_result = ProtoCoreUtils.NumberParseResult.from_float(NAN, id_pos)
 							_:
 								float_result = ProtoCoreUtils.parse_number(text, pos)
 					else:
