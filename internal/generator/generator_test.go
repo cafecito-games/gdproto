@@ -1246,6 +1246,46 @@ message Outer {
 		"the field must not be annotated as an enum\n%s", got)
 }
 
+// TestGenerateAbsoluteReferenceIsNotScopeResolved covers protobuf's rule that a
+// leading dot makes a reference absolute: it resolves against the fully
+// qualified name alone, never against an enclosing scope. Without that rule the
+// innermost-first walk lets a nested declaration capture a reference that names
+// a different type outright, which is a silent miscompile rather than an error.
+func TestGenerateAbsoluteReferenceIsNotScopeResolved(t *testing.T) {
+	const source = `syntax = "proto3";
+package game.v1;
+enum Mode {
+  MODE_A = 0;
+}
+message Outer {
+  message game {
+    message v1 {
+      message Mode {
+        int32 y = 1;
+      }
+    }
+  }
+  .game.v1.Mode absolute = 1;
+  game.v1.Mode relative = 2;
+}
+`
+	files := generateFromSource(t, source, "game.proto")
+	f := findFile(files, "GameOuter")
+	require.NotNil(t, f, "missing GameOuter; got %v", classNames(files))
+	got := f.Source()
+
+	// The absolute reference names the top-level enum, so the field is an enum.
+	assert.Contains(t, got, "var _absolute: GameMode.Mode = 0 as GameMode.Mode",
+		"an absolute reference must resolve at file scope, not against Outer\n%s", got)
+	assert.NotContains(t, got, "func new_absolute()",
+		"the absolute reference names an enum, which has no constructor\n%s", got)
+
+	// The same path without the leading dot resolves innermost-first, which
+	// binds it to Outer.game.v1.Mode -- a message, not the enum.
+	assert.Contains(t, got, "var _relative: GameOutergamev1Mode = null",
+		"a relative reference must resolve against the nearest enclosing scope\n%s", got)
+}
+
 func TestGenerateFullyQualifiedMessageIsNotAnEnum(t *testing.T) {
 	const source = `syntax = "proto3";
 package game.v1;

@@ -280,6 +280,11 @@ func concatProtoPath(typePath string) string {
 // package-relative paths can be consulted with a single walk. Duplicates are
 // dropped, preserving first occurrence.
 func buildLookupCandidates(typeName, currentScope, pkg string) []string {
+	// A leading dot makes the reference absolute. Protobuf resolves such a
+	// reference against the fully qualified name alone and never against an
+	// enclosing scope, so scope-walking one would let a nested declaration
+	// capture a reference that names a different type outright.
+	absolute := strings.HasPrefix(typeName, ".")
 	typeName = strings.TrimPrefix(typeName, ".")
 	var out []string
 	seen := map[string]bool{}
@@ -289,6 +294,10 @@ func buildLookupCandidates(typeName, currentScope, pkg string) []string {
 		}
 		seen[s] = true
 		out = append(out, s)
+	}
+	if absolute {
+		add(typeName)
+		return out
 	}
 	if currentScope != "" {
 		parts := strings.Split(currentScope, ".")
