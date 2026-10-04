@@ -48,6 +48,17 @@ protoc \
     -I "$PROTO_ROOT" \
     "${PROTO_FILES[@]}"
 
+# Imported files are not generated transitively (matching protoc-gen-go), so the
+# well-known types the fixtures reference need their own pass. Downstream
+# consumers do the same thing with a second buf generate scoped to
+# google/protobuf, and keeping it separate here leaves the exclusion above
+# exercising the transitive-import path.
+protoc \
+    --plugin=protoc-gen-gdscript="$PLUGIN" \
+    --gdscript_out="$GENERATED_DIR" \
+    -I "$PROTO_ROOT" \
+    google/protobuf/timestamp.proto
+
 if ! grep -q '^gdscript/warnings/treat_warnings_as_errors=true$' "$GODOT_PROJECT/project.godot"; then
     echo "error: test Godot project must keep strict GDScript warnings enabled" >&2
     exit 1
@@ -99,13 +110,45 @@ if ! grep -E '^ok ' "$vest_log" >/dev/null; then
 fi
 
 # Vest drops a suite whose script fails to parse from its plan instead of
-# reporting it as a failure, and generated GDScript whose declared type and
-# codec describe different declarations is exactly what makes a suite
-# unparseable. The scoping suite is the one that loads the shadowed and
-# nested-enum classes, so assert it actually ran rather than vanished.
-if ! grep -qE '^ok [0-9]+ - res://tests/scoping/test_scoping\.gd$' "$vest_log"; then
-    echo "error: res://tests/scoping/test_scoping.gd did not run;" \
-        "the generated classes it loads most likely failed to parse" >&2
+# reporting it as a failure, so by the checks above a suite that never loaded
+# looks exactly like one that passed. Derive the expected suites from the
+# filesystem instead and require every one of them to report: that way neither a
+# script that stops parsing nor a script that disappears from its suite
+# directory can go unnoticed, and a new suite is covered automatically.
+ran_suites=()
+while IFS= read -r line; do
+    ran_suites+=("$line")
+done < <(sed -n 's/^ok [0-9]* - //p' "$vest_log")
+
+suite_missing=0
+while IFS= read -r suite_script; do
+    suite="res://tests/${suite_script#"$GODOT_PROJECT/tests/"}"
+    found=0
+    for ran_suite in ${ran_suites[@]+"${ran_suites[@]}"}; do
+        if [[ "$ran_suite" == "$suite" ]]; then
+            found=1
+            break
+        fi
+    done
+    if [[ "$found" -ne 1 ]]; then
+        echo "error: $suite is absent from the Vest plan;" \
+            "the classes it loads most likely failed to parse" >&2
+        suite_missing=$((suite_missing + 1))
+    fi
+done < <(find "$GODOT_PROJECT/tests" -type f -name 'test_*.gd' | sort)
+
+# A suite directory with no script at all would drop out of the loop above
+# silently, so require each one to still hold a test script.
+while IFS= read -r suite_dir; do
+    if [[ -z "$(find "$suite_dir" -type f -name 'test_*.gd')" ]]; then
+        echo "error: suite directory res://tests/${suite_dir#"$GODOT_PROJECT/tests/"}" \
+            "holds no test_*.gd script" >&2
+        suite_missing=$((suite_missing + 1))
+    fi
+done < <(find "$GODOT_PROJECT/tests" -mindepth 1 -maxdepth 1 -type d | sort)
+
+if [[ "$suite_missing" -ne 0 ]]; then
+    echo "error: $suite_missing expected Vest suite(s) did not run" >&2
     exit 1
 fi
 
