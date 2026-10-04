@@ -1019,3 +1019,138 @@ func TestGenerateUnresolvedCrossFileTypeIsError(t *testing.T) {
 		t.Fatalf("error missing source filename: %v", err)
 	}
 }
+
+// generateFromSource lexes, parses, validates and generates source, failing the
+// test on any error. It mirrors the full compiler pipeline so that annotation
+// passes driven by parser output (such as local enum detection) are exercised.
+func generateFromSource(t *testing.T, source, filename string) []generator.GeneratedFile {
+	t.Helper()
+	tokens, err := lexer.Tokenize(source, filename)
+	require.NoError(t, err, "tokenize")
+	file, err := parser.Parse(tokens, filename)
+	require.NoError(t, err, "parse")
+	require.Empty(t, validator.Validate(file, filename), "validate")
+	files, err := generator.Generate(file, filename, nil)
+	require.NoError(t, err, "generate")
+	return files
+}
+
+func TestGeneratePackagedUnqualifiedTopLevelEnumField(t *testing.T) {
+	const source = `syntax = "proto3";
+package game.v1;
+enum Team {
+  TEAM_UNKNOWN = 0;
+  TEAM_RED = 1;
+}
+message Unit {
+  Team team = 1;
+}
+`
+	files := generateFromSource(t, source, "game.proto")
+	f := findFile(files, "GameUnit")
+	require.NotNil(t, f, "missing GameUnit; got %v", classNames(files))
+	got := f.Source()
+
+	assert.Contains(t, got, "var _team: GameTeam.Team = 0 as GameTeam.Team",
+		"unqualified top-level enum field should default to the zero enum value\n%s", got)
+	assert.NotContains(t, got, "var _team: GameTeam.Team = null",
+		"unqualified top-level enum field was treated as a message\n%s", got)
+	assert.NotContains(t, got, "func new_team()",
+		"an enum field must not get a message constructor accessor\n%s", got)
+	assert.NotContains(t, got, ".new()",
+		"an enum class cannot be instantiated in GDScript\n%s", got)
+}
+
+func TestGeneratePackagedQualifiedTopLevelEnumField(t *testing.T) {
+	const source = `syntax = "proto3";
+package game.v1;
+enum Team {
+  TEAM_UNKNOWN = 0;
+}
+message Unit {
+  game.v1.Team other = 1;
+}
+`
+	files := generateFromSource(t, source, "game.proto")
+	f := findFile(files, "GameUnit")
+	require.NotNil(t, f, "missing GameUnit; got %v", classNames(files))
+	got := f.Source()
+
+	assert.Contains(t, got, "var _other: GameTeam.Team = 0 as GameTeam.Team",
+		"fully qualified top-level enum field regressed\n%s", got)
+	assert.NotContains(t, got, "func new_other()",
+		"an enum field must not get a message constructor accessor\n%s", got)
+	assert.NotContains(t, got, ".new()",
+		"an enum class cannot be instantiated in GDScript\n%s", got)
+}
+
+func TestGeneratePackagedUnqualifiedTopLevelEnumMapValue(t *testing.T) {
+	const source = `syntax = "proto3";
+package game.v1;
+enum Team {
+  TEAM_UNKNOWN = 0;
+}
+message Unit {
+  map<string, Team> rosters = 1;
+}
+`
+	files := generateFromSource(t, source, "game.proto")
+	f := findFile(files, "GameUnit")
+	require.NotNil(t, f, "missing GameUnit; got %v", classNames(files))
+	got := f.Source()
+
+	assert.Contains(t, got, "entry.append_array(ProtoCoreUtils.encode_varint(value))",
+		"map value typed as an unqualified top-level enum should serialize as a varint\n%s", got)
+	assert.NotContains(t, got, "value.to_bytes()",
+		"map value typed as an unqualified top-level enum was treated as a message\n%s", got)
+	assert.NotContains(t, got, ".new()",
+		"an enum class cannot be instantiated in GDScript\n%s", got)
+}
+
+func TestGeneratePackagedUnqualifiedTopLevelEnumOneofField(t *testing.T) {
+	const source = `syntax = "proto3";
+package game.v1;
+enum Team {
+  TEAM_UNKNOWN = 0;
+}
+message Unit {
+  oneof pick {
+    Team favorite = 1;
+  }
+}
+`
+	files := generateFromSource(t, source, "game.proto")
+	f := findFile(files, "GameUnit")
+	require.NotNil(t, f, "missing GameUnit; got %v", classNames(files))
+	got := f.Source()
+
+	assert.Contains(t, got, "var _favorite: GameTeam.Team = 0 as GameTeam.Team",
+		"oneof field typed as an unqualified top-level enum should default to the zero enum value\n%s", got)
+	assert.NotContains(t, got, "func new_favorite()",
+		"an enum field must not get a message constructor accessor\n%s", got)
+	assert.NotContains(t, got, ".new()",
+		"an enum class cannot be instantiated in GDScript\n%s", got)
+}
+
+func TestGeneratePackagedUnqualifiedNestedEnumField(t *testing.T) {
+	const source = `syntax = "proto3";
+package game.v1;
+message Unit {
+  enum Stance {
+    STANCE_UNKNOWN = 0;
+  }
+  Stance stance = 1;
+}
+`
+	files := generateFromSource(t, source, "game.proto")
+	f := findFile(files, "GameUnit")
+	require.NotNil(t, f, "missing GameUnit; got %v", classNames(files))
+	got := f.Source()
+
+	assert.Contains(t, got, "var _stance: Stance = 0 as Stance",
+		"nested enum referenced from its declaring message should resolve innermost-first\n%s", got)
+	assert.NotContains(t, got, "func new_stance()",
+		"an enum field must not get a message constructor accessor\n%s", got)
+	assert.NotContains(t, got, ".new()",
+		"an enum class cannot be instantiated in GDScript\n%s", got)
+}

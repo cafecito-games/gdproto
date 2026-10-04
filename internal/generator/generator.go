@@ -311,6 +311,11 @@ func (g *generator) annotateLocalEnumMessage(m *ast.Message, scope string, enumP
 	}
 }
 
+// isLocalEnumReference reports whether a type reference inside currentScope
+// names an enum declared in the file being generated. It follows protobuf name
+// resolution: the reference is resolved against each enclosing message scope
+// from the innermost outward, and finally against file (package) scope, where
+// annotateLocalEnumUsage registers top-level enums as "<package>.<EnumName>".
 func isLocalEnumReference(typeName, fullTypePath, currentScope, pkg string, enumPaths map[string]bool) bool {
 	if fullTypePath != "" && enumPaths[strings.TrimPrefix(fullTypePath, ".")] {
 		return true
@@ -330,7 +335,10 @@ func isLocalEnumReference(typeName, fullTypePath, currentScope, pkg string, enum
 
 	typeParts := strings.Split(normalizedType, ".")
 	scopeParts := strings.Split(currentScope, ".")
-	for i := len(scopeParts); i > 0; i-- {
+	// i == 0 drops every message scope and resolves the reference at file
+	// scope, which is where an unqualified reference to a top-level enum of a
+	// packaged file matches ("Team" against "game.v1.Team").
+	for i := len(scopeParts); i >= 0; i-- {
 		candidate := strings.Join(append(append([]string{}, scopeParts[:i]...), typeParts...), ".")
 		prefix := ""
 		if pkg != "" {
