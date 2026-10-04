@@ -1217,7 +1217,7 @@ message Thing { int32 id = 1; }`
 
 	for _, f := range files {
 		lines := strings.Split(mustSource(t, f), "\n")
-		if lines[0] != "# gdkit:disable = max-returns, max-public-methods" {
+		if lines[0] != "# gdkit:disable = max-returns, max-public-methods, max-file-lines" {
 			t.Errorf("%s line 1 = %q, want the gdkit:disable directive", f.Filename, lines[0])
 		}
 		if !strings.HasPrefix(lines[1], "class_name ") {

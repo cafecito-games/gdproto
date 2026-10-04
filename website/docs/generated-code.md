@@ -163,10 +163,13 @@ default configuration. A project that gates CI on gdkit can keep its generated
 protocol directory inside the checked set rather than excluding the directory —
 and with it, the checks that would catch a real problem.
 
-A test in the repository generates `examples/example.proto` into a throwaway
-Godot project and runs gdkit's linter, formatter, and uid check in process, so a
+A test in the repository generates `examples/example.proto` and the map-heavy
+`tests/godot/fixtures/proto/collections.proto` into throwaway Godot projects and
+runs gdkit's linter, formatter, and uid check over each in process, so a
 generator change that breaks conformance fails the gdproto test suite instead of
-surfacing in a downstream project.
+surfacing in a downstream project. The second schema is there because its output
+runs well past a thousand lines, which is the only way a file-length limit gets
+exercised at all.
 
 ### Formatting
 
@@ -196,17 +199,24 @@ var slots.
 Every generated file opens with this comment on line 1:
 
 ```gdscript
-# gdkit:disable = max-returns, max-public-methods
+# gdkit:disable = max-returns, max-public-methods, max-file-lines
 ```
 
-Both suppressed rules are gdkit *design limits* that generated protobuf code
-cannot satisfy by construction:
+All three suppressed rules are gdkit *design limits* whose value scales with the
+schema rather than with the quality of the code, so generated protobuf code
+cannot satisfy them by construction:
 
 - `max-returns` — a wire-format parser is an early-return function with one
   return per field.
 - `max-public-methods` — every field contributes a set of public accessors
   (`get_`, `set_`, `has_`, `clear_`, and more for repeated, map, and message
   fields), so method count grows with the schema.
+- `max-file-lines` — a message's file is as long as its field count demands:
+  serializer, deserializer, text-format reader and writer, accessors, and enum
+  helpers are all emitted per field. The repository's own `collections.proto`
+  fixture generates 1,121 lines from a single map-heavy message, against a
+  default limit of 1,000, and no generator change brings a large message under a
+  fixed line count.
 
 Restructuring generated code to fit those limits would make it worse to read,
 so they are suppressed rather than worked around. **No other rule is
@@ -249,6 +259,15 @@ produces 11 such diagnostics with a longest line of 133 columns. Formatting
 stays canonical and idempotent for those files — it is only the line-length
 lint rule that reports. A project in that situation can allowlist the rule for
 the generated directory, or shorten the schema's names.
+
+This rule is deliberately left reporting rather than suppressed alongside
+`max-file-lines`, and the asymmetry is the point. Wrapping is genuinely the
+formatter's job, and only the one case it cannot touch — a single over-long
+identifier or type annotation with no legal wrap point — escapes it, so a
+`max-line-length` diagnostic in generated output is worth seeing and
+suppressing the rule would hide real formatting problems. A file-length
+diagnostic carries no such signal, because nothing the generator could do
+would make it go away.
 
 **The agreement is with gdkit's default configuration.** gdproto cannot read a
 downstream project's `.gdkit/format.json`, so a project that customizes

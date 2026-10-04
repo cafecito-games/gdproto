@@ -1,4 +1,4 @@
-# gdkit:disable = max-returns, max-public-methods
+# gdkit:disable = max-returns, max-public-methods, max-file-lines
 class_name ExamplePlayerStatus
 
 extends RefCounted

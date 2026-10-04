@@ -385,13 +385,18 @@ const textFormatUtilsGDScript = "# =============================================
 	"\t\treturn {\"value\": int(num_str), \"pos\": pos, \"is_float\": false}"
 
 // gdkitSuppressions is emitted as the first line of every generated file.
-// max-returns and max-public-methods are gdkit design limits that generated
-// protobuf code cannot satisfy by construction: a wire-format parser is an
-// early-return function with one return per field, and a message with N
-// fields has 2N accessors. The directive must be line 1 - max-public-methods
-// is reported against the class global scope there, and a gdkit:disable only
-// reaches from its own line to the end of the file.
-const gdkitSuppressions = "gdkit:disable = max-returns, max-public-methods"
+// max-returns, max-public-methods and max-file-lines are gdkit design limits
+// whose value scales with the schema rather than with the quality of the code,
+// so generated protobuf code cannot satisfy them by construction: a
+// wire-format parser is an early-return function with one return per field, a
+// message with N fields has 2N accessors, and a message's file is as long as
+// its field count demands once the serializer, deserializer, text-format
+// reader and writer, accessors and enum helpers are all emitted per field. No
+// generator change brings a large message under a fixed file-length limit.
+// The directive must be line 1 - max-public-methods is reported against the
+// class global scope there, and a gdkit:disable only reaches from its own line
+// to the end of the file.
+const gdkitSuppressions = "gdkit:disable = max-returns, max-public-methods, max-file-lines"
 
 // headerCommentText returns the file header comment block emitted at the top
 // of every generated GDScript file.

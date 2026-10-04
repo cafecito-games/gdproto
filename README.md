@@ -129,15 +129,19 @@ because `gdkit format check` reports any file another pass would change.
 Every generated file opens with a suppression directive on line 1:
 
 ```gdscript
-# gdkit:disable = max-returns, max-public-methods
+# gdkit:disable = max-returns, max-public-methods, max-file-lines
 ```
 
-Those two rules are gdkit *design limits* that generated protobuf code cannot
-satisfy by construction: a wire-format parser is an early-return function with
-one return per field, and every proto field contributes a set of public
-accessors, so method count grows with the schema. Restructuring generated code
-to fit the limits would make it worse, not better. No other rule is
-suppressed. The directive has to be line 1 because
+All three rules are gdkit *design limits* whose value scales with the schema
+rather than with the quality of the code, so generated protobuf code cannot
+satisfy them by construction: a wire-format parser is an early-return function
+with one return per field, every proto field contributes a set of public
+accessors, and a message's file is as long as its field count demands once the
+serializer, deserializer, text-format reader and writer, accessors and enum
+helpers are emitted per field. The repository's own `collections.proto` fixture
+generates a 1,121-line file from a single map-heavy message. Restructuring
+generated code to fit the limits would make it worse, not better. No other rule
+is suppressed. The directive has to be line 1 because
 `max-public-methods` is reported against the class global scope there, and a
 `gdkit:disable` reaches only from its own line to the end of the file.
 
@@ -165,7 +169,13 @@ two developers' output agree, and is the only scheme that works in the
   long message, field, or enum names still produces lines past gdkit's
   100-column limit, because a single long identifier or type annotation has no
   legal wrap point. Formatting stays canonical and idempotent for such a
-  schema; it is only the line-length lint rule that reports.
+  schema; it is only the line-length lint rule that reports. The rule is left
+  reporting on purpose, unlike `max-file-lines`: wrapping is genuinely the
+  formatter's job and only the unwrappable case escapes it, so suppressing the
+  rule would hide real formatting problems, whereas no generator change can
+  bring a large message under a fixed file-length limit. A project that wants
+  the generated directory silent on this can allowlist the rule for it, or
+  shorten the schema's names.
 - **The agreement is with gdkit's default configuration.** A project with its
   own `.gdkit/format.json` — a different `line_width`, spaces instead of tabs —
   still needs its own `gdkit format write` pass over the generated directory.
