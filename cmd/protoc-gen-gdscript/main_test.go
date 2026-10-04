@@ -120,6 +120,63 @@ func responseFilenames(response *pluginpb.CodeGeneratorResponse) []string {
 
 // TestRunWithExampleProto exercises the full plugin pipeline by shelling out
 // to protoc to build a descriptor set for examples/example.proto, wrapping
+// TestRunResolvesAbsoluteReferenceThroughDescriptorPath covers the plugin path
+// specifically: the descriptor converter reduces a same-file type to its bare
+// name, which discards the leading dot of an absolute reference, while keeping
+// the definitive name the descriptor resolved. Resolving the bare name against
+// enclosing scopes instead lets a nested declaration capture the reference, and
+// the result is not a compile error but a field whose declared type is a
+// message class while its value and codec are an enum's.
+func TestRunResolvesAbsoluteReferenceThroughDescriptorPath(t *testing.T) {
+	const source = `syntax = "proto3";
+package game.v1;
+
+enum Mode {
+  MODE_A = 0;
+}
+
+message Outer {
+  message Mode {
+    int32 y = 1;
+  }
+  .game.v1.Mode absolute = 1;
+}
+`
+	request := buildRequestFromDescriptorSet(t, []string{"game.proto"}, map[string]string{
+		"game.proto": source,
+	})
+	response := runPluginRequest(t, request)
+
+	var outer string
+	for _, file := range response.GetFile() {
+		if file.GetName() == "GameOuter.pb.gd" {
+			outer = file.GetContent()
+		}
+	}
+	if outer == "" {
+		t.Fatalf("GameOuter.pb.gd was not generated; got %v", fileNames(response))
+	}
+
+	const want = "var _absolute: GameMode.Mode = 0 as GameMode.Mode"
+	if !strings.Contains(outer, want) {
+		t.Errorf("absolute reference did not resolve to the top-level enum\nwant: %s\ngot:\n%s", want, outer)
+	}
+	// GameOuterMode is the nested message's class. Declaring the field with it
+	// while assigning an enum value is invalid GDScript, so its appearance here
+	// is the defect, not a stylistic difference.
+	if strings.Contains(outer, "var _absolute: GameOuterMode") {
+		t.Errorf("absolute reference was captured by the nested message\n%s", outer)
+	}
+}
+
+func fileNames(response *pluginpb.CodeGeneratorResponse) []string {
+	names := make([]string, 0, len(response.GetFile()))
+	for _, file := range response.GetFile() {
+		names = append(names, file.GetName())
+	}
+	return names
+}
+
 // it in a CodeGeneratorRequest, and asserting the per-class files match the
 // committed goldens byte-for-byte. The test skips when protoc is unavailable.
 func TestRunWithExampleProto(t *testing.T) {

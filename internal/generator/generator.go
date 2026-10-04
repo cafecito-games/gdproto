@@ -199,7 +199,19 @@ func (g *generator) renderedType(protoType, fullTypePath, sourceFile string, isE
 		}
 		return wrapper
 	}
-	for _, candidate := range buildLookupCandidates(protoType, g.currentScope, g.file.Package) {
+	// A known FullTypePath is the definitive name the descriptor resolved the
+	// reference to, so it is tried before any scope candidate. The descriptor
+	// converter reduces a same-file type to its bare name in FieldType, which
+	// discards the leading dot of an absolute reference; scope-walking that
+	// bare name would let a nested declaration capture a reference the
+	// descriptor had already bound elsewhere.
+	candidates := buildLookupCandidates(protoType, g.currentScope, g.file.Package)
+	if fullTypePath != "" {
+		if definitive := strings.TrimPrefix(fullTypePath, "."); definitive != "" {
+			candidates = append([]string{definitive}, candidates...)
+		}
+	}
+	for _, candidate := range candidates {
 		if wrapper, inner, ok := g.resolver.LookupEnum(candidate); ok {
 			return wrapper + "." + inner
 		}
