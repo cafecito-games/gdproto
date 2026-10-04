@@ -111,11 +111,14 @@ buf generate
 
 ## gdkit conformance
 
-Generated output passes [gdkit](https://github.com/cafecito-games/gdkit)'s
-`gdkit format check`, `gdkit lint check`, and `gdkit uid check` with gdkit's
-default configuration. A project that gates CI on gdkit can therefore keep its
-generated protocol directory inside the checked set. Excluding that directory
-also excludes it from the checks that would catch a real problem in it.
+For a schema that follows [protobuf's own style
+guide](https://protobuf.dev/programming-guides/style/), generated output passes
+[gdkit](https://github.com/cafecito-games/gdkit)'s `gdkit format check`,
+`gdkit lint check`, and `gdkit uid check` with gdkit's default configuration. A
+project that gates CI on gdkit can therefore keep its generated protocol
+directory inside the checked set. Excluding that directory also excludes it
+from the checks that would catch a real problem in it. The style-guide
+condition and the other edges of the guarantee are in [Limits](#limits).
 
 Formatting agrees with gdkit by construction rather than by imitation: the
 generator parses its own output with
@@ -156,15 +159,45 @@ uid://ix8k3hu6vdsf
 ```
 
 Godot assigns these identifiers at random when it first imports a script.
-gdproto derives them from the filename instead, because a generator re-runs on
-every schema sync, and reissuing an identifier changes what every existing
-`uid://` reference to that script resolves to, with nothing rewriting those
-references. Deriving the identifier makes regeneration byte identical, makes
-two developers' output agree, and is the only scheme that works in the
-`protoc` plugin path, which never learns its own output directory.
+gdproto derives them from the filename instead, which makes regeneration
+produce byte-identical sidecars, makes two developers' output agree, and is the
+only scheme that works in the `protoc` plugin path, which never learns its own
+output directory.
+
+That is sound because of the contract generated code is used under: **a
+generated script is addressed by its `class_name`, not by its `uid://` path.**
+Every generated file declares a `class_name`, and generated messages are
+instantiated through it — `ExamplePlayer.new()`. Nothing should reference a
+generated script by `uid://`: not a scene, not a resource, not `project.godot`.
+So the identifier only has to be *stable*, which deriving it from the filename
+guarantees; it never has to be preserved across a change of scheme.
+
+A project that happens to hold Godot-assigned sidecars for generated scripts
+will see them replaced the first time it regenerates. Under the contract above
+that has no effect, because nothing was resolving those identifiers. In a
+production Godot client with 688 generated scripts, none of the 689 generated
+sidecar identifiers appeared in any scene, resource, or project file.
 
 ### Limits
 
+- **Identifier spelling has to follow protobuf's style guide.** Proto
+  identifiers are carried through into GDScript names verbatim, so a schema
+  that departs from the protobuf style guide — a `camelCase` field, a
+  `snake_case` message or enum name, a `camelCase` enum value — produces
+  GDScript names that gdkit's naming rules reject. A single
+  `string userName = 1;` field yields `var _userName` plus `get_userName()`
+  and `set_userName()`, which report `class-variable-name` and
+  `function-name`; `snake_case` type names and
+  `camelCase` enum values add `class-name`, `enum-name`, and
+  `enum-element-name`. The style guide already asks for `lower_snake_case`
+  fields, `PascalCase` message and enum names, and `SCREAMING_SNAKE_CASE` enum
+  values, so a conforming schema is the normal case. These rules are *not*
+  suppressed: they are real naming rules, and silencing them would hide genuine
+  naming problems in generated output, while renaming identifiers would change
+  the generated API — a decision this project has not taken. The remedy is to
+  rename the offending fields in the schema, or to scope gdkit's naming rules
+  away from the generated directory in the consuming project's own
+  `.gdkit/lint.json`.
 - **`max-line-length` is corpus dependent, not guaranteed.** A schema with very
   long message, field, or enum names still produces lines past gdkit's
   100-column limit, because a single long identifier or type annotation has no
@@ -180,14 +213,6 @@ two developers' output agree, and is the only scheme that works in the
   own `.gdkit/format.json` — a different `line_width`, spaces instead of tabs —
   still needs its own `gdkit format write` pass over the generated directory.
   gdproto cannot read a downstream project's configuration.
-- **The first regeneration replaces Godot-assigned sidecars.** A project that
-  already holds Godot-written `.uid` files for generated scripts will see them
-  replaced, since the derived identifier differs from the random one Godot
-  assigned. The exposure is small in practice — every generated class declares
-  `class_name` and is referenced by that global identifier rather than by a
-  `uid://` path — but it is a real one-time event. If a scene or resource does
-  reference a generated script by uid, grep for the old identifiers and update
-  them after the first regeneration.
 
 ## Custom prefix
 

@@ -157,11 +157,18 @@ the right class names in either direction.
 
 ## gdkit Conformance
 
-Generated output passes [gdkit](https://github.com/cafecito-games/gdkit)'s
-`gdkit format check`, `gdkit lint check`, and `gdkit uid check` using gdkit's
-default configuration. A project that gates CI on gdkit can keep its generated
-protocol directory inside the checked set rather than excluding the directory —
-and with it, the checks that would catch a real problem.
+For a schema that follows [protobuf's own style
+guide](https://protobuf.dev/programming-guides/style/), generated output passes
+[gdkit](https://github.com/cafecito-games/gdkit)'s `gdkit format check`,
+`gdkit lint check`, and `gdkit uid check` using gdkit's default configuration. A
+project that gates CI on gdkit can keep its generated protocol directory inside
+the checked set rather than excluding the directory — and with it, the checks
+that would catch a real problem.
+
+That is the whole guarantee, and its edges are worth reading before you rely on
+it: identifier spelling has to follow the style guide, line length is corpus
+dependent, and the agreement is with gdkit's *default* configuration. See
+[Known Limits](#known-limits).
 
 A test in the repository generates `examples/example.proto` and the map-heavy
 `tests/godot/fixtures/proto/collections.proto` into throwaway Godot projects and
@@ -235,10 +242,7 @@ uid://ix8k3hu6vdsf
 
 Godot assigns these resource identifiers at random (`ResourceUID::create_id`)
 the first time it imports a script. gdproto derives the identifier from the
-filename instead. The reason is regeneration: a generator re-runs on every
-schema sync, and reissuing an identifier changes what every existing `uid://`
-reference to that script resolves to, with nothing in the project rewriting
-those references. Deriving it has three further benefits:
+filename instead, which has three benefits:
 
 - Regenerating a schema produces byte-identical output, sidecars included, so
   generated files stay clean in version control.
@@ -247,9 +251,75 @@ those references. Deriving it has three further benefits:
   learns its own output directory and so cannot read identifiers already on
   disk.
 
+#### The Contract
+
+**A generated script is addressed by its `class_name`, not by its `uid://`
+path.** Every generated file declares a `class_name`, which registers the class
+as a global identifier in Godot, and generated messages are instantiated
+through that name:
+
+```gdscript
+var player := ExamplePlayer.new()
+```
+
+Nothing should reference a generated script by `uid://` — not a scene, not a
+resource, not `project.godot`. A generated file is compiler output; it is reached
+by name, the way a library class is, and never by resource path.
+
+That contract is what makes a derived identifier sufficient. The identifier only
+has to be *stable*, so that regenerating a schema does not churn the working
+tree, and deriving it from the filename guarantees exactly that. It does not
+have to be preserved across a change of scheme, because nothing resolves it.
+
+A project that happens to hold Godot-assigned sidecars for generated scripts
+will therefore see them replaced the first time it regenerates with gdproto, and
+that is inconsequential: the identifiers being replaced were not referenced by
+anything. In a production Godot client with 688 generated scripts, none of the
+689 generated sidecar identifiers appeared in any scene, resource, or project
+file.
+
 ### Known Limits
 
 The conformance guarantee has three real edges.
+
+**Identifier spelling has to follow protobuf's style guide.** Proto identifiers
+are carried through into GDScript names verbatim — the generator does not rename
+them — so a schema whose identifiers protobuf permits but gdkit's naming rules
+reject produces lint diagnostics. This schema is legal proto3:
+
+```protobuf
+message Account {
+  string userName = 1;
+}
+```
+
+and its output reports three diagnostics, because the field becomes `var
+_userName` with `get_userName()` and `set_userName()` accessors:
+
+```text
+Error: Class-scope variable name "_userName" is not valid (class-variable-name)
+Error: Function name "set_userName" is not valid (function-name)
+Error: Function name "get_userName" is not valid (function-name)
+```
+
+The same applies to type and enum spelling: a `snake_case` message name reports
+`class-name`, a `snake_case` enum name reports `enum-name`, and a `camelCase`
+enum value reports `enum-element-name`.
+
+The [protobuf style
+guide](https://protobuf.dev/programming-guides/style/) already mandates
+`lower_snake_case` field names, `PascalCase` message and enum names, and
+`SCREAMING_SNAKE_CASE` enum values, so a conforming schema — the normal case —
+runs into none of this.
+
+These naming rules are deliberately **not** suppressed. They are real naming
+rules, and silencing them in generated output would hide genuine naming problems
+there. The alternative, renaming proto identifiers on the way into GDScript,
+would change the generated API — a deliberate decision this project has not
+taken, because a field's proto name is how a schema author expects to address it.
+Two remedies are available: rename the offending fields in the schema, which the
+protobuf style guide already asks for, or scope gdkit's naming rules away from
+the generated directory in the consuming project's own `.gdkit/lint.json`.
 
 **`max-line-length` is corpus dependent.** A schema with very long message,
 field, or enum names still produces lines past gdkit's 100-column limit: a
@@ -274,15 +344,6 @@ downstream project's `.gdkit/format.json`, so a project that customizes
 `line_width`, indents with spaces, or otherwise diverges from gdparser's Godot
 style needs its own `gdkit format write` pass over the generated directory
 after generation.
-
-**The first regeneration replaces Godot-assigned sidecars.** A project that
-already contains `.uid` files Godot wrote for generated scripts will see them
-replaced on the first regeneration with gdproto, because the derived identifier
-differs from the random one Godot assigned. The exposure is usually nil: every
-generated class declares `class_name` and is referenced through that global
-identifier, not through a `uid://` path. But it is a real one-time event, so if
-a scene or resource does reference a generated script by uid, grep the project
-for the old identifiers and update those references.
 
 ## Construct A Message
 

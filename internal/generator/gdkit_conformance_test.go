@@ -198,3 +198,68 @@ func TestGeneratedProjectPassesGdkitUID(t *testing.T) {
 		})
 	}
 }
+
+// TestNonConformingProtoIdentifiersReportNamingDiagnostics pins a *documented
+// limitation*, not a bug, and must not be "fixed" by suppressing gdkit's
+// naming rules or by renaming proto identifiers in the generator.
+//
+// Proto identifiers are carried through into GDScript names verbatim, so a
+// schema that departs from protobuf's style guide produces GDScript names that
+// gdkit's naming rules reject. The conformance guarantee is scoped to schemas
+// that follow that style guide, and README.md and the website's generated-code
+// page say so. This test keeps the documentation and the generator from
+// drifting apart: a `camelCase` field must produce exactly the naming rules the
+// docs predict and nothing else.
+//
+// Suppressing these rules in generated output would hide genuine naming
+// problems there, and renaming identifiers would change the generated API,
+// which is a deliberate decision this project has not taken. The remedy
+// belongs in the consuming schema or in that project's own .gdkit/lint.json.
+func TestNonConformingProtoIdentifiersReportNamingDiagnostics(t *testing.T) {
+	const schema = `syntax = "proto3";
+message Account {
+  string userName = 1;
+  int32 loginCount = 2;
+}
+`
+	// The documented diagnostics: one class-variable-name per backing field,
+	// and one function-name per accessor gdkit sees a non-snake_case name on.
+	wantRules := map[string]int{
+		"class-variable-name": 2,
+		"function-name":       4,
+	}
+
+	dir := t.TempDir()
+	protoPath := filepath.Join(dir, "account.proto")
+	if err := os.WriteFile(protoPath, []byte(schema), 0o600); err != nil {
+		t.Fatalf("write schema: %v", err)
+	}
+
+	root := writeCorpusProject(t, conformanceFixture{name: "camel_case_field", protoPath: protoPath})
+
+	linter, err := lint.New(lint.DefaultConfig())
+	if err != nil {
+		t.Fatalf("new linter: %v", err)
+	}
+	snapshot := loadGdkitSnapshot(t, root)
+	if len(snapshot.Scripts) == 0 {
+		t.Fatal("lint examined no scripts, so it attests to nothing")
+	}
+
+	gotRules := map[string]int{}
+	for _, diagnostic := range linter.Lint(snapshot).Diagnostics {
+		gotRules[diagnostic.Rule]++
+	}
+
+	for rule, want := range wantRules {
+		if gotRules[rule] != want {
+			t.Errorf("rule %s: got %d diagnostics, want %d", rule, gotRules[rule], want)
+		}
+	}
+	for rule, got := range gotRules {
+		if _, documented := wantRules[rule]; !documented {
+			t.Errorf("undocumented rule %s reported %d diagnostics; either the generator "+
+				"regressed or the documented limits need updating", rule, got)
+		}
+	}
+}
