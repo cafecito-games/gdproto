@@ -1154,3 +1154,123 @@ message Unit {
 	assert.NotContains(t, got, ".new()",
 		"an enum class cannot be instantiated in GDScript\n%s", got)
 }
+
+func TestGenerateNestedMessageShadowsTopLevelEnum(t *testing.T) {
+	const source = `syntax = "proto3";
+package game.v1;
+enum Mode {
+  MODE_A = 0;
+}
+message Outer {
+  message Mode {
+    int32 x = 1;
+  }
+  Mode field = 1;
+}
+`
+	files := generateFromSource(t, source, "shadow.proto")
+	f := findFile(files, "ShadowOuter")
+	require.NotNil(t, f, "missing ShadowOuter; got %v", classNames(files))
+	got := f.Source()
+
+	assert.Contains(t, got, "var _field: ShadowOuterMode = null",
+		"a nested message must shadow a same-named file-scope enum\n%s", got)
+	assert.NotContains(t, got, "ShadowMode",
+		"the reference must not resolve to the file-scope enum wrapper\n%s", got)
+	assert.NotContains(t, got, "0 as ",
+		"the field must not be annotated as an enum\n%s", got)
+	assert.NotContains(t, got, "ProtoCoreUtils.encode_varint(_field)",
+		"a message field must not use the varint codec\n%s", got)
+	assert.Contains(t, got, "func new_field()",
+		"a message field needs a constructor accessor\n%s", got)
+	assert.Contains(t, got, "_field.to_bytes()",
+		"a message field must serialize through to_bytes\n%s", got)
+}
+
+func TestGenerateNestedEnumShadowsTopLevelMessage(t *testing.T) {
+	const source = `syntax = "proto3";
+package game.v1;
+message Mode {
+  int32 x = 1;
+}
+message Outer {
+  enum Mode {
+    MODE_A = 0;
+  }
+  Mode field = 1;
+}
+`
+	files := generateFromSource(t, source, "shadow.proto")
+	f := findFile(files, "ShadowOuter")
+	require.NotNil(t, f, "missing ShadowOuter; got %v", classNames(files))
+	got := f.Source()
+
+	assert.Contains(t, got, "var _field: Mode = 0 as Mode",
+		"a nested enum must shadow a same-named top-level message\n%s", got)
+	assert.NotContains(t, got, "ShadowMode",
+		"the reference must not resolve to the top-level message class\n%s", got)
+	assert.NotContains(t, got, "func new_field()",
+		"an enum field must not get a message constructor accessor\n%s", got)
+}
+
+func TestGenerateDeepNestingResolvesNearestScope(t *testing.T) {
+	const source = `syntax = "proto3";
+package game.v1;
+enum Mode {
+  MODE_A = 0;
+}
+message Outer {
+  message Mode {
+    int32 outer_value = 1;
+  }
+  message Middle {
+    message Mode {
+      bool middle_value = 1;
+    }
+    message Inner {
+      Mode field = 1;
+    }
+  }
+}
+`
+	files := generateFromSource(t, source, "shadow.proto")
+	f := findFile(files, "ShadowOuterMiddleInner")
+	require.NotNil(t, f, "missing ShadowOuterMiddleInner; got %v", classNames(files))
+	got := f.Source()
+
+	assert.Contains(t, got, "var _field: ShadowOuterMiddleMode = null",
+		"the walk must stop at the nearest enclosing declaration\n%s", got)
+	assert.NotContains(t, got, "ShadowOuterMode",
+		"the walk must not skip past the intermediate scope\n%s", got)
+	assert.NotContains(t, got, "0 as ",
+		"the field must not be annotated as an enum\n%s", got)
+}
+
+func TestGenerateFullyQualifiedMessageIsNotAnEnum(t *testing.T) {
+	const source = `syntax = "proto3";
+package game.v1;
+enum Mode {
+  MODE_A = 0;
+}
+message Outer {
+  message Mode {
+    int32 x = 1;
+  }
+  game.v1.Outer.Mode qualified = 1;
+  game.v1.Mode explicit = 2;
+}
+`
+	files := generateFromSource(t, source, "shadow.proto")
+	f := findFile(files, "ShadowOuter")
+	require.NotNil(t, f, "missing ShadowOuter; got %v", classNames(files))
+	got := f.Source()
+
+	assert.Contains(t, got, "var _qualified: ShadowOuterMode = null",
+		"a fully qualified message reference must stay a message\n%s", got)
+	assert.Contains(t, got, "func new_qualified()",
+		"a fully qualified message reference needs a constructor accessor\n%s", got)
+	assert.Contains(t, got, "var _explicit: ShadowMode.Mode = 0 as ShadowMode.Mode",
+		"a fully qualified enum reference must stay an enum\n%s", got)
+	assert.NotContains(t, got, "func new_explicit()",
+		"an enum field must not get a message constructor accessor\n%s", got)
+}

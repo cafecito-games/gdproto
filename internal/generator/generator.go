@@ -63,6 +63,7 @@ func Generate(file *ast.ProtoFile, sourceName string, imports []FileEntry) ([]Ge
 		prefix:     prefix,
 		resolver:   resolver,
 	}
+	g.declarations = collectLocalDeclarations(file)
 	g.annotateLocalEnumUsage()
 	return g.generate()
 }
@@ -72,6 +73,12 @@ type generator struct {
 	sourceName string
 	prefix     string
 	resolver   *NameResolver
+	// declarations indexes the proto FQNs of every enum and message declared
+	// in g.file. It complements the NameResolver, which deliberately omits
+	// nested enums, and it is what lets the candidate walk in renderedType
+	// and isLocalEnumReference stop at the nearest enclosing declaration of
+	// either kind instead of running on to an outer, same-named one.
+	declarations localDeclarations
 	// currentScope is the dotted proto-FQN-style path (without the package
 	// prefix) of the message whose body is currently being rendered. It is
 	// set at the entrypoint of generateMessageClass and consulted by
@@ -199,11 +206,43 @@ func (g *generator) renderedType(protoType, fullTypePath, sourceFile string, isE
 		if name, ok := g.resolver.Lookup(candidate); ok {
 			return name
 		}
+		// Nested enums are absent from the NameResolver (they are addressed
+		// through their declaring message's class), so without this check the
+		// walk would run past a nested enum and let an outer, same-named
+		// message or top-level enum capture the reference.
+		if g.declarations.enums[candidate] {
+			return g.renderedNestedEnumType(candidate)
+		}
 	}
-	// Fallback: bare type name (handles nested-enum references which the
-	// resolver does not index; they render inside the parent class scope
-	// as e.g. "Status.ONLINE").
+	// Fallback: bare type name. Reached for references the resolver cannot
+	// place, where the unqualified name is the best guess available.
 	return strings.TrimPrefix(protoType, ".")
+}
+
+// renderedNestedEnumType renders a reference to the nested enum at the given
+// fully qualified proto path. When the enum is declared by the message
+// currently being rendered its bare name is directly in scope; otherwise it
+// has to be qualified with the declaring message's generated class, because
+// nested messages are flattened into sibling classes rather than inner ones.
+func (g *generator) renderedNestedEnumType(enumFQN string) string {
+	enumName := lastProtoSegment(enumFQN)
+	declaringMessage := strings.TrimSuffix(strings.TrimSuffix(enumFQN, enumName), ".")
+	if declaringMessage == packageScope(g.file.Package)+g.currentScope {
+		return enumName
+	}
+	if class, ok := g.resolver.Lookup(declaringMessage); ok {
+		return class + "." + enumName
+	}
+	return enumName
+}
+
+// packageScope returns the dotted prefix that qualifies declarations in the
+// given proto package, or "" for a file without a package.
+func packageScope(pkg string) string {
+	if pkg == "" {
+		return ""
+	}
+	return pkg + "."
 }
 
 // lastProtoSegment returns the last dotted segment of a proto type path,
@@ -229,11 +268,17 @@ func concatProtoPath(typePath string) string {
 	return strings.Join(parts, "")
 }
 
-// buildLookupCandidates produces the set of proto FQNs to try when resolving
-// a type reference written inside currentScope. It mirrors the scope walk
-// used by isLocalEnumReference: the bare name, the bare name under the
-// package, and the name appended to every prefix of the current scope (with
-// and without the package).
+// buildLookupCandidates produces, in order, the proto FQNs to try when
+// resolving a type reference written inside currentScope. The order is the one
+// protobuf itself uses: the name is appended to the innermost enclosing
+// message scope first, then to each progressively outer scope, and only last
+// is it resolved at file scope (bare, and under the file's package). A nested
+// declaration therefore shadows a same-named outer one.
+//
+// Each scope yields the unqualified candidate before the package-qualified
+// one so that both an index keyed by package-qualified FQNs and one keyed by
+// package-relative paths can be consulted with a single walk. Duplicates are
+// dropped, preserving first occurrence.
 func buildLookupCandidates(typeName, currentScope, pkg string) []string {
 	typeName = strings.TrimPrefix(typeName, ".")
 	var out []string
@@ -245,10 +290,6 @@ func buildLookupCandidates(typeName, currentScope, pkg string) []string {
 		seen[s] = true
 		out = append(out, s)
 	}
-	add(typeName)
-	if pkg != "" {
-		add(pkg + "." + typeName)
-	}
 	if currentScope != "" {
 		parts := strings.Split(currentScope, ".")
 		for i := len(parts); i > 0; i-- {
@@ -259,95 +300,119 @@ func buildLookupCandidates(typeName, currentScope, pkg string) []string {
 			}
 		}
 	}
+	add(typeName)
+	if pkg != "" {
+		add(pkg + "." + typeName)
+	}
 	return out
 }
 
-func (g *generator) annotateLocalEnumUsage() {
-	enumPaths := map[string]bool{}
-	prefix := ""
-	if g.file.Package != "" {
-		prefix = g.file.Package + "."
-	}
-	for _, e := range g.file.Enums {
-		enumPaths[prefix+e.Name] = true
-	}
-	for _, m := range g.file.Messages {
-		g.collectLocalEnumPaths(m, prefix+m.Name, enumPaths)
-	}
-	for _, m := range g.file.Messages {
-		g.annotateLocalEnumMessage(m, m.Name, enumPaths)
-	}
+// localDeclarations indexes the fully qualified proto paths of the enums and
+// messages declared in a single proto file, including nested ones at every
+// depth. Paths are qualified with the file's package when it has one, matching
+// the keys the NameResolver uses.
+//
+// Both kinds are indexed because protobuf name resolution binds a reference to
+// the nearest enclosing declaration regardless of its kind: a nested message
+// shadows a same-named outer enum, and a nested enum shadows a same-named outer
+// message. Knowing only the enums cannot distinguish the two.
+type localDeclarations struct {
+	enums    map[string]bool
+	messages map[string]bool
 }
 
-func (g *generator) collectLocalEnumPaths(m *ast.Message, scope string, enumPaths map[string]bool) {
+// collectLocalDeclarations indexes every enum and message declared in file.
+func collectLocalDeclarations(file *ast.ProtoFile) localDeclarations {
+	declarations := localDeclarations{
+		enums:    map[string]bool{},
+		messages: map[string]bool{},
+	}
+	scope := packageScope(file.Package)
+	for _, e := range file.Enums {
+		declarations.enums[scope+e.Name] = true
+	}
+	for _, m := range file.Messages {
+		declarations.collectMessage(m, scope+m.Name)
+	}
+	return declarations
+}
+
+// collectMessage records the message at path along with its nested enums and
+// messages, recursing to arbitrary depth.
+func (d localDeclarations) collectMessage(m *ast.Message, path string) {
+	d.messages[path] = true
 	for _, e := range m.NestedEnums {
-		enumPaths[scope+"."+e.Name] = true
+		d.enums[path+"."+e.Name] = true
 	}
 	for _, nested := range m.NestedMessages {
-		g.collectLocalEnumPaths(nested, scope+"."+nested.Name, enumPaths)
+		d.collectMessage(nested, path+"."+nested.Name)
 	}
 }
 
-func (g *generator) annotateLocalEnumMessage(m *ast.Message, scope string, enumPaths map[string]bool) {
+// annotateLocalEnumUsage marks every same-file enum-typed field, map value and
+// oneof field in the AST as an enum, so the serialization and accessor
+// templates emit varint codecs instead of message handling. References to
+// imported types carry a SourceFile and are left to the NameResolver.
+func (g *generator) annotateLocalEnumUsage() {
+	for _, m := range g.file.Messages {
+		g.annotateLocalEnumMessage(m, m.Name)
+	}
+}
+
+func (g *generator) annotateLocalEnumMessage(m *ast.Message, scope string) {
 	for _, f := range m.Fields {
-		if f.SourceFile == "" && isLocalEnumReference(f.FieldType, f.FullTypePath, scope, g.file.Package, enumPaths) {
+		if f.SourceFile == "" && isLocalEnumReference(f.FieldType, f.FullTypePath, scope, g.file.Package, g.declarations) {
 			f.IsEnum = true
 		}
 	}
 	for _, mf := range m.Maps {
-		if mf.ValueSourceFile == "" && isLocalEnumReference(mf.ValueType, mf.FullValueTypePath, scope, g.file.Package, enumPaths) {
+		if mf.ValueSourceFile == "" && isLocalEnumReference(mf.ValueType, mf.FullValueTypePath, scope, g.file.Package, g.declarations) {
 			mf.ValueIsEnum = true
 		}
 	}
 	for _, oneof := range m.Oneofs {
 		for _, f := range oneof.Fields {
-			if f.SourceFile == "" && isLocalEnumReference(f.FieldType, f.FullTypePath, scope, g.file.Package, enumPaths) {
+			if f.SourceFile == "" && isLocalEnumReference(f.FieldType, f.FullTypePath, scope, g.file.Package, g.declarations) {
 				f.IsEnum = true
 			}
 		}
 	}
 	for _, nested := range m.NestedMessages {
-		g.annotateLocalEnumMessage(nested, scope+"."+nested.Name, enumPaths)
+		g.annotateLocalEnumMessage(nested, scope+"."+nested.Name)
 	}
 }
 
-// isLocalEnumReference reports whether a type reference inside currentScope
-// names an enum declared in the file being generated. It follows protobuf name
-// resolution: the reference is resolved against each enclosing message scope
-// from the innermost outward, and finally against file (package) scope, where
-// annotateLocalEnumUsage registers top-level enums as "<package>.<EnumName>".
-func isLocalEnumReference(typeName, fullTypePath, currentScope, pkg string, enumPaths map[string]bool) bool {
-	if fullTypePath != "" && enumPaths[strings.TrimPrefix(fullTypePath, ".")] {
-		return true
-	}
-
-	normalizedType := strings.TrimPrefix(typeName, ".")
-	if enumPaths[normalizedType] {
-		return true
-	}
-
-	if pkg != "" {
-		packagePrefix := pkg + "."
-		if strings.HasPrefix(normalizedType, packagePrefix) && enumPaths[normalizedType] {
+// isLocalEnumReference reports whether a type reference written inside
+// currentScope names an enum declared in the file being generated.
+//
+// It follows protobuf name resolution by walking buildLookupCandidates — the
+// same candidate order renderedType uses, so the two cannot disagree about
+// which declaration a reference binds to — and answering from the first
+// candidate that names a declaration of either kind. Stopping at a message is
+// as important as matching an enum: a nested message shadows a same-named
+// outer enum, and continuing the walk past it would report that message as an
+// enum.
+//
+// fullTypePath is the parser's already-resolved path for the reference, when
+// it has one; it short-circuits the walk, and is likewise checked against both
+// kinds.
+func isLocalEnumReference(typeName, fullTypePath, currentScope, pkg string, declarations localDeclarations) bool {
+	if fullTypePath != "" {
+		resolved := strings.TrimPrefix(fullTypePath, ".")
+		if declarations.enums[resolved] {
 			return true
 		}
-	}
-
-	typeParts := strings.Split(normalizedType, ".")
-	scopeParts := strings.Split(currentScope, ".")
-	// i == 0 drops every message scope and resolves the reference at file
-	// scope, which is where an unqualified reference to a top-level enum of a
-	// packaged file matches ("Team" against "game.v1.Team").
-	for i := len(scopeParts); i >= 0; i-- {
-		candidate := strings.Join(append(append([]string{}, scopeParts[:i]...), typeParts...), ".")
-		prefix := ""
-		if pkg != "" {
-			prefix = pkg + "."
+		if declarations.messages[resolved] {
+			return false
 		}
-		if enumPaths[candidate] || (prefix != "" && enumPaths[prefix+candidate]) {
+	}
+	for _, candidate := range buildLookupCandidates(typeName, currentScope, pkg) {
+		if declarations.enums[candidate] {
 			return true
 		}
+		if declarations.messages[candidate] {
+			return false
+		}
 	}
-
 	return false
 }
