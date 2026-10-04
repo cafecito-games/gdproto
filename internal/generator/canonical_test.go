@@ -60,3 +60,17 @@ func TestCanonicalizeRejectsSourceThatDoesNotParse(t *testing.T) {
 		t.Errorf("want the error to name the file, got %q", err.Error())
 	}
 }
+
+func TestProtoCoreUtilsAssetIsAlreadyCanonical(t *testing.T) {
+	source := generator.GenerateProtoCoreUtilsRaw()
+
+	got, err := generator.Canonicalize("proto_core_utils.gd", source)
+	if err != nil {
+		t.Fatalf("canonicalize: %v", err)
+	}
+
+	if got != source {
+		t.Error("proto_core_utils_data.gd is not in canonical format; " +
+			"format it with gdkit and commit the result")
+	}
+}
