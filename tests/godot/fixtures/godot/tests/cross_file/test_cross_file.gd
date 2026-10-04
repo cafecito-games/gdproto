@@ -73,8 +73,8 @@ func test_text_format_round_trip_with_cross_file_types():
 func test_cross_file_message_field_from_integration():
 	# integration.proto imports shared.proto and uses fixture.Payload as a
 	# message-typed field. Round-tripping proves the IntegrationKitchenSink
-	# wrapper can resolve SharedPayload across generated files via class_name
-	# globals without any preload statements.
+	# wrapper can resolve SharedPayload across generated files via the global
+	# class names they register, without any preload statements.
 	var msg := IntegrationKitchenSink.new()
 	msg.set_name("cross-file-message")
 	var extra := msg.new_extra()
