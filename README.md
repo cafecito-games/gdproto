@@ -129,7 +129,7 @@ gdparser's `GodotStyle()`, so neither side reimplements the other's wrapping
 rules. The generator also verifies that a second formatting pass is a no-op,
 because `gdkit format check` reports any file another pass would change.
 
-Every generated file opens with a suppression directive on line 1:
+Every generated `.pb.gd` file opens with a suppression directive on line 1:
 
 ```gdscript
 # gdkit:disable = max-returns, max-public-methods, max-file-lines
@@ -147,6 +147,11 @@ generated code to fit the limits would make it worse, not better. No other rule
 is suppressed. The directive has to be line 1 because
 `max-public-methods` is reported against the class global scope there, and a
 `gdkit:disable` reaches only from its own line to the end of the file.
+The sibling `proto_core_utils.gd` runtime carries no such directive, and needs
+none: it is a fixed file rather than one generated per message, so its length
+and its method and return counts do not grow with the schema, and it stays
+within every default limit on its own.
+
 
 ### `uid://` sidecars
 

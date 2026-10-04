@@ -203,7 +203,7 @@ var slots.
 
 ### The `gdkit:disable` Directive
 
-Every generated file opens with this comment on line 1:
+Every generated `.pb.gd` file opens with this comment on line 1:
 
 ```gdscript
 # gdkit:disable = max-returns, max-public-methods, max-file-lines
@@ -231,6 +231,11 @@ suppressed**; everything else gdkit's default lint configuration checks is
 satisfied outright. The directive has to be the first line because
 `max-public-methods` is reported against the class global scope there, and a
 `gdkit:disable` applies only from its own line to the end of the file.
+The sibling `proto_core_utils.gd` runtime carries no such directive, and needs
+none: it is a fixed file rather than one generated per message, so its length
+and its method and return counts do not grow with the schema, and it stays
+within every default limit on its own.
+
 
 ### `uid://` Sidecars
 
