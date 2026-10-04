@@ -6,8 +6,6 @@ extends RefCounted
 # Common Protocol Buffers utilities
 # DO NOT EDIT
 
-
-
 enum ProtobufError {
 	NO_ERRORS = 0,
 	VARINT_NOT_FOUND = -1,
@@ -21,12 +19,14 @@ enum ProtobufError {
 	REQUIRED_FIELDS = -9,
 }
 
+
 class NumberParseResult extends RefCounted:
 	var int_value: int = 0
 	var float_value: float = 0.0
 	var pos: int = 0
 	var is_float: bool = false
 	var error: String = ""
+
 
 	static func from_int(value: int, next_pos: int) -> NumberParseResult:
 		var result: NumberParseResult = NumberParseResult.new()
@@ -36,6 +36,7 @@ class NumberParseResult extends RefCounted:
 		result.is_float = false
 		return result
 
+
 	static func from_float(value: float, next_pos: int) -> NumberParseResult:
 		var result: NumberParseResult = NumberParseResult.new()
 		result.float_value = value
@@ -44,28 +45,30 @@ class NumberParseResult extends RefCounted:
 		result.is_float = true
 		return result
 
+
 	static func from_error(message: String) -> NumberParseResult:
 		var result: NumberParseResult = NumberParseResult.new()
 		result.error = message
 		return result
 
+
 	func has_error() -> bool:
 		return error != ""
 
 
-
 const PROTO_VERSION: int = 3
+
 
 static func _append_byte(result: PackedByteArray, value: int) -> void:
 	var err: int = result.append(value)
 	if err != OK:
 		push_error("PackedByteArray append failed")
 
+
 static func _resize_bytes(result: PackedByteArray, size: int) -> void:
 	var err: int = result.resize(size)
 	if err != OK:
 		push_error("PackedByteArray resize failed")
-
 
 
 # Encode/decode varint (variable-length integer)
@@ -75,11 +78,12 @@ static func encode_varint(value: int) -> PackedByteArray:
 	# Use unsigned right shift for proper varint encoding
 	# Negative values will be encoded as large unsigned values (10 bytes)
 	var unsigned_value: int = value
-	while unsigned_value > 0x7F or unsigned_value < 0:
-		_append_byte(result, (unsigned_value & 0x7F) | 0x80)
-		unsigned_value = (unsigned_value >> 7) & 0x01FFFFFFFFFFFFFF  # Unsigned right shift
-	_append_byte(result, unsigned_value & 0x7F)
+	while unsigned_value > 0x7f or unsigned_value < 0:
+		_append_byte(result, unsigned_value & 0x7f | 0x80)
+		unsigned_value = unsigned_value >> 7 & 0x01ffffffffffffff  # Unsigned right shift
+	_append_byte(result, unsigned_value & 0x7f)
 	return result
+
 
 static func decode_varint(data: PackedByteArray, offset: int) -> Dictionary[String, int]:
 	"""Decode varint from data.
@@ -93,43 +97,46 @@ static func decode_varint(data: PackedByteArray, offset: int) -> Dictionary[Stri
 
 	while offset + size < data.size():
 		var byte: int = data[offset + size]
-		result |= (byte & 0x7F) << shift
+		result |= (byte & 0x7f) << shift
 		size += 1
-		if (byte & 0x80) == 0:
-			return {"value": result, "size": size}
+		if byte & 0x80 == 0:
+			return { "value": result, "size": size }
 		shift += 7
 		if shift > 63:
 			break
 
-	return {"value": 0, "size": -1}
+	return { "value": 0, "size": -1 }
+
 
 # Encode/decode zigzag (for sint32/sint64)
 static func encode_zigzag32(value: int) -> int:
 	"""Encode signed int32 using zigzag encoding."""
 	# Mask final result to 32 bits to prevent 64-bit sign extension issues
-	return (((value << 1) & 0xFFFFFFFF) ^ (value >> 31)) & 0xFFFFFFFF
+	return (value << 1 & 0xffffffff ^ value >> 31) & 0xffffffff
+
 
 static func encode_zigzag64(value: int) -> int:
 	"""Encode signed int64 using zigzag encoding."""
-	return (value << 1) ^ (value >> 63)
+	return value << 1 ^ value >> 63
+
 
 static func decode_zigzag32(value: int) -> int:
 	"""Decode zigzag-encoded int32."""
 	# Use conditional approach to avoid sign extension issues
 	if value & 0x01:
 		return ~(value >> 1)
-	else:
-		return value >> 1
+	return value >> 1
+
 
 static func decode_zigzag64(value: int) -> int:
 	"""Decode zigzag-encoded int64."""
 	# Need unsigned right shift for 64-bit values
 	# Simulate unsigned right shift by masking after shift
-	var shifted: int = (value >> 1) & 0x7FFFFFFFFFFFFFFF
+	var shifted: int = value >> 1 & 0x7fffffffffffffff
 	if value & 0x01:
 		return ~shifted
-	else:
-		return shifted
+	return shifted
+
 
 # Encode/decode fixed-size integers
 static func encode_fixed32(value: int) -> PackedByteArray:
@@ -139,6 +146,7 @@ static func encode_fixed32(value: int) -> PackedByteArray:
 	result.encode_u32(0, value)
 	return result
 
+
 static func encode_fixed64(value: int) -> PackedByteArray:
 	"""Encode 64-bit fixed integer."""
 	var result: PackedByteArray = PackedByteArray()
@@ -146,13 +154,16 @@ static func encode_fixed64(value: int) -> PackedByteArray:
 	result.encode_u64(0, value)
 	return result
 
+
 static func decode_fixed32(data: PackedByteArray, offset: int) -> int:
 	"""Decode 32-bit unsigned fixed integer."""
 	return data.decode_u32(offset)
 
+
 static func decode_fixed64(data: PackedByteArray, offset: int) -> int:
 	"""Decode 64-bit unsigned fixed integer."""
 	return data.decode_u64(offset)
+
 
 static func encode_sfixed32(value: int) -> PackedByteArray:
 	"""Encode 32-bit signed fixed integer."""
@@ -161,6 +172,7 @@ static func encode_sfixed32(value: int) -> PackedByteArray:
 	result.encode_s32(0, value)
 	return result
 
+
 static func encode_sfixed64(value: int) -> PackedByteArray:
 	"""Encode 64-bit signed fixed integer."""
 	var result: PackedByteArray = PackedByteArray()
@@ -168,13 +180,16 @@ static func encode_sfixed64(value: int) -> PackedByteArray:
 	result.encode_s64(0, value)
 	return result
 
+
 static func decode_sfixed32(data: PackedByteArray, offset: int) -> int:
 	"""Decode 32-bit signed fixed integer."""
 	return data.decode_s32(offset)
 
+
 static func decode_sfixed64(data: PackedByteArray, offset: int) -> int:
 	"""Decode 64-bit signed fixed integer."""
 	return data.decode_s64(offset)
+
 
 # Encode/decode float/double
 static func encode_float(value: float) -> PackedByteArray:
@@ -184,6 +199,7 @@ static func encode_float(value: float) -> PackedByteArray:
 	result.encode_float(0, value)
 	return result
 
+
 static func encode_double(value: float) -> PackedByteArray:
 	"""Encode 64-bit double."""
 	var result: PackedByteArray = PackedByteArray()
@@ -191,33 +207,40 @@ static func encode_double(value: float) -> PackedByteArray:
 	result.encode_double(0, value)
 	return result
 
+
 static func decode_float(data: PackedByteArray, offset: int) -> float:
 	"""Decode 32-bit float."""
 	return data.decode_float(offset)
 
+
 static func decode_double(data: PackedByteArray, offset: int) -> float:
 	"""Decode 64-bit double."""
 	return data.decode_double(offset)
+
 
 # Encode/decode string
 static func encode_string(value: String) -> PackedByteArray:
 	"""Encode string as UTF-8."""
 	return value.to_utf8_buffer()
 
+
 static func decode_string(data: PackedByteArray, offset: int, length: int) -> String:
 	"""Decode UTF-8 string."""
 	var slice: PackedByteArray = data.slice(offset, offset + length)
 	return slice.get_string_from_utf8()
 
+
 # Make field tag
 static func make_tag(field_number: int, wire_type: int) -> int:
 	"""Make protobuf field tag."""
-	return (field_number << 3) | wire_type
+	return field_number << 3 | wire_type
+
 
 # Get wire type from tag
 static func get_wire_type(tag: int) -> int:
 	"""Extract wire type from tag."""
 	return tag & 0x7
+
 
 # Get field number from tag
 static func get_field_number(tag: int) -> int:
@@ -225,11 +248,10 @@ static func get_field_number(tag: int) -> int:
 	return tag >> 3
 
 
-
-
 # ============================================================================
 # Text Format Utilities
 # ============================================================================
+
 
 # Text format escaping and unescaping
 static func escape_string_text_format(value: String) -> String:
@@ -238,11 +260,16 @@ static func escape_string_text_format(value: String) -> String:
 	for i in range(value.length()):
 		var ch: String = value[i]
 		match ch:
-			"\n": result += "\\n"
-			"\r": result += "\\r"
-			"\t": result += "\\t"
-			"\"": result += "\\\""
-			"\\": result += "\\\\"
+			"\n":
+				result += "\\n"
+			"\r":
+				result += "\\r"
+			"\t":
+				result += "\\t"
+			'"':
+				result += '\\"'
+			"\\":
+				result += "\\\\"
 			_:
 				var code: int = ch.unicode_at(0)
 				if code < 32:
@@ -253,15 +280,22 @@ static func escape_string_text_format(value: String) -> String:
 					result += ch
 	return result
 
+
 static func escape_bytes_text_format(value: PackedByteArray) -> String:
 	"""Escape bytes for text format output."""
 	var result: String = ""
 	for byte in value:
-		if byte >= 32 and byte < 127 and byte != 92 and byte != 34:  # printable, not backslash or quote
+		if (
+				byte >= 32
+				and byte < 127
+				and byte != 92
+				and byte != 34
+		):  # printable, not backslash or quote
 			result += char(byte)
 		else:
 			result += "\\x%02x" % byte
 	return result
+
 
 static func unescape_string_text_format(value: String) -> String:
 	"""Unescape text format string."""
@@ -275,11 +309,16 @@ static func unescape_string_text_format(value: String) -> String:
 				break
 			var next: String = value[i]
 			match next:
-				"n": result += "\n"
-				"r": result += "\r"
-				"t": result += "\t"
-				"\\": result += "\\"
-				"\"": result += "\""
+				"n":
+					result += "\n"
+				"r":
+					result += "\r"
+				"t":
+					result += "\t"
+				"\\":
+					result += "\\"
+				'"':
+					result += '"'
 				"x":
 					# \xHH hex escape
 					if i + 2 < value.length():
@@ -294,6 +333,7 @@ static func unescape_string_text_format(value: String) -> String:
 			i += 1
 	return result
 
+
 static func unescape_bytes_text_format(value: String) -> PackedByteArray:
 	"""Unescape text format string directly to bytes."""
 	var result: PackedByteArray = PackedByteArray()
@@ -306,11 +346,16 @@ static func unescape_bytes_text_format(value: String) -> PackedByteArray:
 				break
 			var next: String = value[i]
 			match next:
-				"n": _append_byte(result, 0x0A)  # \n
-				"r": _append_byte(result, 0x0D)  # \r
-				"t": _append_byte(result, 0x09)  # \t
-				"\\": _append_byte(result, 0x5C)  # \
-				"\"": _append_byte(result, 0x22)  # "
+				"n":  # \n
+					_append_byte(result, 0x0a)
+				"r":  # \r
+					_append_byte(result, 0x0d)
+				"t":  # \t
+					_append_byte(result, 0x09)
+				"\\":  # \
+					_append_byte(result, 0x5c)
+				'"':  # "
+					_append_byte(result, 0x22)
 				"x":
 					# \xHH hex escape - convert directly to byte
 					if i + 2 < value.length():
@@ -327,6 +372,7 @@ static func unescape_bytes_text_format(value: String) -> PackedByteArray:
 			i += 1
 	return result
 
+
 # Text format parsing utilities
 static func skip_whitespace(text: String, pos: int) -> int:
 	"""Skip whitespace and comments."""
@@ -342,41 +388,48 @@ static func skip_whitespace(text: String, pos: int) -> int:
 			break
 	return pos
 
+
 static func parse_identifier(text: String, pos: int) -> Dictionary[String, Variant]:
 	"""Parse identifier (field name or keyword)."""
 	var start: int = pos
 	while pos < text.length():
 		var ch: String = text[pos]
-		if ch.is_valid_identifier() or ch == "_" or (pos > start and ch.is_valid_int()):
+		if ch.is_valid_identifier() or ch == "_" or pos > start and ch.is_valid_int():
 			pos += 1
 		else:
 			break
 	if pos == start:
-		return {"error": "Expected identifier"}
-	return {"value": text.substr(start, pos - start), "pos": pos}
+		return { "error": "Expected identifier" }
+	return { "value": text.substr(start, pos - start), "pos": pos }
+
 
 static func parse_string_literal(text: String, pos: int) -> Dictionary[String, Variant]:
 	"""Parse quoted string literal."""
-	if pos >= text.length() or text[pos] != "\"":
-		return {"error": "Expected string literal"}
+	if pos >= text.length() or text[pos] != '"':
+		return { "error": "Expected string literal" }
 	pos += 1  # Skip opening quote
 	var value: String = ""
 	while pos < text.length():
 		var ch: String = text[pos]
-		if ch == "\"":
+		if ch == '"':
 			pos += 1
-			return {"value": value, "pos": pos}
-		elif ch == "\\":
+			return { "value": value, "pos": pos }
+		if ch == "\\":
 			pos += 1
 			if pos >= text.length():
-				return {"error": "Unterminated string"}
+				return { "error": "Unterminated string" }
 			var next: String = text[pos]
 			match next:
-				"n": value += "\n"
-				"r": value += "\r"
-				"t": value += "\t"
-				"\\": value += "\\"
-				"\"": value += "\""
+				"n":
+					value += "\n"
+				"r":
+					value += "\r"
+				"t":
+					value += "\t"
+				"\\":
+					value += "\\"
+				'"':
+					value += '"'
 				"x":
 					if pos + 2 < text.length():
 						var hex: String = text.substr(pos + 1, 2)
@@ -388,7 +441,8 @@ static func parse_string_literal(text: String, pos: int) -> Dictionary[String, V
 		else:
 			value += ch
 			pos += 1
-	return {"error": "Unterminated string"}
+	return { "error": "Unterminated string" }
+
 
 static func parse_number(text: String, pos: int) -> NumberParseResult:
 	"""Parse number (int or float)."""
@@ -420,10 +474,9 @@ static func parse_number(text: String, pos: int) -> NumberParseResult:
 				pos += 1
 		else:
 			break
-	if pos == start or (pos == start + 1 and text[start] in ["-", "+"]):
+	if pos == start or pos == start + 1 and text[start] in ["-", "+"]:
 		return NumberParseResult.from_error("Expected number")
 	var num_str: String = text.substr(start, pos - start)
 	if has_dot or has_exp:
 		return NumberParseResult.from_float(float(num_str), pos)
-	else:
-		return NumberParseResult.from_int(int(num_str), pos)
+	return NumberParseResult.from_int(int(num_str), pos)

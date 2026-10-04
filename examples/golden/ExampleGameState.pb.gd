@@ -1,3 +1,4 @@
+# gdkit:disable = max-returns, max-public-methods, max-file-lines
 class_name ExampleGameState
 
 extends RefCounted
@@ -13,27 +14,35 @@ var _map_name: String = ""
 
 # Accessors
 
+
 func add_players() -> ExamplePlayer:
 	var item: ExamplePlayer = ExamplePlayer.new()
 	_players.append(item)
 	return item
 
+
 func get_players() -> Array[ExamplePlayer]:
 	return _players
+
 
 func set_timestamp(value: int) -> void:
 	_timestamp = value
 
+
 func get_timestamp() -> int:
 	return _timestamp
+
 
 func set_map_name(value: String) -> void:
 	_map_name = value
 
+
 func get_map_name() -> String:
 	return _map_name
 
+
 # Serialization
+
 
 func to_bytes() -> PackedByteArray:
 	"""Serialize message to bytes."""
@@ -56,6 +65,7 @@ func to_bytes() -> PackedByteArray:
 		result.append_array(str_data)
 	return result
 
+
 func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 	"""Deserialize message from bytes."""
 	var offset: int = 0
@@ -74,7 +84,10 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 		match field_number:
 			1:
 				# Field players
-				var length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+				var length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(
+						data,
+						offset
+				)
 				if length_result["size"] == -1:
 					return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
 				offset += length_result["size"]
@@ -97,7 +110,10 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 				offset += result["size"]
 			3:
 				# Field map_name
-				var length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+				var length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(
+						data,
+						offset
+				)
 				if length_result["size"] == -1:
 					return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
 				offset += length_result["size"]
@@ -110,14 +126,20 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 				# Skip unknown field
 				match wire_type:
 					0:  # Varint
-						var skip_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+						var skip_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(
+								data,
+								offset
+						)
 						if skip_result["size"] == -1:
 							return ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND
 						offset += skip_result["size"]
 					1:  # Fixed64
 						offset += 8
 					2:  # Length-delimited
-						var skip_length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+						var skip_length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(
+								data,
+								offset
+						)
 						if skip_length_result["size"] == -1:
 							return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
 						offset += skip_length_result["size"] + skip_length_result["value"]
@@ -127,6 +149,7 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 						return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
 
 	return ProtoCoreUtils.ProtobufError.NO_ERRORS
+
 
 func to_text(indent_level: int = 0) -> String:
 	"""Serialize message to protobuf text format."""
@@ -145,9 +168,12 @@ func to_text(indent_level: int = 0) -> String:
 
 	# Field map_name
 	if _map_name != "":
-		result += indent + "map_name: \"" + ProtoCoreUtils.escape_string_text_format(_map_name) + "\"\n"
+		result += indent + 'map_name: "' + ProtoCoreUtils.escape_string_text_format(
+				_map_name
+		) + '"\n'
 
 	return result
+
 
 func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 	"""Deserialize message from protobuf text format."""
@@ -199,7 +225,9 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = pos + 1  # Skip closing brace
 
 					var msg_instance: ExamplePlayer = ExamplePlayer.new()
-					var parse_result: ProtoCoreUtils.ProtobufError = msg_instance.from_text(msg_text)
+					var parse_result: ProtoCoreUtils.ProtobufError = msg_instance.from_text(
+							msg_text
+					)
 					if parse_result != ProtoCoreUtils.ProtobufError.NO_ERRORS:
 						return parse_result
 					_players.append(msg_instance)
@@ -209,7 +237,10 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = pos + 1
 				pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
-				var num_result: ProtoCoreUtils.NumberParseResult = ProtoCoreUtils.parse_number(text, pos)
+				var num_result: ProtoCoreUtils.NumberParseResult = ProtoCoreUtils.parse_number(
+						text,
+						pos
+				)
 				if num_result.has_error():
 					return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
 				_timestamp = num_result.int_value
@@ -220,7 +251,10 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = pos + 1
 				pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
-				var str_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_string_literal(text, pos)
+				var str_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_string_literal(
+						text,
+						pos
+				)
 				if "error" in str_result:
 					return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
 				_map_name = str_result["value"]
@@ -249,6 +283,7 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 							pos = pos + 1
 
 	return ProtoCoreUtils.ProtobufError.NO_ERRORS
+
 
 func _to_string() -> String:
 	"""Generate debug string representation."""

@@ -165,8 +165,14 @@ type ClassDefinition struct {
 	Name               string
 	Extends            string
 	ClassNameDirective string
-	HeaderComment      string
-	Statements         []Node
+	// LeadingComment is a comment block emitted above the class_name
+	// directive, with no blank line between it and class_name. It exists for
+	// directives that must be the file's first line to take effect, such as a
+	// gdkit lint suppression covering a diagnostic reported at line 1.
+	// Ignored for nested classes.
+	LeadingComment string
+	HeaderComment  string
+	Statements     []Node
 	// TightStatements disables the automatic blank line that would otherwise
 	// be inserted between adjacent statements. When true, the caller controls
 	// spacing entirely via EmptyLine entries in Statements.
@@ -195,6 +201,9 @@ func (c ClassDefinition) ToGDScript(level int) string {
 	bodyIndent := level
 
 	if c.Name == "" {
+		if c.LeadingComment != "" {
+			lines = append(lines, renderCommentBlock(c.LeadingComment, 0, "#"))
+		}
 		if c.ClassNameDirective != "" {
 			lines = append(lines, "class_name "+c.ClassNameDirective, "")
 		}

@@ -62,15 +62,21 @@ enum) this produces:
 ```text
 godot/generated/
   ExamplePlayer.pb.gd
+  ExamplePlayer.pb.gd.uid
   ExamplePlayerPosition.pb.gd
+  ExamplePlayerPosition.pb.gd.uid
   ExampleGameState.pb.gd
+  ExampleGameState.pb.gd.uid
   ExamplePlayerStatus.pb.gd
+  ExamplePlayerStatus.pb.gd.uid
   proto_core_utils.gd
+  proto_core_utils.gd.uid
 ```
 
 The class prefix (`Example`) is derived from the proto filename. Each file
 declares a top-level `class_name` so the classes are globally available in
-Godot without `preload`.
+Godot without `preload`. The `.uid` files are Godot resource identifier
+sidecars; see [gdkit conformance](#gdkit-conformance).
 
 `protoc` plugin — `--gdscript_out` is the output directory:
 
@@ -102,6 +108,132 @@ Then run:
 ```bash
 buf generate
 ```
+
+## gdkit conformance
+
+For a schema that follows [protobuf's own style
+guide](https://protobuf.dev/programming-guides/style/), generated output passes
+[gdkit](https://github.com/cafecito-games/gdkit)'s `gdkit format check`,
+`gdkit lint check`, and `gdkit uid check` with gdkit's default configuration. A
+project that gates CI on gdkit can therefore keep its generated protocol
+directory inside the checked set. Excluding that directory also excludes it
+from the checks that would catch a real problem in it. The style-guide
+condition and the other edges of the guarantee are in [Limits](#limits).
+
+Formatting agrees with gdkit by construction rather than by imitation: the
+generator parses its own output with
+[gdparser](https://github.com/cafecito-games/gdparser) and re-emits it through
+`gdparser/format` using the Godot style options. `gdkit format` delegates to
+that same engine, and gdkit's default format configuration is field for field
+gdparser's `GodotStyle()`, so neither side reimplements the other's wrapping
+rules. The generator also verifies that a second formatting pass is a no-op,
+because `gdkit format check` reports any file another pass would change.
+
+Every generated `.pb.gd` file opens with a suppression directive on line 1:
+
+```gdscript
+# gdkit:disable = max-returns, max-public-methods, max-file-lines
+```
+
+All three rules are gdkit *design limits* whose value scales with the schema
+rather than with the quality of the code, so generated protobuf code cannot
+satisfy them by construction: a wire-format parser is an early-return function
+with one return per field, every proto field contributes a set of public
+accessors, and a message's file is as long as its field count demands once the
+serializer, deserializer, text-format reader and writer, accessors and enum
+helpers are emitted per field. The repository's own `collections.proto` fixture
+generates a 1,121-line file from a single map-heavy message. Restructuring
+generated code to fit the limits would make it worse, not better. No other rule
+is suppressed. The directive has to be line 1 because
+`max-public-methods` is reported against the class global scope there, and a
+`gdkit:disable` reaches only from its own line to the end of the file.
+The sibling `proto_core_utils.gd` runtime carries no such directive, and needs
+none: it is a fixed file rather than one generated per message, so its length
+and its method and return counts do not grow with the schema, and it stays
+within every default limit on its own.
+
+
+### `uid://` sidecars
+
+Each generated script is written with a sibling `.uid` file holding its Godot
+resource identifier:
+
+```text
+$ cat godot/generated/ExamplePlayer.pb.gd.uid
+uid://ix8k3hu6vdsf
+```
+
+Godot assigns these identifiers at random when it first imports a script.
+gdproto derives them from the filename instead, which makes regeneration
+produce byte-identical sidecars, makes two developers' output agree, and is the
+only scheme that works in the `protoc` plugin path, which never learns its own
+output directory.
+
+That is sound because of the contract generated code is used under: **a
+generated script is addressed by its `class_name`, not by its `uid://` path.**
+Every generated file declares a `class_name`, and generated messages are
+instantiated through it — `ExamplePlayer.new()`. Nothing should reference a
+generated script by `uid://`: not a scene, not a resource, not `project.godot`.
+So the identifier only has to be *stable*, which deriving it from the filename
+guarantees; it never has to be preserved across a change of scheme.
+
+A project that happens to hold Godot-assigned sidecars for generated scripts
+will see them replaced the first time it regenerates. Under the contract above
+that has no effect, because nothing was resolving those identifiers. In a
+production Godot client with 688 generated scripts, none of the 689 generated
+sidecar identifiers appeared in any scene, resource, or project file.
+
+### Limits
+
+- **Identifier spelling has to follow protobuf's style guide.** Proto
+  identifiers are carried through into GDScript names verbatim, so a schema
+  that departs from the protobuf style guide — a `camelCase` field, a
+  `snake_case` message or enum name, a `camelCase` enum value — produces
+  GDScript names that gdkit's naming rules reject. A single
+  `string userName = 1;` field yields `var _userName` plus `get_userName()`
+  and `set_userName()`, which report `class-variable-name` and
+  `function-name`; `snake_case` type names and
+  `camelCase` enum values add `class-name`, `enum-name`, and
+  `enum-element-name`. The style guide already asks for `lower_snake_case`
+  fields, `PascalCase` message and enum names, and `SCREAMING_SNAKE_CASE` enum
+  values, so a conforming schema is the normal case. These rules are *not*
+  suppressed: they are real naming rules, and silencing them would hide genuine
+  naming problems in generated output, while renaming identifiers would change
+  the generated API — a decision this project has not taken. The remedy is to
+  rename the offending fields in the schema, or to scope gdkit's naming rules
+  away from the generated directory in the consuming project's own
+  `.gdkit/lint.json`.
+- **`max-line-length` reports for deep package paths, and that is the common
+  case.** Class prefixes are derived from the full `.proto` path (see
+  [Custom prefix](#custom-prefix)), so a layout like
+  `uzir/assetpack/client/v1/characters.proto` yields class names near 50
+  characters. A declaration that names its type twice then cannot fit in 100
+  columns and has no legal wrap point:
+
+  ```gdscript
+  var msg_instance: UzirAssetpackClientV1CharactersAvatarBodyDirection = UzirAssetpackClientV1CharactersAvatarBodyDirection.new()
+  ```
+
+  Regenerating a 687-file production schema produces 868 of these, and nothing
+  else — `format check` and `uid check` pass that same schema completely. So
+  treat this as expected for a monorepo layout rather than as an edge case.
+  Shortening the prefix with `(gdproto.class_prefix)` reduces it; inferring the
+  type instead would fix it but breaks under a strict `untyped_declaration`
+  warning policy, so the generator keeps the annotation.
+
+  The rule is left reporting on purpose, unlike `max-file-lines`: wrapping is
+  genuinely the formatter's job, and suppressing the rule would hide real
+  formatting problems. A project that wants the generated directory silent on
+  this disables or allowlists the one rule for that directory.
+- **An opt-in logging rule reports.** Generated code calls `push_error` to
+  report a decode failure. A project that enables gdkit's `no-engine-logging`
+  rule — inert by default — and routes diagnostics through its own logger will
+  see that rule report across generated files, since the generator cannot know
+  the project's logger. Scope the rule away from the generated directory.
+- **The agreement is with gdkit's default configuration.** A project with its
+  own `.gdkit/format.json` — a different `line_width`, spaces instead of tabs —
+  still needs its own `gdkit format write` pass over the generated directory.
+  gdproto cannot read a downstream project's configuration.
 
 ## Custom prefix
 

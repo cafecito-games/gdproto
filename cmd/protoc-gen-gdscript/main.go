@@ -132,22 +132,46 @@ func run(in io.Reader, out io.Writer) error {
 				response.Error = &message
 				return writeResponse(out, response)
 			}
+			source, err := gf.Source()
+			if err != nil {
+				message := err.Error()
+				response.Error = &message
+				return writeResponse(out, response)
+			}
 			emittedFrom[gf.Filename] = name
-			response.File = append(response.File, &pluginpb.CodeGeneratorResponse_File{
-				Name:    proto.String(gf.Filename),
-				Content: proto.String(gf.Source()),
-			})
+			response.File = append(response.File, fileEntries(gf.Filename, source)...)
 		}
 	}
 
 	if len(response.File) > 0 {
-		response.File = append(response.File, &pluginpb.CodeGeneratorResponse_File{
-			Name:    proto.String("proto_core_utils.gd"),
-			Content: proto.String(generator.GenerateProtoCoreUtilsRaw()),
-		})
+		response.File = append(
+			response.File,
+			fileEntries("proto_core_utils.gd", generator.GenerateProtoCoreUtilsRaw())...,
+		)
 	}
 
 	return writeResponse(out, response)
+}
+
+// fileEntries returns the response entries for one generated GDScript file:
+// the script itself and its .uid sidecar.
+//
+// Godot writes the sidecar on import, and gdkit reports a script without one
+// as having no stable identity. The identifier is derived from the filename
+// rather than drawn at random, so protoc regenerating the same schema produces
+// byte-identical sidecars; this path could not preserve an existing one in any
+// case, because protoc never tells a plugin where its output will land.
+func fileEntries(filename, source string) []*pluginpb.CodeGeneratorResponse_File {
+	return []*pluginpb.CodeGeneratorResponse_File{
+		{
+			Name:    proto.String(filename),
+			Content: proto.String(source),
+		},
+		{
+			Name:    proto.String(generator.SidecarFilename(filename)),
+			Content: proto.String(generator.SidecarSource(filename)),
+		},
+	}
 }
 
 func writeResponse(out io.Writer, response *pluginpb.CodeGeneratorResponse) error {

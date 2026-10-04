@@ -1,3 +1,4 @@
+# gdkit:disable = max-returns, max-public-methods, max-file-lines
 class_name ExamplePlayerPosition
 
 extends RefCounted
@@ -13,25 +14,33 @@ var _z: float = 0.0
 
 # Accessors
 
+
 func set_x(value: float) -> void:
 	_x = value
+
 
 func get_x() -> float:
 	return _x
 
+
 func set_y(value: float) -> void:
 	_y = value
+
 
 func get_y() -> float:
 	return _y
 
+
 func set_z(value: float) -> void:
 	_z = value
+
 
 func get_z() -> float:
 	return _z
 
+
 # Serialization
+
 
 func to_bytes() -> PackedByteArray:
 	"""Serialize message to bytes."""
@@ -49,6 +58,7 @@ func to_bytes() -> PackedByteArray:
 		result.append_array(ProtoCoreUtils.encode_varint(29))
 		result.append_array(ProtoCoreUtils.encode_float(_z))
 	return result
+
 
 func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 	"""Deserialize message from bytes."""
@@ -88,14 +98,20 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 				# Skip unknown field
 				match wire_type:
 					0:  # Varint
-						var skip_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+						var skip_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(
+								data,
+								offset
+						)
 						if skip_result["size"] == -1:
 							return ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND
 						offset += skip_result["size"]
 					1:  # Fixed64
 						offset += 8
 					2:  # Length-delimited
-						var skip_length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+						var skip_length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(
+								data,
+								offset
+						)
 						if skip_length_result["size"] == -1:
 							return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
 						offset += skip_length_result["size"] + skip_length_result["value"]
@@ -105,6 +121,7 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 						return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
 
 	return ProtoCoreUtils.ProtobufError.NO_ERRORS
+
 
 func to_text(indent_level: int = 0) -> String:
 	"""Serialize message to protobuf text format."""
@@ -140,6 +157,7 @@ func to_text(indent_level: int = 0) -> String:
 
 	return result
 
+
 func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 	"""Deserialize message from protobuf text format."""
 	var pos: int = 0
@@ -171,16 +189,28 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 
 				var float_result: ProtoCoreUtils.NumberParseResult
 				# Check for special values or identifiers
-				if pos < text.length() and (text[pos] in ["i", "n", "-", "+"] or not text[pos].is_valid_int()):
-					var id_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)
+				if (
+						pos < text.length()
+						and (text[pos] in ["i", "n", "-", "+"] or not text[pos].is_valid_int())
+				):
+					var id_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(
+							text,
+							pos
+					)
 					if "value" in id_result:
 						var id_value: String = id_result["value"]
 						var id_pos: int = id_result["pos"]
 						match id_value:
 							"inf":
-								float_result = ProtoCoreUtils.NumberParseResult.from_float(INF, id_pos)
+								float_result = ProtoCoreUtils.NumberParseResult.from_float(
+										INF,
+										id_pos
+								)
 							"nan":
-								float_result = ProtoCoreUtils.NumberParseResult.from_float(NAN, id_pos)
+								float_result = ProtoCoreUtils.NumberParseResult.from_float(
+										NAN,
+										id_pos
+								)
 							_:
 								float_result = ProtoCoreUtils.parse_number(text, pos)
 					else:
@@ -199,16 +229,28 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 
 				var float_result: ProtoCoreUtils.NumberParseResult
 				# Check for special values or identifiers
-				if pos < text.length() and (text[pos] in ["i", "n", "-", "+"] or not text[pos].is_valid_int()):
-					var id_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)
+				if (
+						pos < text.length()
+						and (text[pos] in ["i", "n", "-", "+"] or not text[pos].is_valid_int())
+				):
+					var id_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(
+							text,
+							pos
+					)
 					if "value" in id_result:
 						var id_value: String = id_result["value"]
 						var id_pos: int = id_result["pos"]
 						match id_value:
 							"inf":
-								float_result = ProtoCoreUtils.NumberParseResult.from_float(INF, id_pos)
+								float_result = ProtoCoreUtils.NumberParseResult.from_float(
+										INF,
+										id_pos
+								)
 							"nan":
-								float_result = ProtoCoreUtils.NumberParseResult.from_float(NAN, id_pos)
+								float_result = ProtoCoreUtils.NumberParseResult.from_float(
+										NAN,
+										id_pos
+								)
 							_:
 								float_result = ProtoCoreUtils.parse_number(text, pos)
 					else:
@@ -227,16 +269,28 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 
 				var float_result: ProtoCoreUtils.NumberParseResult
 				# Check for special values or identifiers
-				if pos < text.length() and (text[pos] in ["i", "n", "-", "+"] or not text[pos].is_valid_int()):
-					var id_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)
+				if (
+						pos < text.length()
+						and (text[pos] in ["i", "n", "-", "+"] or not text[pos].is_valid_int())
+				):
+					var id_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(
+							text,
+							pos
+					)
 					if "value" in id_result:
 						var id_value: String = id_result["value"]
 						var id_pos: int = id_result["pos"]
 						match id_value:
 							"inf":
-								float_result = ProtoCoreUtils.NumberParseResult.from_float(INF, id_pos)
+								float_result = ProtoCoreUtils.NumberParseResult.from_float(
+										INF,
+										id_pos
+								)
 							"nan":
-								float_result = ProtoCoreUtils.NumberParseResult.from_float(NAN, id_pos)
+								float_result = ProtoCoreUtils.NumberParseResult.from_float(
+										NAN,
+										id_pos
+								)
 							_:
 								float_result = ProtoCoreUtils.parse_number(text, pos)
 					else:
@@ -271,6 +325,7 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 							pos = pos + 1
 
 	return ProtoCoreUtils.ProtobufError.NO_ERRORS
+
 
 func _to_string() -> String:
 	"""Generate debug string representation."""

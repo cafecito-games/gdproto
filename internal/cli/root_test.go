@@ -9,6 +9,7 @@ import (
 
 	"github.com/cafecito-games/gdproto/internal/cli"
 	"github.com/cafecito-games/gdproto/internal/gdprotopb"
+	"github.com/cafecito-games/gdproto/internal/generator"
 )
 
 func TestRootVersionFlag(t *testing.T) {
@@ -122,8 +123,19 @@ func TestCLIWritesPerClassFilesToDirectory(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
 			t.Errorf("missing %s: %v", name, err)
 		}
+		// Each script is written with its .uid sidecar, so the progress line
+		// reports twice as many files as there are scripts.
+		sidecar := name + ".uid"
+		content, err := os.ReadFile(filepath.Join(dir, sidecar))
+		if err != nil {
+			t.Errorf("missing %s: %v", sidecar, err)
+			continue
+		}
+		if got, want := string(content), generator.SidecarSource(name); got != want {
+			t.Errorf("%s: got %q, want %q", sidecar, got, want)
+		}
 	}
-	if !strings.Contains(errOut.String(), "wrote 5 files to") {
+	if !strings.Contains(errOut.String(), "wrote 10 files to") {
 		t.Errorf("missing progress line in stderr: %q", errOut.String())
 	}
 }

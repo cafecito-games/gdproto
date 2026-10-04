@@ -25,13 +25,12 @@ type GeneratedFile struct {
 	protoFQN string
 }
 
-// Source renders the class to GDScript, ensuring a trailing newline.
-func (gf GeneratedFile) Source() string {
-	out := gf.Class.ToGDScript(0)
-	if !strings.HasSuffix(out, "\n") {
-		out += "\n"
-	}
-	return out
+// Source renders the class to canonical GDScript — the form gdkit's
+// formatter produces — with a trailing newline. It returns an error if the
+// rendered source does not parse, which means the generator produced
+// malformed GDScript.
+func (gf GeneratedFile) Source() (string, error) {
+	return Canonicalize(gf.Filename, gf.Class.ToGDScript(0))
 }
 
 // Generate produces one GeneratedFile per top-level enum and per message
@@ -126,6 +125,7 @@ func (g *generator) generateTopLevelEnumFile(e *ast.Enum) GeneratedFile {
 	class := &gdast.ClassDefinition{
 		ClassNameDirective: className,
 		Extends:            "RefCounted",
+		LeadingComment:     gdkitSuppressions,
 		HeaderComment:      headerCommentText(filepath.Base(g.sourceName)),
 		Statements:         []gdast.Node{generateEnum(e)},
 		TightStatements:    true,
