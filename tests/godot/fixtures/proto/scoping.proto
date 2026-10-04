@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+// Shapes where a type reference can bind to more than one same-named
+// declaration, or to a nested enum that is not in the referring class's scope.
+// Protobuf binds each reference to the nearest enclosing declaration; a
+// different binding produces GDScript whose declared type, default value and
+// codec describe different declarations, which Godot refuses to parse.
+// tests/scoping/test_scoping.gd round-trips each of them, so a wrong binding
+// surfaces as a load failure in a real SceneTree rather than silently.
+package scoping.v1;
+
+enum Mode {
+  MODE_UNSPECIFIED = 0;
+}
+
+enum Level {
+  LEVEL_FILE_SCOPE_ZERO = 0;
+  LEVEL_FILE_SCOPE_ONE = 1;
+}
+
+message Kind {
+  int32 x = 1;
+}
+
+// A nested message shadows the file-scope enum Mode, for a plain field, a map
+// value and a oneof field alike.
+message ShadowingMessage {
+  message Mode {
+    int32 value = 1;
+  }
+  Mode field = 1;
+  map<string, Mode> by_name = 2;
+  oneof choice {
+    Mode one = 3;
+  }
+}
+
+// A nested enum shadows the file-scope message Kind.
+message ShadowingEnum {
+  enum Kind {
+    KIND_NESTED = 0;
+  }
+  Kind field = 1;
+}
+
+// A nested enum shadows the file-scope enum Level. Their value names differ,
+// so the text-format helpers reveal which declaration the field bound to.
+message ShadowingLevel {
+  enum Level {
+    LEVEL_NESTED_ZERO = 0;
+    LEVEL_NESTED_ONE = 1;
+  }
+  Level field = 1;
+}
+
+// A nested enum referenced from a deeper message, with nothing shadowed:
+// nested messages are flattened into sibling classes, so Status has to be
+// qualified with the class that declares it.
+message Holder {
+  enum Status {
+    STATUS_OK = 0;
+  }
+  message Inner {
+    Status status = 1;
+  }
+}
