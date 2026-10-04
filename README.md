@@ -62,15 +62,21 @@ enum) this produces:
 ```text
 godot/generated/
   ExamplePlayer.pb.gd
+  ExamplePlayer.pb.gd.uid
   ExamplePlayerPosition.pb.gd
+  ExamplePlayerPosition.pb.gd.uid
   ExampleGameState.pb.gd
+  ExampleGameState.pb.gd.uid
   ExamplePlayerStatus.pb.gd
+  ExamplePlayerStatus.pb.gd.uid
   proto_core_utils.gd
+  proto_core_utils.gd.uid
 ```
 
 The class prefix (`Example`) is derived from the proto filename. Each file
 declares a top-level `class_name` so the classes are globally available in
-Godot without `preload`.
+Godot without `preload`. The `.uid` files are Godot resource identifier
+sidecars; see [gdkit conformance](#gdkit-conformance).
 
 `protoc` plugin — `--gdscript_out` is the output directory:
 
@@ -102,6 +108,76 @@ Then run:
 ```bash
 buf generate
 ```
+
+## gdkit conformance
+
+Generated output passes [gdkit](https://github.com/cafecito-games/gdkit)'s
+`gdkit format check`, `gdkit lint check`, and `gdkit uid check` with gdkit's
+default configuration. A project that gates CI on gdkit can therefore keep its
+generated protocol directory inside the checked set instead of excluding it —
+and excluding it from the checks that would catch a real problem.
+
+Formatting agrees with gdkit by construction rather than by imitation: the
+generator parses its own output with
+[gdparser](https://github.com/cafecito-games/gdparser) and re-emits it through
+`gdparser/format` using the Godot style options. `gdkit format` delegates to
+that same engine, and gdkit's default format configuration is field for field
+gdparser's `GodotStyle()`, so neither side reimplements the other's wrapping
+rules. The generator also verifies that a second formatting pass is a no-op,
+because `gdkit format check` reports any file another pass would change.
+
+Every generated file opens with a suppression directive on line 1:
+
+```gdscript
+# gdkit:disable = max-returns, max-public-methods
+```
+
+Those two rules are gdkit *design limits* that generated protobuf code cannot
+satisfy by construction: a wire-format parser is an early-return function with
+one return per field, and every proto field contributes a set of public
+accessors, so method count grows with the schema. Restructuring generated code
+to fit the limits would make it worse, not better. No other rule is
+suppressed. The directive has to be line 1 because
+`max-public-methods` is reported against the class global scope there, and a
+`gdkit:disable` reaches only from its own line to the end of the file.
+
+### `uid://` sidecars
+
+Each generated script is written with a sibling `.uid` file holding its Godot
+resource identifier:
+
+```text
+$ cat godot/generated/ExamplePlayer.pb.gd.uid
+uid://ix8k3hu6vdsf
+```
+
+Godot assigns these identifiers at random when it first imports a script.
+gdproto derives them from the filename instead, because a generator re-runs on
+every schema sync, and reissuing an identifier changes what every existing
+`uid://` reference to that script resolves to, with nothing rewriting those
+references. Deriving the identifier makes regeneration byte identical, makes
+two developers' output agree, and is the only scheme that works in the
+`protoc` plugin path, which never learns its own output directory.
+
+### Limits
+
+- **`max-line-length` is corpus dependent, not guaranteed.** A schema with very
+  long message, field, or enum names still produces lines past gdkit's
+  100-column limit, because a single long identifier or type annotation has no
+  legal wrap point. Formatting stays canonical and idempotent for such a
+  schema; it is only the line-length lint rule that reports.
+- **The agreement is with gdkit's default configuration.** A project with its
+  own `.gdkit/format.json` — a different `line_width`, spaces instead of tabs —
+  still needs its own `gdkit format write` pass over the generated directory.
+  gdproto cannot read a downstream project's configuration.
+- **The first regeneration replaces Godot-assigned sidecars.** A project that
+  already holds Godot-written `.uid` files for generated scripts will see them
+  replaced, since the derived identifier differs from the random one Godot
+  assigned. The exposure is small in practice — every generated class declares
+  `class_name` and is referenced by that global identifier rather than by a
+  `uid://` path — but it is a real one-time event. If a scene or resource does
+  reference a generated script by uid, grep for the old identifiers and update
+  them after the first regeneration.
 
 ## Custom prefix
 

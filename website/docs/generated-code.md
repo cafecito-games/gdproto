@@ -14,6 +14,10 @@ Every generated wrapper depends on the sibling `proto_core_utils.gd`
 (registered globally as `ProtoCoreUtils`), so the runtime file must stay in
 the same output directory as the wrappers.
 
+Each generated script is accompanied by a `.uid` sidecar carrying its Godot
+resource identifier, and the output as a whole is written in a form that
+passes gdkit's checks — see [gdkit conformance](#gdkit-conformance).
+
 ## File and Class Naming
 
 The class prefix is derived from the input `.proto` filename by default —
@@ -150,6 +154,116 @@ is absent. The importer's prefix is not applied to imported types. This
 means a single project can mix files with explicit `class_prefix` options
 and files that rely on the default, and cross-file references resolve to
 the right class names in either direction.
+
+## gdkit Conformance
+
+Generated output passes [gdkit](https://github.com/cafecito-games/gdkit)'s
+`gdkit format check`, `gdkit lint check`, and `gdkit uid check` using gdkit's
+default configuration. A project that gates CI on gdkit can keep its generated
+protocol directory inside the checked set rather than excluding the directory —
+and with it, the checks that would catch a real problem.
+
+A test in the repository generates `examples/example.proto` into a throwaway
+Godot project and runs gdkit's linter, formatter, and uid check in process, so a
+generator change that breaks conformance fails the gdproto test suite instead of
+surfacing in a downstream project.
+
+### Formatting
+
+The generator parses its own output with
+[gdparser](https://github.com/cafecito-games/gdparser) and re-emits it through
+`gdparser/format` with the Godot style options. `gdkit format` delegates to that
+same engine, and gdkit's default format configuration is field for field
+gdparser's `GodotStyle()`, so the two agree by construction instead of gdproto
+reimplementing gdkit's wrapping rules. The generator additionally checks that a
+second formatting pass changes nothing, because `gdkit format check` reports any
+file another pass would rewrite.
+
+Because the agreement runs through a pinned library version, formatting matches
+the gdkit release gdproto was built against; `go.mod` pins gdkit and gdparser
+together for that reason. A much newer `gdkit` binary could in principle format
+a construct differently, which a `gdkit format write` pass over the generated
+directory resolves.
+
+### Definition Order
+
+Oneof discriminant enums are emitted ahead of the field `var` declarations,
+because gdkit's `class-definitions-order` rule places the enums slot before the
+var slots.
+
+### The `gdkit:disable` Directive
+
+Every generated file opens with this comment on line 1:
+
+```gdscript
+# gdkit:disable = max-returns, max-public-methods
+```
+
+Both suppressed rules are gdkit *design limits* that generated protobuf code
+cannot satisfy by construction:
+
+- `max-returns` — a wire-format parser is an early-return function with one
+  return per field.
+- `max-public-methods` — every field contributes a set of public accessors
+  (`get_`, `set_`, `has_`, `clear_`, and more for repeated, map, and message
+  fields), so method count grows with the schema.
+
+Restructuring generated code to fit those limits would make it worse to read,
+so they are suppressed rather than worked around. **No other rule is
+suppressed**; everything else gdkit's default lint configuration checks is
+satisfied outright. The directive has to be the first line because
+`max-public-methods` is reported against the class global scope there, and a
+`gdkit:disable` applies only from its own line to the end of the file.
+
+### `uid://` Sidecars
+
+Every generated `X.gd` is written with a sibling `X.gd.uid` holding one line:
+
+```text
+uid://ix8k3hu6vdsf
+```
+
+Godot assigns these resource identifiers at random (`ResourceUID::create_id`)
+the first time it imports a script. gdproto derives the identifier from the
+filename instead. The reason is regeneration: a generator re-runs on every
+schema sync, and reissuing an identifier changes what every existing `uid://`
+reference to that script resolves to, with nothing in the project rewriting
+those references. Deriving it has three further benefits:
+
+- Regenerating a schema produces byte-identical output, sidecars included, so
+  generated files stay clean in version control.
+- Two developers generating the same schema get the same identifiers.
+- It is the only scheme that works in the `protoc` plugin path, which never
+  learns its own output directory and so cannot read identifiers already on
+  disk.
+
+### Known Limits
+
+The conformance guarantee has three real edges.
+
+**`max-line-length` is corpus dependent.** A schema with very long message,
+field, or enum names still produces lines past gdkit's 100-column limit: a
+single long identifier or type annotation has no legal wrap point, so no
+formatter can bring the line down. A deliberately long-named probe schema
+produces 11 such diagnostics with a longest line of 133 columns. Formatting
+stays canonical and idempotent for those files — it is only the line-length
+lint rule that reports. A project in that situation can allowlist the rule for
+the generated directory, or shorten the schema's names.
+
+**The agreement is with gdkit's default configuration.** gdproto cannot read a
+downstream project's `.gdkit/format.json`, so a project that customizes
+`line_width`, indents with spaces, or otherwise diverges from gdparser's Godot
+style needs its own `gdkit format write` pass over the generated directory
+after generation.
+
+**The first regeneration replaces Godot-assigned sidecars.** A project that
+already contains `.uid` files Godot wrote for generated scripts will see them
+replaced on the first regeneration with gdproto, because the derived identifier
+differs from the random one Godot assigned. The exposure is usually nil: every
+generated class declares `class_name` and is referenced through that global
+identifier, not through a `uid://` path. But it is a real one-time event, so if
+a scene or resource does reference a generated script by uid, grep the project
+for the old identifiers and update those references.
 
 ## Construct A Message
 

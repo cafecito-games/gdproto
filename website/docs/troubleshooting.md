@@ -133,6 +133,44 @@ gdproto -I proto-include -o godot/generated proto/example.proto
 The flag is repeatable; each include root is searched in order before the
 input file's own directory is consulted.
 
+## `gdkit format check` Reports Generated Files
+
+gdproto writes generated GDScript in the canonical form produced by gdkit's
+default format configuration. A project that customizes `.gdkit/format.json`
+— a different `line_width`, spaces instead of tabs — diverges from that form,
+and gdproto cannot read a downstream project's configuration. Run your own
+formatter pass over the generated directory after generating:
+
+```bash
+gdkit format write godot/generated
+```
+
+## `gdkit lint check` Reports `max-line-length` In Generated Files
+
+A single long identifier or type annotation has no legal wrap point, so a
+schema with very long message, field, or enum names produces generated lines
+past gdkit's 100-column limit no matter how the file is formatted. The
+formatting itself is still canonical and idempotent; only the line-length rule
+reports.
+
+Either shorten the offending schema names or allowlist `max-line-length` for
+the generated directory. Do not suppress the rule project-wide — it is doing
+useful work everywhere else.
+
+## Generated `.uid` Files Changed On Regeneration
+
+gdproto derives each script's `uid://` identifier from its filename so that
+regenerating a schema is byte-identical. Godot, by contrast, assigns these
+identifiers at random when it first imports a script, so the first gdproto
+regeneration over a directory that already holds Godot-written sidecars
+replaces them.
+
+This is a one-time event, and usually harmless: every generated class declares
+`class_name` and is referenced through that global identifier rather than
+through a `uid://` path. If a scene or resource does reference a generated
+script by uid, grep the project for the old identifier and update the
+reference.
+
 ## Validation Fails For A Schema Feature
 
 Check [Feature support](./feature-support.md). gdproto intentionally rejects or
