@@ -114,8 +114,8 @@ buf generate
 Generated output passes [gdkit](https://github.com/cafecito-games/gdkit)'s
 `gdkit format check`, `gdkit lint check`, and `gdkit uid check` with gdkit's
 default configuration. A project that gates CI on gdkit can therefore keep its
-generated protocol directory inside the checked set instead of excluding it —
-and excluding it from the checks that would catch a real problem.
+generated protocol directory inside the checked set. Excluding that directory
+also excludes it from the checks that would catch a real problem in it.
 
 Formatting agrees with gdkit by construction rather than by imitation: the
 generator parses its own output with
