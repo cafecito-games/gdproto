@@ -60,16 +60,22 @@ func (g *generator) generateMessageClass(m *ast.Message, className, scope string
 		)
 	}
 
+	// Enums precede vars: gdkit's class-definitions-order puts the enums
+	// slot ahead of the pubvars/prvvars slots, so the oneof enums cannot
+	// be emitted alongside the oneof tracking var further down.
+	if len(m.Oneofs) > 0 {
+		statements = append(statements, gdast.Comment{Text: "Oneof enums"})
+		for _, oneof := range m.Oneofs {
+			statements = append(statements, generateOneofEnum(oneof))
+		}
+	}
+
 	if declarations := g.generateFieldDeclarations(m); len(declarations) > 0 {
 		statements = append(statements, gdast.Comment{Text: "Fields"})
 		statements = append(statements, declarations...)
 	}
 
 	if len(m.Oneofs) > 0 {
-		statements = append(statements, gdast.Comment{Text: "Oneof enums"})
-		for _, oneof := range m.Oneofs {
-			statements = append(statements, generateOneofEnum(oneof))
-		}
 		statements = append(statements, gdast.Comment{Text: "Oneof tracking"})
 		for _, oneof := range m.Oneofs {
 			enumName := oneofEnumName(oneof.Name)

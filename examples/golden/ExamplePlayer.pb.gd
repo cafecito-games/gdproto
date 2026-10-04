@@ -6,6 +6,10 @@ extends RefCounted
 # Source: example.proto
 # DO NOT EDIT
 
+# Oneof enums
+
+enum ContactOneOf { UNSET = 0, EMAIL = 1, DISCORD = 2 }
+
 # Fields
 var _username: String = ""
 var _level: int = 0
@@ -17,10 +21,6 @@ var _email: String = ""
 var _discord: String = ""
 var _stats: Dictionary[String, int] = {}
 var _status_effects: Dictionary[String, ExamplePlayerStatus.PlayerStatus] = {}
-
-# Oneof enums
-
-enum ContactOneOf { UNSET = 0, EMAIL = 1, DISCORD = 2 }
 
 # Oneof tracking
 var _oneof_contact: ContactOneOf = ContactOneOf.UNSET

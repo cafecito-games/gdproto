@@ -1170,3 +1170,26 @@ message Unit {
 	assert.NotContains(t, got, ".new()",
 		"an enum class cannot be instantiated in GDScript\n%s", got)
 }
+
+func TestOneofEnumIsEmittedBeforeFieldVars(t *testing.T) {
+	const source = `syntax = "proto3";
+message Contact {
+	int32 id = 1;
+	oneof channel {
+		string email = 2;
+		string phone = 3;
+	}
+}
+`
+	files := generateFromSource(t, source, "contact.proto")
+	f := findFile(files, "ContactContact")
+	require.NotNil(t, f, "missing ContactContact; got %v", classNames(files))
+	got := mustSource(t, *f)
+
+	enumAt := strings.Index(got, "enum ChannelOneOf")
+	varAt := strings.Index(got, "var _id:")
+	require.NotEqual(t, -1, enumAt, "missing the oneof enum\n%s", got)
+	require.NotEqual(t, -1, varAt, "missing the id field\n%s", got)
+	assert.Less(t, enumAt, varAt,
+		"oneof enum must precede field vars for gdkit slot order\n%s", got)
+}
