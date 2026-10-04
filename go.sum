@@ -1,7 +1,7 @@
-github.com/cafecito-games/gdkit v0.4.1 h1:sYYgpipLXytD6GL5BGrtc8Rj45YqnaHBGyzea/agnPc=
-github.com/cafecito-games/gdkit v0.4.1/go.mod h1:GalvIhfvT/EGDv6p9E0d9apLth0L8sWoDXTW380P0gs=
-github.com/cafecito-games/gdparser v0.1.5 h1:wVB/jP6RTWqBHa1Eq+KFbvh3edUhfkJOE/JF1dLH28g=
-github.com/cafecito-games/gdparser v0.1.5/go.mod h1:ekj7tvE0utDBNw+DJyE58HVla7zLuWzGERgTLBC0dFI=
+github.com/cafecito-games/gdkit v0.4.2 h1:9zf+JeLIcks/yz13XgEd3hh8v1gH0H9q1aYsP0UMLXM=
+github.com/cafecito-games/gdkit v0.4.2/go.mod h1:HdHSJuxYwWx/fJrHyQANPaK1Rpdqm1l0bgns7XzIo64=
+github.com/cafecito-games/gdparser v0.1.6 h1:JEccBrOrwHCxLYSc9u2XsuqnbJx+6Nh0Ibjl57eFT5Q=
+github.com/cafecito-games/gdparser v0.1.6/go.mod h1:ekj7tvE0utDBNw+DJyE58HVla7zLuWzGERgTLBC0dFI=
 github.com/cpuguy83/go-md2man/v2 v2.0.6/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
