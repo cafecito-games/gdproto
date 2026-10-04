@@ -198,17 +198,33 @@ sidecar identifiers appeared in any scene, resource, or project file.
   rename the offending fields in the schema, or to scope gdkit's naming rules
   away from the generated directory in the consuming project's own
   `.gdkit/lint.json`.
-- **`max-line-length` is corpus dependent, not guaranteed.** A schema with very
-  long message, field, or enum names still produces lines past gdkit's
-  100-column limit, because a single long identifier or type annotation has no
-  legal wrap point. Formatting stays canonical and idempotent for such a
-  schema; it is only the line-length lint rule that reports. The rule is left
-  reporting on purpose, unlike `max-file-lines`: wrapping is genuinely the
-  formatter's job and only the unwrappable case escapes it, so suppressing the
-  rule would hide real formatting problems, whereas no generator change can
-  bring a large message under a fixed file-length limit. A project that wants
-  the generated directory silent on this can allowlist the rule for it, or
-  shorten the schema's names.
+- **`max-line-length` reports for deep package paths, and that is the common
+  case.** Class prefixes are derived from the full `.proto` path (see
+  [Custom prefix](#custom-prefix)), so a layout like
+  `uzir/assetpack/client/v1/characters.proto` yields class names near 50
+  characters. A declaration that names its type twice then cannot fit in 100
+  columns and has no legal wrap point:
+
+  ```gdscript
+  var msg_instance: UzirAssetpackClientV1CharactersAvatarBodyDirection = UzirAssetpackClientV1CharactersAvatarBodyDirection.new()
+  ```
+
+  Regenerating a 687-file production schema produces 868 of these, and nothing
+  else — `format check` and `uid check` pass that same schema completely. So
+  treat this as expected for a monorepo layout rather than as an edge case.
+  Shortening the prefix with `(gdproto.class_prefix)` reduces it; inferring the
+  type instead would fix it but breaks under a strict `untyped_declaration`
+  warning policy, so the generator keeps the annotation.
+
+  The rule is left reporting on purpose, unlike `max-file-lines`: wrapping is
+  genuinely the formatter's job, and suppressing the rule would hide real
+  formatting problems. A project that wants the generated directory silent on
+  this disables or allowlists the one rule for that directory.
+- **An opt-in logging rule reports.** Generated code calls `push_error` to
+  report a decode failure. A project that enables gdkit's `no-engine-logging`
+  rule — inert by default — and routes diagnostics through its own logger will
+  see that rule report across generated files, since the generator cannot know
+  the project's logger. Scope the rule away from the generated directory.
 - **The agreement is with gdkit's default configuration.** A project with its
   own `.gdkit/format.json` — a different `line_width`, spaces instead of tabs —
   still needs its own `gdkit format write` pass over the generated directory.

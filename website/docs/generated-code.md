@@ -321,14 +321,24 @@ Two remedies are available: rename the offending fields in the schema, which the
 protobuf style guide already asks for, or scope gdkit's naming rules away from
 the generated directory in the consuming project's own `.gdkit/lint.json`.
 
-**`max-line-length` is corpus dependent.** A schema with very long message,
-field, or enum names still produces lines past gdkit's 100-column limit: a
-single long identifier or type annotation has no legal wrap point, so no
-formatter can bring the line down. A deliberately long-named probe schema
-produces 11 such diagnostics with a longest line of 133 columns. Formatting
-stays canonical and idempotent for those files — it is only the line-length
-lint rule that reports. A project in that situation can allowlist the rule for
-the generated directory, or shorten the schema's names.
+**`max-line-length` reports for deep package paths, and that is the common
+case.** Class prefixes are derived from the full `.proto` path, so a layout
+like `uzir/assetpack/client/v1/characters.proto` produces class names near 50
+characters. A declaration that names its type twice then cannot fit in 100
+columns, and has no legal wrap point:
+
+```gdscript
+var msg_instance: UzirAssetpackClientV1CharactersAvatarBodyDirection = UzirAssetpackClientV1CharactersAvatarBodyDirection.new()
+```
+
+Regenerating a 687-file production schema produces 868 of these and no other
+lint diagnostic, while `format check` and `uid check` pass that same schema
+completely. Treat it as expected for a monorepo layout rather than as an edge
+case. Shortening the prefix with `(gdproto.class_prefix)` reduces it; inferring
+the type would remove it but breaks under a strict `untyped_declaration`
+warning policy, so the generator keeps the annotation. A project that wants the
+generated directory silent on this disables or allowlists the one rule for that
+directory.
 
 This rule is deliberately left reporting rather than suppressed alongside
 `max-file-lines`, and the asymmetry is the point. Wrapping is genuinely the
@@ -338,6 +348,12 @@ identifier or type annotation with no legal wrap point — escapes it, so a
 suppressing the rule would hide real formatting problems. A file-length
 diagnostic carries no such signal, because nothing the generator could do
 would make it go away.
+
+**An opt-in logging rule reports.** Generated code calls `push_error` to report
+a decode failure, so a project that enables gdkit's `no-engine-logging` rule —
+inert by default — and routes diagnostics through its own logger will see that
+rule report across generated files. The generator cannot know the project's
+logger, so scope the rule away from the generated directory.
 
 **The agreement is with gdkit's default configuration.** gdproto cannot read a
 downstream project's `.gdkit/format.json`, so a project that customizes
