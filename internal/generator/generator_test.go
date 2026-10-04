@@ -1251,6 +1251,61 @@ message Outer {
 // qualified name alone, never against an enclosing scope. Without that rule the
 // innermost-first walk lets a nested declaration capture a reference that names
 // a different type outright, which is a silent miscompile rather than an error.
+// parseProtoSource lexes and parses one proto source, failing the test on any
+// error. It stops short of validation so a fixture may reference a type that
+// only another file in the set declares.
+func parseProtoSource(t *testing.T, source, filename string) *ast.ProtoFile {
+	t.Helper()
+	tokens, err := lexer.Tokenize(source, filename)
+	require.NoError(t, err, "tokenize %s", filename)
+	file, err := parser.Parse(tokens, filename)
+	require.NoError(t, err, "parse %s", filename)
+	return file
+}
+
+// TestGeneratePackagedReferenceIsNotCapturedByAnImport covers the interaction
+// between the innermost-first walk and the shared declaration index: that index
+// holds imported declarations too, so a scope-relative candidate spelled without
+// the package could match another file's type. Protobuf would never resolve a
+// packaged file's reference to that name, and the failure is silent -- the field
+// keeps enum annotation while its declared type becomes the imported message's
+// class, which is invalid GDScript rather than a type error.
+func TestGeneratePackagedReferenceIsNotCapturedByAnImport(t *testing.T) {
+	const imported = `syntax = "proto3";
+message Outer {
+  message Mode {
+    int32 z = 1;
+  }
+}
+`
+	const main = `syntax = "proto3";
+package game.v1;
+import "imported.proto";
+enum Mode {
+  MODE_A = 0;
+}
+message Outer {
+  Mode field = 1;
+}
+`
+	importedFile := parseProtoSource(t, imported, "imported.proto")
+	mainFile := parseProtoSource(t, main, "main.proto")
+
+	files, err := generator.Generate(mainFile, "main.proto", []generator.FileEntry{
+		{File: importedFile, Filename: "imported.proto"},
+	})
+	require.NoError(t, err, "generate")
+
+	f := findFile(files, "MainOuter")
+	require.NotNil(t, f, "missing MainOuter; got %v", classNames(files))
+	got := f.Source()
+
+	assert.Contains(t, got, "var _field: MainMode.Mode = 0 as MainMode.Mode",
+		"the reference must resolve to the local enum, not an import\n%s", got)
+	assert.NotContains(t, got, "ImportedOuterMode",
+		"an imported declaration captured a reference to a local type\n%s", got)
+}
+
 func TestGenerateAbsoluteReferenceIsNotScopeResolved(t *testing.T) {
 	const source = `syntax = "proto3";
 package game.v1;

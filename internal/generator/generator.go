@@ -311,20 +311,29 @@ func buildLookupCandidates(typeName, currentScope, pkg string) []string {
 		add(typeName)
 		return out
 	}
+	// A scope-relative candidate names a declaration of the file being
+	// generated, so in a packaged file it is only ever the package-qualified
+	// form. The unqualified form is not a name protobuf would resolve there,
+	// and the index it is looked up in holds other files' declarations too, so
+	// emitting it would let an import capture a local reference.
 	if currentScope != "" {
 		parts := strings.Split(currentScope, ".")
 		for i := len(parts); i > 0; i-- {
 			candidate := strings.Join(append(append([]string{}, parts[:i]...), typeName), ".")
-			add(candidate)
-			if pkg != "" {
-				add(pkg + "." + candidate)
+			if pkg == "" {
+				add(candidate)
+				continue
 			}
+			add(pkg + "." + candidate)
 		}
 	}
-	add(typeName)
 	if pkg != "" {
 		add(pkg + "." + typeName)
 	}
+	// Last, the name as written. For a file with no package this is its own
+	// file-scope name; for a packaged one it is how a reference to another
+	// package, or to the root package, is spelled.
+	add(typeName)
 	return out
 }
 
