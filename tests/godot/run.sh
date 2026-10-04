@@ -98,5 +98,16 @@ if ! grep -E '^ok ' "$vest_log" >/dev/null; then
     exit 1
 fi
 
+# Vest drops a suite whose script fails to parse from its plan instead of
+# reporting it as a failure, and generated GDScript whose declared type and
+# codec describe different declarations is exactly what makes a suite
+# unparseable. The scoping suite is the one that loads the shadowed and
+# nested-enum classes, so assert it actually ran rather than vanished.
+if ! grep -qE '^ok [0-9]+ - res://tests/scoping/test_scoping\.gd$' "$vest_log"; then
+    echo "error: res://tests/scoping/test_scoping.gd did not run;" \
+        "the generated classes it loads most likely failed to parse" >&2
+    exit 1
+fi
+
 cleanup
 trap - EXIT
