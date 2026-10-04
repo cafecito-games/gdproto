@@ -28,7 +28,7 @@ func (g *generator) generateMessageFiles(m *ast.Message, classChain, protoChain 
 	if protoChain != "" {
 		scope = protoChain + "." + m.Name
 	}
-	class := g.generateMessageClass(m, className, scope)
+	class := g.generateMessageClass(m, className)
 	out := []GeneratedFile{{
 		Filename:  className + ".pb.gd",
 		ClassName: className,
@@ -46,11 +46,7 @@ func (g *generator) generateMessageFiles(m *ast.Message, classChain, protoChain 
 // proto message. Nested enums remain inline inside the class body; nested
 // messages are emitted as sibling files by generateMessageFiles and are
 // intentionally NOT included here.
-func (g *generator) generateMessageClass(m *ast.Message, className, scope string) *gdast.ClassDefinition {
-	prevScope := g.currentScope
-	g.currentScope = scope
-	defer func() { g.currentScope = prevScope }()
-
+func (g *generator) generateMessageClass(m *ast.Message, className string) *gdast.ClassDefinition {
 	var statements []gdast.Node
 
 	for _, e := range m.NestedEnums {

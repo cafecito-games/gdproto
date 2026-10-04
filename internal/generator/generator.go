@@ -57,12 +57,18 @@ func Generate(file *ast.ProtoFile, sourceName string, imports []FileEntry) ([]Ge
 		return nil, err
 	}
 	g := &generator{
-		file:       file,
-		sourceName: sourceName,
-		prefix:     prefix,
-		resolver:   resolver,
+		file:                file,
+		sourceName:          sourceName,
+		prefix:              prefix,
+		resolver:            resolver,
+		declarations:        newDeclarationIndex(entries),
+		fieldResolutions:    map[*ast.Field]typeResolution{},
+		mapValueResolutions: map[*ast.MapField]typeResolution{},
 	}
-	g.annotateLocalEnumUsage()
+	g.resolveFieldTypes()
+	if g.firstErr != nil {
+		return nil, g.firstErr
+	}
 	return g.generate()
 }
 
@@ -71,12 +77,16 @@ type generator struct {
 	sourceName string
 	prefix     string
 	resolver   *NameResolver
-	// currentScope is the dotted proto-FQN-style path (without the package
-	// prefix) of the message whose body is currently being rendered. It is
-	// set at the entrypoint of generateMessageClass and consulted by
-	// renderedType to resolve same-file type references through the
-	// NameResolver. Empty when rendering top-level constructs.
-	currentScope string
+	// declarations indexes every message and enum declared by the file being
+	// generated and by its imports, which is what resolveTypeReference walks.
+	declarations *declarationIndex
+	// fieldResolutions and mapValueResolutions hold the one binding chosen
+	// for each non-scalar reference, recorded by resolveFieldTypes before any
+	// rendering happens. Rendering reads them instead of resolving again, so
+	// a field's declared type, default, accessors, codec and text helpers
+	// cannot end up describing different declarations.
+	fieldResolutions    map[*ast.Field]typeResolution
+	mapValueResolutions map[*ast.MapField]typeResolution
 	// firstErr captures the first error recorded during the generation walk
 	// from contexts (like renderedType) that cannot return an error through
 	// their signature. Generate consults it before returning files.
@@ -138,216 +148,31 @@ func (g *generator) generateTopLevelEnumFile(e *ast.Enum) GeneratedFile {
 	}
 }
 
+// renderedFieldType returns the GDScript type expression for a field's
+// declared type. Scalars map directly; every other reference is answered from
+// the binding resolveFieldTypes recorded for it.
 func (g *generator) renderedFieldType(f *ast.Field) string {
-	return g.renderedType(f.FieldType, f.FullTypePath, f.SourceFile, f.IsEnum)
-}
-
-func (g *generator) renderedMapValueType(mf *ast.MapField) string {
-	return g.renderedType(mf.ValueType, mf.FullValueTypePath, mf.ValueSourceFile, mf.ValueIsEnum)
-}
-
-// renderedType returns the GDScript type to use for a proto type reference,
-// resolving same-file message/enum references to their generated prefixed
-// class names. Cross-file references are looked up in the resolver, which
-// indexes both the input file and every import threaded through Generate.
-//
-// Reaching the cross-file fallback indicates an internal inconsistency: the
-// AST recorded a SourceFile for the reference, but the resolver has no entry
-// for any of the candidate FQNs in that file. This should not happen for
-// inputs that pass through the plugin or CLI paths (both thread the full
-// import closure). When it does, an error is recorded on the generator so
-// Generate surfaces the failure instead of emitting a malformed .pb.gd; a
-// best-effort placeholder is returned to allow the walk to finish.
-//
-// isEnumHint biases the placeholder toward a qualified `<Wrapper>.<EnumName>`
-// shape when the reference is known to be an enum.
-func (g *generator) renderedType(protoType, fullTypePath, sourceFile string, isEnumHint bool) string {
-	if t, ok := scalarTypeMap[protoType]; ok {
+	if t, ok := scalarTypeMap[f.FieldType]; ok {
 		return t
 	}
-	if sourceFile != "" && sourceFile != g.sourceName && sourceFile != filepath.Base(g.sourceName) {
-		candidates := buildLookupCandidates(protoType, "", g.file.Package)
-		if fullTypePath != "" && fullTypePath != protoType {
-			candidates = append([]string{strings.TrimPrefix(fullTypePath, ".")}, candidates...)
-		}
-		for _, candidate := range candidates {
-			if wrapper, inner, ok := g.resolver.LookupEnum(candidate); ok {
-				return wrapper + "." + inner
-			}
-			if name, ok := g.resolver.Lookup(candidate); ok {
-				return name
-			}
-		}
-		g.recordError(fmt.Errorf(
-			"internal: no resolver entry for cross-file type %q from %q (import not threaded into Generate?)",
-			protoType, sourceFile,
-		))
-		otherPrefix, err := ResolvePrefix(&ast.ProtoFile{}, sourceFile)
-		if err != nil {
-			return strings.TrimPrefix(protoType, ".")
-		}
-		wrapper := otherPrefix + concatProtoPath(protoType)
-		if isEnumHint {
-			return wrapper + "." + lastProtoSegment(protoType)
-		}
-		return wrapper
+	if resolution, ok := g.fieldResolution(f); ok {
+		return resolution.gdType
 	}
-	for _, candidate := range buildLookupCandidates(protoType, g.currentScope, g.file.Package) {
-		if wrapper, inner, ok := g.resolver.LookupEnum(candidate); ok {
-			return wrapper + "." + inner
-		}
-		if name, ok := g.resolver.Lookup(candidate); ok {
-			return name
-		}
-	}
-	// Fallback: bare type name (handles nested-enum references which the
-	// resolver does not index; they render inside the parent class scope
-	// as e.g. "Status.ONLINE").
-	return strings.TrimPrefix(protoType, ".")
+	// resolveFieldTypes records an error for any reference it cannot bind, so
+	// Generate has already failed by the time this is reached and the rendered
+	// text is discarded. Returning the reference as written keeps the walk
+	// able to finish instead of panicking on an empty type.
+	return strings.TrimPrefix(f.FieldType, ".")
 }
 
-// lastProtoSegment returns the last dotted segment of a proto type path,
-// stripping any leading dot. For "shared.Color" it returns "Color".
-func lastProtoSegment(typePath string) string {
-	s := strings.TrimPrefix(typePath, ".")
-	if i := strings.LastIndex(s, "."); i >= 0 {
-		return s[i+1:]
+// renderedMapValueType returns the GDScript type expression for a map field's
+// value type, from the binding resolveFieldTypes recorded for it.
+func (g *generator) renderedMapValueType(mf *ast.MapField) string {
+	if t, ok := scalarTypeMap[mf.ValueType]; ok {
+		return t
 	}
-	return s
-}
-
-// concatProtoPath turns a dotted proto type path like "pkg.Outer.Inner" into a
-// concatenated class-name fragment like "OuterInner". When the path has more
-// than two segments the leading segment(s) are assumed to be a package
-// prefix and dropped. For one- or two-segment paths every segment is kept.
-func concatProtoPath(typePath string) string {
-	s := strings.TrimPrefix(typePath, ".")
-	parts := strings.Split(s, ".")
-	if len(parts) > 2 {
-		parts = parts[len(parts)-2:]
+	if resolution, ok := g.mapValueResolution(mf); ok {
+		return resolution.gdType
 	}
-	return strings.Join(parts, "")
-}
-
-// buildLookupCandidates produces the set of proto FQNs to try when resolving
-// a type reference written inside currentScope. It mirrors the scope walk
-// used by isLocalEnumReference: the bare name, the bare name under the
-// package, and the name appended to every prefix of the current scope (with
-// and without the package).
-func buildLookupCandidates(typeName, currentScope, pkg string) []string {
-	typeName = strings.TrimPrefix(typeName, ".")
-	var out []string
-	seen := map[string]bool{}
-	add := func(s string) {
-		if s == "" || seen[s] {
-			return
-		}
-		seen[s] = true
-		out = append(out, s)
-	}
-	add(typeName)
-	if pkg != "" {
-		add(pkg + "." + typeName)
-	}
-	if currentScope != "" {
-		parts := strings.Split(currentScope, ".")
-		for i := len(parts); i > 0; i-- {
-			candidate := strings.Join(append(append([]string{}, parts[:i]...), typeName), ".")
-			add(candidate)
-			if pkg != "" {
-				add(pkg + "." + candidate)
-			}
-		}
-	}
-	return out
-}
-
-func (g *generator) annotateLocalEnumUsage() {
-	enumPaths := map[string]bool{}
-	prefix := ""
-	if g.file.Package != "" {
-		prefix = g.file.Package + "."
-	}
-	for _, e := range g.file.Enums {
-		enumPaths[prefix+e.Name] = true
-	}
-	for _, m := range g.file.Messages {
-		g.collectLocalEnumPaths(m, prefix+m.Name, enumPaths)
-	}
-	for _, m := range g.file.Messages {
-		g.annotateLocalEnumMessage(m, m.Name, enumPaths)
-	}
-}
-
-func (g *generator) collectLocalEnumPaths(m *ast.Message, scope string, enumPaths map[string]bool) {
-	for _, e := range m.NestedEnums {
-		enumPaths[scope+"."+e.Name] = true
-	}
-	for _, nested := range m.NestedMessages {
-		g.collectLocalEnumPaths(nested, scope+"."+nested.Name, enumPaths)
-	}
-}
-
-func (g *generator) annotateLocalEnumMessage(m *ast.Message, scope string, enumPaths map[string]bool) {
-	for _, f := range m.Fields {
-		if f.SourceFile == "" && isLocalEnumReference(f.FieldType, f.FullTypePath, scope, g.file.Package, enumPaths) {
-			f.IsEnum = true
-		}
-	}
-	for _, mf := range m.Maps {
-		if mf.ValueSourceFile == "" && isLocalEnumReference(mf.ValueType, mf.FullValueTypePath, scope, g.file.Package, enumPaths) {
-			mf.ValueIsEnum = true
-		}
-	}
-	for _, oneof := range m.Oneofs {
-		for _, f := range oneof.Fields {
-			if f.SourceFile == "" && isLocalEnumReference(f.FieldType, f.FullTypePath, scope, g.file.Package, enumPaths) {
-				f.IsEnum = true
-			}
-		}
-	}
-	for _, nested := range m.NestedMessages {
-		g.annotateLocalEnumMessage(nested, scope+"."+nested.Name, enumPaths)
-	}
-}
-
-// isLocalEnumReference reports whether a type reference inside currentScope
-// names an enum declared in the file being generated. It follows protobuf name
-// resolution: the reference is resolved against each enclosing message scope
-// from the innermost outward, and finally against file (package) scope, where
-// annotateLocalEnumUsage registers top-level enums as "<package>.<EnumName>".
-func isLocalEnumReference(typeName, fullTypePath, currentScope, pkg string, enumPaths map[string]bool) bool {
-	if fullTypePath != "" && enumPaths[strings.TrimPrefix(fullTypePath, ".")] {
-		return true
-	}
-
-	normalizedType := strings.TrimPrefix(typeName, ".")
-	if enumPaths[normalizedType] {
-		return true
-	}
-
-	if pkg != "" {
-		packagePrefix := pkg + "."
-		if strings.HasPrefix(normalizedType, packagePrefix) && enumPaths[normalizedType] {
-			return true
-		}
-	}
-
-	typeParts := strings.Split(normalizedType, ".")
-	scopeParts := strings.Split(currentScope, ".")
-	// i == 0 drops every message scope and resolves the reference at file
-	// scope, which is where an unqualified reference to a top-level enum of a
-	// packaged file matches ("Team" against "game.v1.Team").
-	for i := len(scopeParts); i >= 0; i-- {
-		candidate := strings.Join(append(append([]string{}, scopeParts[:i]...), typeParts...), ".")
-		prefix := ""
-		if pkg != "" {
-			prefix = pkg + "."
-		}
-		if enumPaths[candidate] || (prefix != "" && enumPaths[prefix+candidate]) {
-			return true
-		}
-	}
-
-	return false
+	return strings.TrimPrefix(mf.ValueType, ".")
 }

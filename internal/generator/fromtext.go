@@ -532,46 +532,18 @@ func (g *generator) generateParseEnumValueHelper(f *ast.Field) gdast.Function {
 	}
 }
 
-// enumValuesFor returns the enum values associated with an enum-typed field.
-// Same-file references resolve through the in-file enum AST; cross-file
-// references rely on the EnumValues snapshot attached during descriptor or
-// import resolution.
+// enumValuesFor returns the values of the enum an enum-typed field is bound
+// to, so the text-format helpers emit the symbolic names of the same
+// declaration the field's type and codec came from.
+//
+// The binding recorded by resolveFieldTypes carries the enum's AST node
+// whenever the enum is declared in the file being generated or in one of its
+// imports. The EnumValues snapshot attached during descriptor or import
+// resolution is the fallback for a reference the index could not supply a node
+// for.
 func (g *generator) enumValuesFor(f *ast.Field) []*ast.EnumValue {
-	if enum := g.findEnum(f.FieldType); enum != nil {
-		return enum.Values
+	if resolution, ok := g.fieldResolution(f); ok && resolution.enum != nil {
+		return resolution.enum.Values
 	}
 	return f.EnumValues
-}
-
-// findEnum locates an enum AST node by name, searching top-level enums then
-// nested enums of every message. Returns nil if not found (shouldn't occur for
-// well-formed input).
-func (g *generator) findEnum(name string) *ast.Enum {
-	for _, e := range g.file.Enums {
-		if e.Name == name {
-			return e
-		}
-	}
-	for _, m := range g.file.Messages {
-		if e := findNestedEnum(m, name, m.Name); e != nil {
-			return e
-		}
-	}
-	return nil
-}
-
-func findNestedEnum(m *ast.Message, name, prefix string) *ast.Enum {
-	for _, e := range m.NestedEnums {
-		fullName := prefix + "." + e.Name
-		if e.Name == name || fullName == name {
-			return e
-		}
-	}
-	for _, nested := range m.NestedMessages {
-		nestedPrefix := prefix + "." + nested.Name
-		if e := findNestedEnum(nested, name, nestedPrefix); e != nil {
-			return e
-		}
-	}
-	return nil
 }
