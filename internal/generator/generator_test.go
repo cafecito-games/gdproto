@@ -17,6 +17,35 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// wrappedCallOpen, wrappedCallArgument and wrappedCallClose match the line
+// continuations the canonical formatter introduces when a call does not fit
+// on one line.
+var (
+	wrappedCallOpen     = regexp.MustCompile(`\(\n\s*`)
+	wrappedCallArgument = regexp.MustCompile(`,\n\s*`)
+	wrappedCallClose    = regexp.MustCompile(`\n\s*\)`)
+)
+
+// collapseWrapping joins those continuations back into single logical lines so
+// that tests can assert on the statements the generator rendered without
+// encoding where the formatter chose to break them.
+func collapseWrapping(source string) string {
+	source = wrappedCallOpen.ReplaceAllString(source, "(")
+	source = wrappedCallArgument.ReplaceAllString(source, ", ")
+	return wrappedCallClose.ReplaceAllString(source, ")")
+}
+
+// mustSource renders gf to canonical GDScript, failing the test if the
+// generated source does not parse.
+func mustSource(t *testing.T, gf generator.GeneratedFile) string {
+	t.Helper()
+	source, err := gf.Source()
+	if err != nil {
+		t.Fatalf("source for %s: %v", gf.Filename, err)
+	}
+	return source
+}
+
 // findFile returns the GeneratedFile in files whose ClassName matches name,
 // or nil if no such file was produced.
 func findFile(files []generator.GeneratedFile, name string) *generator.GeneratedFile {
@@ -62,7 +91,7 @@ func TestGenerateFieldlessMessageCollapsesMethods(t *testing.T) {
 	if f == nil {
 		t.Fatalf("missing PartyLeaveParty class; got %v", classNames(files))
 	}
-	out := f.Source()
+	out := mustSource(t, *f)
 
 	for _, want := range []string{
 		"func to_bytes() -> PackedByteArray:",
@@ -104,8 +133,9 @@ func TestGenerateHeaderUsesBasename(t *testing.T) {
 	if f == nil {
 		t.Fatalf("missing TmpFooBarBazFoo class; got %v", classNames(files))
 	}
-	if !strings.Contains(f.Source(), "# Source: bar_baz.proto") {
-		t.Errorf("output should reference basename of input path; got:\n%s", f.Source())
+	out := mustSource(t, *f)
+	if !strings.Contains(out, "# Source: bar_baz.proto") {
+		t.Errorf("output should reference basename of input path; got:\n%s", out)
 	}
 }
 
@@ -130,7 +160,7 @@ func TestGenerateTopLevelEnum(t *testing.T) {
 	if f == nil {
 		t.Fatalf("missing ExamplePlayerStatus wrapper class; got %v", classNames(files))
 	}
-	out := f.Source()
+	out := mustSource(t, *f)
 	if !strings.Contains(out, "class_name ExamplePlayerStatus") {
 		t.Errorf("output missing class_name directive:\n%s", out)
 	}
@@ -176,7 +206,7 @@ func TestGenerateMessageClassShell(t *testing.T) {
 		t.Fatalf("missing ExamplePlayerPosition sibling; got %v", classNames(files))
 	}
 
-	playerOut := player.Source()
+	playerOut := mustSource(t, *player)
 	for _, want := range []string{
 		"class_name ExamplePlayer",
 		"extends RefCounted",
@@ -195,7 +225,7 @@ func TestGenerateMessageClassShell(t *testing.T) {
 		t.Errorf("ExamplePlayer should not embed Position as a nested class:\n%s", playerOut)
 	}
 
-	positionOut := position.Source()
+	positionOut := mustSource(t, *position)
 	for _, want := range []string{
 		"class_name ExamplePlayerPosition",
 		"extends RefCounted",
@@ -258,7 +288,7 @@ func TestGenerateAccessorBodies(t *testing.T) {
 	if player == nil {
 		t.Fatalf("missing ExamplePlayer; got %v", classNames(files))
 	}
-	out := player.Source()
+	out := mustSource(t, *player)
 	for _, want := range []string{
 		"func set_username(value: String) -> void:\n\t_username = value",
 		"func get_username() -> String:\n\treturn _username",
@@ -281,7 +311,7 @@ func TestGenerateAccessorBodies(t *testing.T) {
 	if gameState == nil {
 		t.Fatalf("missing ExampleGameState; got %v", classNames(files))
 	}
-	gsOut := gameState.Source()
+	gsOut := mustSource(t, *gameState)
 	if !strings.Contains(gsOut, "func add_players() -> ExamplePlayer:\n\tvar item: ExamplePlayer = ExamplePlayer.new()\n\t_players.append(item)\n\treturn item") {
 		t.Errorf("GameState missing prefixed add_players accessor:\n%s", gsOut)
 	}
@@ -307,7 +337,7 @@ func TestGenerateToBytesScalar(t *testing.T) {
 	if f == nil {
 		t.Fatalf("missing ExamplePosition; got %v", classNames(files))
 	}
-	out := f.Source()
+	out := mustSource(t, *f)
 	for _, want := range []string{
 		"func to_bytes() -> PackedByteArray:",
 		`"""Serialize message to bytes."""`,
@@ -365,7 +395,7 @@ func TestGenerateToBytesStringRepeatedMessageOneofMap(t *testing.T) {
 	if f == nil {
 		t.Fatalf("missing ExamplePlayer; got %v", classNames(files))
 	}
-	out := f.Source()
+	out := mustSource(t, *f)
 	for _, want := range []string{
 		"# Field username",
 		`if _username != "":`,
@@ -415,7 +445,7 @@ func TestGenerateFromBytesScalar(t *testing.T) {
 	if f == nil {
 		t.Fatalf("missing ExamplePosition; got %v", classNames(files))
 	}
-	out := f.Source()
+	out := mustSource(t, *f)
 	for _, want := range []string{
 		"func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:",
 		`"""Deserialize message from bytes."""`,
@@ -478,7 +508,7 @@ func TestGenerateFromBytesComplex(t *testing.T) {
 	if f == nil {
 		t.Fatalf("missing ExamplePlayer; got %v", classNames(files))
 	}
-	out := f.Source()
+	out := collapseWrapping(mustSource(t, *f))
 	for _, want := range []string{
 		"# Field username",
 		"_username = ProtoCoreUtils.decode_string(data, offset, length)",
@@ -531,7 +561,7 @@ func TestGenerateFromTextFloatSpecialValuesCastIdentifierPosition(t *testing.T) 
 	if f == nil {
 		t.Fatalf("missing ExampleReading; got %v", classNames(files))
 	}
-	got := f.Source()
+	got := collapseWrapping(mustSource(t, *f))
 	for _, want := range []string{
 		`var id_value: String = id_result["value"]`,
 		`var id_pos: int = id_result["pos"]`,
@@ -570,7 +600,7 @@ func TestGenerateExampleStrictGDScriptShape(t *testing.T) {
 	untypedVar := regexp.MustCompile(`(?m)^\s*var\s+[A-Za-z_][A-Za-z0-9_]*\s*=`)
 	bareDictionaryVar := regexp.MustCompile(`(?m)^\s*var\s+[A-Za-z_][A-Za-z0-9_]*:\s*Dictionary(\s|$)`)
 	for _, f := range files {
-		out := f.Source()
+		out := mustSource(t, f)
 		assert.NotContains(t, out, ":=", "%s contains inferred declaration operator :=\n%s", f.Filename, firstMatchingLine(out, ":="))
 		assert.Empty(t, untypedVar.FindString(out), "%s contains untyped local declaration", f.Filename)
 		assert.Empty(t, bareDictionaryVar.FindString(out), "%s contains bare Dictionary local declaration", f.Filename)
@@ -646,7 +676,7 @@ message Hello {
 	if f == nil {
 		t.Fatalf("missing HelloHello; got %v", classNames(files))
 	}
-	out := f.Source()
+	out := mustSource(t, *f)
 	// Field 2 with wire type 0 (varint) → tag = (2 << 3) | 0 = 16.
 	if !strings.Contains(out, "encode_varint(16)") {
 		t.Errorf("expected encode_varint(16) for enum field 2; output:\n%s", out)
@@ -685,7 +715,7 @@ func TestGenerateImportedMessageUsesPrefixedClassName(t *testing.T) {
 	if f == nil {
 		t.Fatalf("missing MainUses; got %v", classNames(files))
 	}
-	got := f.Source()
+	got := mustSource(t, *f)
 	if !strings.Contains(got, "var _shared: CommonShared = null") {
 		t.Fatalf("missing imported prefixed class type:\n%s", got)
 	}
@@ -740,7 +770,7 @@ func TestGenerateImportedEnumFieldEmitsHelpers(t *testing.T) {
 	if f == nil {
 		t.Fatalf("missing MainUses; got %v", classNames(files))
 	}
-	got := f.Source()
+	got := mustSource(t, *f)
 	if !strings.Contains(got, "_get_enum_name_color") {
 		t.Fatalf("missing _get_enum_name_color helper:\n%s", got)
 	}
@@ -793,7 +823,7 @@ func TestGenerateMapEnumUsesVarintPaths(t *testing.T) {
 	if f == nil {
 		t.Fatalf("missing MapEnumUses; got %v", classNames(files))
 	}
-	got := f.Source()
+	got := mustSource(t, *f)
 	if !strings.Contains(got, "entry.append_array(ProtoCoreUtils.encode_varint(value))") {
 		t.Fatalf("missing enum varint serialization path:\n%s", got)
 	}
@@ -839,7 +869,7 @@ func TestGenerateMessageEnumNameCollisionDoesNotUseEnumPaths(t *testing.T) {
 	if f == nil {
 		t.Fatalf("missing CollisionB; got %v", classNames(files))
 	}
-	got := f.Source()
+	got := mustSource(t, *f)
 	if !strings.Contains(got, "var _status: CollisionBStatus = null") {
 		t.Fatalf("message field should default to null with prefixed type:\n%s", got)
 	}
@@ -881,12 +911,16 @@ func TestGenerateExampleGoldenDirectory(t *testing.T) {
 	for _, f := range files {
 		seen[f.Filename] = true
 		path := filepath.Join(goldenDir, f.Filename)
-		want, err := os.ReadFile(path)
-		if err != nil {
-			t.Errorf("missing golden for %s: %v\n--- got ---\n%s", f.Filename, err, f.Source())
+		got, sourceErr := f.Source()
+		if sourceErr != nil {
+			t.Errorf("source for %s: %v", f.Filename, sourceErr)
 			continue
 		}
-		got := f.Source()
+		want, err := os.ReadFile(path)
+		if err != nil {
+			t.Errorf("missing golden for %s: %v\n--- got ---\n%s", f.Filename, err, got)
+			continue
+		}
 		if got == string(want) {
 			continue
 		}
@@ -1049,7 +1083,7 @@ message Unit {
 	files := generateFromSource(t, source, "game.proto")
 	f := findFile(files, "GameUnit")
 	require.NotNil(t, f, "missing GameUnit; got %v", classNames(files))
-	got := f.Source()
+	got := mustSource(t, *f)
 
 	assert.Contains(t, got, "var _team: GameTeam.Team = 0 as GameTeam.Team",
 		"unqualified top-level enum field should default to the zero enum value\n%s", got)
@@ -1074,7 +1108,7 @@ message Unit {
 	files := generateFromSource(t, source, "game.proto")
 	f := findFile(files, "GameUnit")
 	require.NotNil(t, f, "missing GameUnit; got %v", classNames(files))
-	got := f.Source()
+	got := mustSource(t, *f)
 
 	assert.Contains(t, got, "var _other: GameTeam.Team = 0 as GameTeam.Team",
 		"fully qualified top-level enum field regressed\n%s", got)
@@ -1097,7 +1131,7 @@ message Unit {
 	files := generateFromSource(t, source, "game.proto")
 	f := findFile(files, "GameUnit")
 	require.NotNil(t, f, "missing GameUnit; got %v", classNames(files))
-	got := f.Source()
+	got := mustSource(t, *f)
 
 	assert.Contains(t, got, "entry.append_array(ProtoCoreUtils.encode_varint(value))",
 		"map value typed as an unqualified top-level enum should serialize as a varint\n%s", got)
@@ -1122,7 +1156,7 @@ message Unit {
 	files := generateFromSource(t, source, "game.proto")
 	f := findFile(files, "GameUnit")
 	require.NotNil(t, f, "missing GameUnit; got %v", classNames(files))
-	got := f.Source()
+	got := mustSource(t, *f)
 
 	assert.Contains(t, got, "var _favorite: GameTeam.Team = 0 as GameTeam.Team",
 		"oneof field typed as an unqualified top-level enum should default to the zero enum value\n%s", got)
@@ -1145,7 +1179,7 @@ message Unit {
 	files := generateFromSource(t, source, "game.proto")
 	f := findFile(files, "GameUnit")
 	require.NotNil(t, f, "missing GameUnit; got %v", classNames(files))
-	got := f.Source()
+	got := mustSource(t, *f)
 
 	assert.Contains(t, got, "var _stance: Stance = 0 as Stance",
 		"nested enum referenced from its declaring message should resolve innermost-first\n%s", got)

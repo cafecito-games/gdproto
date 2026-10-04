@@ -3,6 +3,9 @@ module github.com/cafecito-games/gdproto
 go 1.26
 
 require (
+	// Pinned to the gdparser version gdkit pins, so Canonicalize and a user's
+	// installed `gdkit format` agree byte for byte. Bump deliberately, with gdkit.
+	github.com/cafecito-games/gdparser v0.1.5
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	google.golang.org/protobuf v1.36.11

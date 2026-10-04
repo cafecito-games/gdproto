@@ -132,10 +132,16 @@ func run(in io.Reader, out io.Writer) error {
 				response.Error = &message
 				return writeResponse(out, response)
 			}
+			source, err := gf.Source()
+			if err != nil {
+				message := err.Error()
+				response.Error = &message
+				return writeResponse(out, response)
+			}
 			emittedFrom[gf.Filename] = name
 			response.File = append(response.File, &pluginpb.CodeGeneratorResponse_File{
 				Name:    proto.String(gf.Filename),
-				Content: proto.String(gf.Source()),
+				Content: proto.String(source),
 			})
 		}
 	}

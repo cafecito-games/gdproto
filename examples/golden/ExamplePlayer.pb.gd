@@ -20,53 +20,62 @@ var _status_effects: Dictionary[String, ExamplePlayerStatus.PlayerStatus] = {}
 
 # Oneof enums
 
-enum ContactOneOf {
-	UNSET = 0,
-	EMAIL = 1,
-	DISCORD = 2
-}
+enum ContactOneOf { UNSET = 0, EMAIL = 1, DISCORD = 2 }
 
 # Oneof tracking
 var _oneof_contact: ContactOneOf = ContactOneOf.UNSET
 
 # Accessors
 
+
 func set_username(value: String) -> void:
 	_username = value
+
 
 func get_username() -> String:
 	return _username
 
+
 func set_level(value: int) -> void:
 	_level = value
+
 
 func get_level() -> int:
 	return _level
 
+
 func set_experience(value: int) -> void:
 	_experience = value
+
 
 func get_experience() -> int:
 	return _experience
 
+
 func set_status(value: ExamplePlayerStatus.PlayerStatus) -> void:
 	_status = value
+
 
 func get_status() -> ExamplePlayerStatus.PlayerStatus:
 	return _status
 
+
 func add_inventory(value: String) -> void:
 	_inventory.append(value)
 
+
 func get_inventory() -> Array[String]:
 	return _inventory
+
 
 func new_position() -> ExamplePlayerPosition:
 	_position = ExamplePlayerPosition.new()
 	return _position
 
+
 func get_position() -> ExamplePlayerPosition:
 	return _position
+
 
 func set_email(value: String) -> void:
 	if _oneof_contact != ContactOneOf.EMAIL:
@@ -74,11 +83,14 @@ func set_email(value: String) -> void:
 		_oneof_contact = ContactOneOf.EMAIL
 	_email = value
 
+
 func get_email() -> String:
 	return _email
 
+
 func has_email() -> bool:
 	return _oneof_contact == ContactOneOf.EMAIL
+
 
 func set_discord(value: String) -> void:
 	if _oneof_contact != ContactOneOf.DISCORD:
@@ -86,30 +98,40 @@ func set_discord(value: String) -> void:
 		_oneof_contact = ContactOneOf.DISCORD
 	_discord = value
 
+
 func get_discord() -> String:
 	return _discord
+
 
 func has_discord() -> bool:
 	return _oneof_contact == ContactOneOf.DISCORD
 
+
 func add_stats(key: String, value: int) -> void:
 	_stats[key] = value
+
 
 func get_stats() -> Dictionary[String, int]:
 	return _stats
 
+
 func add_status_effects(key: String, value: ExamplePlayerStatus.PlayerStatus) -> void:
 	_status_effects[key] = value
+
 
 func get_status_effects() -> Dictionary[String, ExamplePlayerStatus.PlayerStatus]:
 	return _status_effects
 
+
 # Oneof case getters
+
 
 func get_contact_case() -> ContactOneOf:
 	return _oneof_contact
 
+
 # Enum name lookup helpers
+
 
 func _get_enum_name_status(value: int) -> String:
 	"""Get enum name for status value."""
@@ -125,6 +147,7 @@ func _get_enum_name_status(value: int) -> String:
 		_:
 			return str(value)
 
+
 func _parse_enum_value_status(name: String) -> int:
 	"""Parse enum value from name for status."""
 	match name:
@@ -139,7 +162,9 @@ func _parse_enum_value_status(name: String) -> int:
 		_:
 			return 0
 
+
 # Serialization
+
 
 func to_bytes() -> PackedByteArray:
 	"""Serialize message to bytes."""
@@ -232,6 +257,7 @@ func to_bytes() -> PackedByteArray:
 		result.append_array(entry)
 	return result
 
+
 func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 	"""Deserialize message from bytes."""
 	var offset: int = 0
@@ -250,7 +276,10 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 		match field_number:
 			1:
 				# Field username
-				var length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+				var length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(
+						data,
+						offset
+				)
 				if length_result["size"] == -1:
 					return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
 				offset += length_result["size"]
@@ -282,7 +311,10 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 				offset += result["size"]
 			5:
 				# Field inventory
-				var length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+				var length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(
+						data,
+						offset
+				)
 				if length_result["size"] == -1:
 					return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
 				offset += length_result["size"]
@@ -293,7 +325,10 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 				offset += length
 			7:
 				# Field position
-				var length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+				var length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(
+						data,
+						offset
+				)
 				if length_result["size"] == -1:
 					return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
 				offset += length_result["size"]
@@ -308,7 +343,10 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 				offset += length
 			6:
 				# Map field stats
-				var length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+				var length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(
+						data,
+						offset
+				)
 				if length_result["size"] == -1:
 					return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
 				offset += length_result["size"]
@@ -323,7 +361,10 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 				var map_value: int = 0
 
 				while entry_offset < entry_data.size():
-					var entry_tag_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(entry_data, entry_offset)
+					var entry_tag_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(
+							entry_data,
+							entry_offset
+					)
 					if entry_tag_result["size"] == -1:
 						return ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND
 					var entry_tag: int = entry_tag_result["value"]
@@ -333,18 +374,28 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 					match entry_field_number:
 						1:
 							# Entry key
-							var len_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(entry_data, entry_offset)
+							var len_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(
+									entry_data,
+									entry_offset
+							)
 							if len_result["size"] == -1:
 								return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
 							entry_offset += len_result["size"]
 							var str_len: int = len_result["value"]
 							if entry_offset + str_len > entry_data.size():
 								return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_MISMATCH
-							map_key = ProtoCoreUtils.decode_string(entry_data, entry_offset, str_len)
+							map_key = ProtoCoreUtils.decode_string(
+									entry_data,
+									entry_offset,
+									str_len
+							)
 							entry_offset += str_len
 						2:
 							# Entry value
-							var result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(entry_data, entry_offset)
+							var result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(
+									entry_data,
+									entry_offset
+							)
 							if result["size"] == -1:
 								return ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND
 							map_value = result["value"]
@@ -354,7 +405,10 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 				offset += length
 			10:
 				# Map field status_effects
-				var length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+				var length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(
+						data,
+						offset
+				)
 				if length_result["size"] == -1:
 					return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
 				offset += length_result["size"]
@@ -366,10 +420,16 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 				var entry_offset: int = 0
 
 				var map_key: String = ""
-				var map_value: ExamplePlayerStatus.PlayerStatus = 0 as ExamplePlayerStatus.PlayerStatus
+				var map_value: ExamplePlayerStatus.PlayerStatus = (
+						0
+						as ExamplePlayerStatus.PlayerStatus
+				)
 
 				while entry_offset < entry_data.size():
-					var entry_tag_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(entry_data, entry_offset)
+					var entry_tag_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(
+							entry_data,
+							entry_offset
+					)
 					if entry_tag_result["size"] == -1:
 						return ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND
 					var entry_tag: int = entry_tag_result["value"]
@@ -379,18 +439,28 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 					match entry_field_number:
 						1:
 							# Entry key
-							var len_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(entry_data, entry_offset)
+							var len_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(
+									entry_data,
+									entry_offset
+							)
 							if len_result["size"] == -1:
 								return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
 							entry_offset += len_result["size"]
 							var str_len: int = len_result["value"]
 							if entry_offset + str_len > entry_data.size():
 								return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_MISMATCH
-							map_key = ProtoCoreUtils.decode_string(entry_data, entry_offset, str_len)
+							map_key = ProtoCoreUtils.decode_string(
+									entry_data,
+									entry_offset,
+									str_len
+							)
 							entry_offset += str_len
 						2:
 							# Entry value
-							var result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(entry_data, entry_offset)
+							var result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(
+									entry_data,
+									entry_offset
+							)
 							if result["size"] == -1:
 								return ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND
 							map_value = result["value"] as ExamplePlayerStatus.PlayerStatus
@@ -400,7 +470,10 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 				offset += length
 			8:
 				# Field email
-				var length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+				var length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(
+						data,
+						offset
+				)
 				if length_result["size"] == -1:
 					return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
 				offset += length_result["size"]
@@ -412,7 +485,10 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 				_oneof_contact = ContactOneOf.EMAIL
 			9:
 				# Field discord
-				var length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+				var length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(
+						data,
+						offset
+				)
 				if length_result["size"] == -1:
 					return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
 				offset += length_result["size"]
@@ -426,14 +502,20 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 				# Skip unknown field
 				match wire_type:
 					0:  # Varint
-						var skip_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+						var skip_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(
+								data,
+								offset
+						)
 						if skip_result["size"] == -1:
 							return ProtoCoreUtils.ProtobufError.VARINT_NOT_FOUND
 						offset += skip_result["size"]
 					1:  # Fixed64
 						offset += 8
 					2:  # Length-delimited
-						var skip_length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(data, offset)
+						var skip_length_result: Dictionary[String, int] = ProtoCoreUtils.decode_varint(
+								data,
+								offset
+						)
 						if skip_length_result["size"] == -1:
 							return ProtoCoreUtils.ProtobufError.LENGTH_DELIMITED_SIZE_NOT_FOUND
 						offset += skip_length_result["size"] + skip_length_result["value"]
@@ -444,6 +526,7 @@ func from_bytes(data: PackedByteArray) -> ProtoCoreUtils.ProtobufError:
 
 	return ProtoCoreUtils.ProtobufError.NO_ERRORS
 
+
 func to_text(indent_level: int = 0) -> String:
 	"""Serialize message to protobuf text format."""
 	var result: String = ""
@@ -451,7 +534,9 @@ func to_text(indent_level: int = 0) -> String:
 
 	# Field username
 	if _username != "":
-		result += indent + "username: \"" + ProtoCoreUtils.escape_string_text_format(_username) + "\"\n"
+		result += indent + 'username: "' + ProtoCoreUtils.escape_string_text_format(
+				_username
+		) + '"\n'
 
 	# Field level
 	if _level != 0:
@@ -467,7 +552,7 @@ func to_text(indent_level: int = 0) -> String:
 
 	# Repeated field inventory
 	for item in _inventory:
-		result += indent + "inventory: \"" + ProtoCoreUtils.escape_string_text_format(item) + "\"\n"
+		result += indent + 'inventory: "' + ProtoCoreUtils.escape_string_text_format(item) + '"\n'
 
 	# Field position
 	if _position != null:
@@ -478,9 +563,11 @@ func to_text(indent_level: int = 0) -> String:
 	# Oneof group: contact
 	match _oneof_contact:
 		ContactOneOf.EMAIL:
-			result += indent + "email: \"" + ProtoCoreUtils.escape_string_text_format(_email) + "\"\n"
+			result += indent + 'email: "' + ProtoCoreUtils.escape_string_text_format(_email) + '"\n'
 		ContactOneOf.DISCORD:
-			result += indent + "discord: \"" + ProtoCoreUtils.escape_string_text_format(_discord) + "\"\n"
+			result += indent + 'discord: "' + ProtoCoreUtils.escape_string_text_format(
+					_discord
+			) + '"\n'
 
 	# Map field stats
 	for key in _stats:
@@ -488,7 +575,7 @@ func to_text(indent_level: int = 0) -> String:
 		result += indent + "stats {\n"
 		var inner_indent: String = "\t".repeat(indent_level + 1)
 
-		result += inner_indent + "key: \"" + ProtoCoreUtils.escape_string_text_format(key) + "\"\n"
+		result += inner_indent + 'key: "' + ProtoCoreUtils.escape_string_text_format(key) + '"\n'
 		result += inner_indent + "value: " + str(value) + "\n"
 
 		result += indent + "}\n"
@@ -499,12 +586,13 @@ func to_text(indent_level: int = 0) -> String:
 		result += indent + "status_effects {\n"
 		var inner_indent: String = "\t".repeat(indent_level + 1)
 
-		result += inner_indent + "key: \"" + ProtoCoreUtils.escape_string_text_format(key) + "\"\n"
+		result += inner_indent + 'key: "' + ProtoCoreUtils.escape_string_text_format(key) + '"\n'
 		result += inner_indent + "value: " + str(value) + "\n"
 
 		result += indent + "}\n"
 
 	return result
+
 
 func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 	"""Deserialize message from protobuf text format."""
@@ -535,7 +623,10 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = pos + 1
 				pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
-				var str_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_string_literal(text, pos)
+				var str_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_string_literal(
+						text,
+						pos
+				)
 				if "error" in str_result:
 					return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
 				_username = str_result["value"]
@@ -546,7 +637,10 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = pos + 1
 				pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
-				var num_result: ProtoCoreUtils.NumberParseResult = ProtoCoreUtils.parse_number(text, pos)
+				var num_result: ProtoCoreUtils.NumberParseResult = ProtoCoreUtils.parse_number(
+						text,
+						pos
+				)
 				if num_result.has_error():
 					return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
 				_level = num_result.int_value
@@ -557,7 +651,10 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = pos + 1
 				pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
-				var num_result: ProtoCoreUtils.NumberParseResult = ProtoCoreUtils.parse_number(text, pos)
+				var num_result: ProtoCoreUtils.NumberParseResult = ProtoCoreUtils.parse_number(
+						text,
+						pos
+				)
 				if num_result.has_error():
 					return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
 				_experience = num_result.int_value
@@ -571,7 +668,10 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 				# Parse enum value (name or number)
 				if pos < text.length() and not text[pos].is_valid_int() and text[pos] != "-":
 					# Parse as identifier (enum name)
-					var enum_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)
+					var enum_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(
+							text,
+							pos
+					)
 					if "error" not in enum_result:
 						var enum_name: String = enum_result["value"]
 						var enum_value: int = _parse_enum_value_status(enum_name)
@@ -579,7 +679,10 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 						pos = enum_result["pos"]
 				else:
 					# Parse as number
-					var enum_result: ProtoCoreUtils.NumberParseResult = ProtoCoreUtils.parse_number(text, pos)
+					var enum_result: ProtoCoreUtils.NumberParseResult = ProtoCoreUtils.parse_number(
+							text,
+							pos
+					)
 					if enum_result.has_error():
 						return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
 					_status = enum_result.int_value as ExamplePlayerStatus.PlayerStatus
@@ -590,7 +693,10 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = pos + 1
 				pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
-				var str_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_string_literal(text, pos)
+				var str_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_string_literal(
+						text,
+						pos
+				)
 				if "error" in str_result:
 					return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
 				_inventory.append(str_result["value"])
@@ -631,7 +737,10 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = pos + 1
 				pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
-				var str_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_string_literal(text, pos)
+				var str_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_string_literal(
+						text,
+						pos
+				)
 				if "error" in str_result:
 					return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
 				_email = str_result["value"]
@@ -643,7 +752,10 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = pos + 1
 				pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
-				var str_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_string_literal(text, pos)
+				var str_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_string_literal(
+						text,
+						pos
+				)
 				if "error" in str_result:
 					return ProtoCoreUtils.ProtobufError.UNDEFINED_STATE
 				_discord = str_result["value"]
@@ -663,7 +775,10 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 
 					# Parse key and value
 					while pos < text.length() and text[pos] != "}":
-						var entry_name_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)
+						var entry_name_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(
+								text,
+								pos
+						)
 						if "error" in entry_name_result:
 							break
 						var entry_field: String = entry_name_result["value"]
@@ -674,12 +789,18 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 						pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
 						if entry_field == "key":
-							var str_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_string_literal(text, pos)
+							var str_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_string_literal(
+									text,
+									pos
+							)
 							if "value" in str_result:
 								map_key = str_result["value"]
 								pos = str_result["pos"]
 						elif entry_field == "value":
-							var num_result: ProtoCoreUtils.NumberParseResult = ProtoCoreUtils.parse_number(text, pos)
+							var num_result: ProtoCoreUtils.NumberParseResult = ProtoCoreUtils.parse_number(
+									text,
+									pos
+							)
 							if not num_result.has_error():
 								map_value = num_result.int_value
 								pos = num_result.pos
@@ -702,11 +823,17 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 					pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
 					var map_key: String = ""
-					var map_value: ExamplePlayerStatus.PlayerStatus = 0 as ExamplePlayerStatus.PlayerStatus
+					var map_value: ExamplePlayerStatus.PlayerStatus = (
+							0
+							as ExamplePlayerStatus.PlayerStatus
+					)
 
 					# Parse key and value
 					while pos < text.length() and text[pos] != "}":
-						var entry_name_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(text, pos)
+						var entry_name_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_identifier(
+								text,
+								pos
+						)
 						if "error" in entry_name_result:
 							break
 						var entry_field: String = entry_name_result["value"]
@@ -717,12 +844,18 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 						pos = ProtoCoreUtils.skip_whitespace(text, pos)
 
 						if entry_field == "key":
-							var str_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_string_literal(text, pos)
+							var str_result: Dictionary[String, Variant] = ProtoCoreUtils.parse_string_literal(
+									text,
+									pos
+							)
 							if "value" in str_result:
 								map_key = str_result["value"]
 								pos = str_result["pos"]
 						elif entry_field == "value":
-							var num_result: ProtoCoreUtils.NumberParseResult = ProtoCoreUtils.parse_number(text, pos)
+							var num_result: ProtoCoreUtils.NumberParseResult = ProtoCoreUtils.parse_number(
+									text,
+									pos
+							)
 							if not num_result.has_error():
 								map_value = num_result.int_value as ExamplePlayerStatus.PlayerStatus
 								pos = num_result.pos
@@ -759,6 +892,7 @@ func from_text(text: String) -> ProtoCoreUtils.ProtobufError:
 							pos = pos + 1
 
 	return ProtoCoreUtils.ProtobufError.NO_ERRORS
+
 
 func _to_string() -> String:
 	"""Generate debug string representation."""

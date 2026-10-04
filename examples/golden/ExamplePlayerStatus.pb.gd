@@ -6,9 +6,4 @@ extends RefCounted
 # Source: example.proto
 # DO NOT EDIT
 
-enum PlayerStatus {
-	OFFLINE = 0,
-	ONLINE = 1,
-	AWAY = 2,
-	IN_GAME = 3
-}
+enum PlayerStatus { OFFLINE = 0, ONLINE = 1, AWAY = 2, IN_GAME = 3 }
