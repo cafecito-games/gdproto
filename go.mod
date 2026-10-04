@@ -3,6 +3,10 @@ module github.com/cafecito-games/gdproto
 go 1.26
 
 require (
+	// Test-only, for the generated-output conformance gate. Pinned rather than
+	// floating because a newer gdkit pulls in a newer gdparser; bump the two
+	// together.
+	github.com/cafecito-games/gdkit v0.4.1
 	// Pinned to the gdparser version gdkit pins, so Canonicalize and a user's
 	// installed `gdkit format` agree byte for byte. Bump deliberately, with gdkit.
 	github.com/cafecito-games/gdparser v0.1.5
