@@ -125,6 +125,7 @@ func (g *generator) generateTopLevelEnumFile(e *ast.Enum) GeneratedFile {
 	class := &gdast.ClassDefinition{
 		ClassNameDirective: className,
 		Extends:            "RefCounted",
+		LeadingComment:     gdkitSuppressions,
 		HeaderComment:      headerCommentText(filepath.Base(g.sourceName)),
 		Statements:         []gdast.Node{generateEnum(e)},
 		TightStatements:    true,

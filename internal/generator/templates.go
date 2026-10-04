@@ -384,6 +384,15 @@ const textFormatUtilsGDScript = "# =============================================
 	"\telse:\n" +
 	"\t\treturn {\"value\": int(num_str), \"pos\": pos, \"is_float\": false}"
 
+// gdkitSuppressions is emitted as the first line of every generated file.
+// max-returns and max-public-methods are gdkit design limits that generated
+// protobuf code cannot satisfy by construction: a wire-format parser is an
+// early-return function with one return per field, and a message with N
+// fields has 2N accessors. The directive must be line 1 - max-public-methods
+// is reported against the class global scope there, and a gdkit:disable only
+// reaches from its own line to the end of the file.
+const gdkitSuppressions = "gdkit:disable = max-returns, max-public-methods"
+
 // headerCommentText returns the file header comment block emitted at the top
 // of every generated GDScript file.
 func headerCommentText(sourceName string) string {

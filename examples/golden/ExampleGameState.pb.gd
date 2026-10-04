@@ -1,3 +1,4 @@
+# gdkit:disable = max-returns, max-public-methods
 class_name ExampleGameState
 
 extends RefCounted

@@ -1193,3 +1193,35 @@ message Contact {
 	assert.Less(t, enumAt, varAt,
 		"oneof enum must precede field vars for gdkit slot order\n%s", got)
 }
+
+func TestGeneratedFilesOpenWithGdkitSuppressionDirective(t *testing.T) {
+	source := `syntax = "proto3";
+enum Status { UNKNOWN = 0; }
+message Thing { int32 id = 1; }`
+	tokens, err := lexer.Tokenize(source, "thing.proto")
+	if err != nil {
+		t.Fatalf("tokenize: %v", err)
+	}
+	file, err := parser.Parse(tokens, "thing.proto")
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	files, err := generator.Generate(file, "thing.proto", nil)
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	if len(files) == 0 {
+		t.Fatal("want generated files, got none")
+	}
+
+	for _, f := range files {
+		lines := strings.Split(mustSource(t, f), "\n")
+		if lines[0] != "# gdkit:disable = max-returns, max-public-methods" {
+			t.Errorf("%s line 1 = %q, want the gdkit:disable directive", f.Filename, lines[0])
+		}
+		if !strings.HasPrefix(lines[1], "class_name ") {
+			t.Errorf("%s line 2 = %q, want the class_name directive", f.Filename, lines[1])
+		}
+	}
+}

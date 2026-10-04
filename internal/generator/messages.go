@@ -116,6 +116,7 @@ func (g *generator) generateMessageClass(m *ast.Message, className, scope string
 	return &gdast.ClassDefinition{
 		ClassNameDirective: className,
 		Extends:            "RefCounted",
+		LeadingComment:     gdkitSuppressions,
 		HeaderComment:      headerCommentText(filepath.Base(g.sourceName)),
 		Statements:         statements,
 	}
