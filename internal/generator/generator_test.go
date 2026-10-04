@@ -10,6 +10,7 @@ import (
 
 	"github.com/cafecito-games/gdproto/internal/ast"
 	"github.com/cafecito-games/gdproto/internal/generator"
+	"github.com/cafecito-games/gdproto/internal/importer"
 	"github.com/cafecito-games/gdproto/internal/lexer"
 	"github.com/cafecito-games/gdproto/internal/parser"
 	"github.com/cafecito-games/gdproto/internal/validator"
@@ -1270,6 +1271,67 @@ func parseProtoSource(t *testing.T, source, filename string) *ast.ProtoFile {
 // packaged file's reference to that name, and the failure is silent -- the field
 // keeps enum annotation while its declared type becomes the imported message's
 // class, which is invalid GDScript rather than a type error.
+// TestGenerateAbsoluteImportedRootTypeIsNotCapturedLocally covers the one shape
+// where a reference's definitive name is identical to the name as written: an
+// absolute reference to a root-package type arrives as `Type` in both the field
+// type and the resolved path, since neither emission path keeps the leading dot.
+// The definitive name therefore has to be preferred even when it equals the
+// written name, or the package-qualified candidate is tried first and a
+// same-named local declaration captures the imported type -- leaving enum
+// defaults and a varint codec on a message class.
+func TestGenerateAbsoluteImportedRootTypeIsNotCapturedLocally(t *testing.T) {
+	const rooted = `syntax = "proto3";
+enum Type {
+  TYPE_A = 0;
+}
+`
+	const consumer = `syntax = "proto3";
+package game;
+import "rooted.proto";
+message Type {
+  int32 n = 1;
+}
+message Holder {
+  .Type imported_root = 1;
+}
+`
+	directory := t.TempDir()
+	for name, source := range map[string]string{
+		"rooted.proto":   rooted,
+		"consumer.proto": consumer,
+	} {
+		require.NoError(t, os.WriteFile(filepath.Join(directory, name), []byte(source), 0o600))
+	}
+
+	consumerPath := filepath.Join(directory, "consumer.proto")
+	consumerFile := parseProtoSource(t, consumer, "consumer.proto")
+
+	// Import resolution is what marks a field as naming another file's type,
+	// which is the branch this test is about, so it has to run here rather
+	// than the imported file simply being handed to Generate.
+	importedFiles, err := importer.ResolveExternalWithFiles(
+		consumerFile, consumerPath, &importer.OSFS{BaseDir: directory},
+	)
+	require.NoError(t, err, "resolve imports")
+
+	entries := make([]generator.FileEntry, 0, len(importedFiles))
+	for _, imported := range importedFiles {
+		entries = append(entries, generator.FileEntry{File: imported.File, Filename: imported.Filename})
+	}
+
+	files, err := generator.Generate(consumerFile, "consumer.proto", entries)
+	require.NoError(t, err, "generate")
+
+	f := findFile(files, "ConsumerHolder")
+	require.NotNil(t, f, "missing ConsumerHolder; got %v", classNames(files))
+	got := f.Source()
+
+	assert.Contains(t, got, "var _imported_root: RootedType.Type = 0 as RootedType.Type",
+		"the absolute reference names the imported root-package enum\n%s", got)
+	assert.NotContains(t, got, "var _imported_root: ConsumerType",
+		"a same-named local message captured the imported root type\n%s", got)
+}
+
 func TestGeneratePackagedReferenceIsNotCapturedByAnImport(t *testing.T) {
 	const imported = `syntax = "proto3";
 message Outer {

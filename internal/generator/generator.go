@@ -174,7 +174,12 @@ func (g *generator) renderedType(protoType, fullTypePath, sourceFile string, isE
 	}
 	if sourceFile != "" && sourceFile != g.sourceName && sourceFile != filepath.Base(g.sourceName) {
 		candidates := buildLookupCandidates(protoType, "", g.file.Package)
-		if fullTypePath != "" && fullTypePath != protoType {
+		// The definitive name goes first even when it equals the name as
+		// written, which is how an absolute reference to a root-package type
+		// arrives: both emission paths reduce `.Type` to `Type` in both
+		// fields. Without it the package-qualified candidate is tried first,
+		// and a same-named local declaration captures the imported type.
+		if fullTypePath != "" {
 			candidates = append([]string{strings.TrimPrefix(fullTypePath, ".")}, candidates...)
 		}
 		for _, candidate := range candidates {
