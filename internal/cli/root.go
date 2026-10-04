@@ -146,24 +146,43 @@ func runCompile(cmd *cobra.Command, inputPath, outputPath string, includePaths [
 
 	written := 0
 	for _, gf := range files {
-		p := filepath.Join(outDir, gf.Filename)
 		source, err := gf.Source()
 		if err != nil {
 			return err
 		}
-		if err := os.WriteFile(p, []byte(source), 0o644); err != nil { //nolint:gosec // generated source intended to be world-readable
-			return fmt.Errorf("write %s: %w", p, err)
+		count, err := writeWithSidecar(outDir, gf.Filename, source)
+		if err != nil {
+			return err
 		}
-		written++
+		written += count
 	}
-	siblingPath := filepath.Join(outDir, "proto_core_utils.gd")
-	if err := os.WriteFile(siblingPath, []byte(generator.GenerateProtoCoreUtilsRaw()), 0o644); err != nil { //nolint:gosec // generated source intended to be world-readable
-		return fmt.Errorf("write %s: %w", siblingPath, err)
+	count, err := writeWithSidecar(outDir, "proto_core_utils.gd", generator.GenerateProtoCoreUtilsRaw())
+	if err != nil {
+		return err
 	}
-	written++
+	written += count
 
 	_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "wrote %d files to %s/\n", written, outDir)
 	return nil
+}
+
+// writeWithSidecar writes a generated GDScript file into outDir together with
+// its .uid sidecar, and reports how many files it created.
+//
+// Godot writes the sidecar itself on import, but a project that has never
+// opened the generated files in the editor has none, and gdkit reports a
+// script without one as having no stable identity. Emitting it here also fixes
+// the identifier, instead of letting whichever machine imports first decide it.
+func writeWithSidecar(outDir, filename, source string) (int, error) {
+	path := filepath.Join(outDir, filename)
+	if err := os.WriteFile(path, []byte(source), 0o644); err != nil { //nolint:gosec // generated source intended to be world-readable
+		return 0, fmt.Errorf("write %s: %w", path, err)
+	}
+	sidecarPath := filepath.Join(outDir, generator.SidecarFilename(filename))
+	if err := os.WriteFile(sidecarPath, []byte(generator.SidecarSource(filename)), 0o644); err != nil { //nolint:gosec // generated source intended to be world-readable
+		return 0, fmt.Errorf("write %s: %w", sidecarPath, err)
+	}
+	return 2, nil
 }
 
 func validateOutputDir(p string) error {

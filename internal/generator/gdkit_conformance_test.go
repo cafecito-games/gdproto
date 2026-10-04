@@ -8,6 +8,7 @@ import (
 	gdkitformat "github.com/cafecito-games/gdkit/format"
 	"github.com/cafecito-games/gdkit/lint"
 	"github.com/cafecito-games/gdkit/project"
+	gdkituid "github.com/cafecito-games/gdkit/uid"
 
 	"github.com/cafecito-games/gdproto/internal/generator"
 	"github.com/cafecito-games/gdproto/internal/lexer"
@@ -54,16 +55,25 @@ func writeExampleCorpusProject(t *testing.T) string {
 		if err != nil {
 			t.Fatalf("source for %s: %v", generated.Filename, err)
 		}
-		path := filepath.Join(root, generated.Filename)
-		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-			t.Fatalf("write %s: %v", generated.Filename, err)
-		}
+		writeCorpusFile(t, root, generated.Filename, content)
 	}
-	utilsPath := filepath.Join(root, "proto_core_utils.gd")
-	if err := os.WriteFile(utilsPath, []byte(generator.GenerateProtoCoreUtilsRaw()), 0o600); err != nil {
-		t.Fatalf("write proto_core_utils.gd: %v", err)
-	}
+	writeCorpusFile(t, root, "proto_core_utils.gd", generator.GenerateProtoCoreUtilsRaw())
 	return root
+}
+
+// writeCorpusFile writes one generated GDScript file into the throwaway
+// project along with its .uid sidecar, mirroring what both emission paths put
+// on disk.
+func writeCorpusFile(t *testing.T, root, filename, content string) {
+	t.Helper()
+
+	if err := os.WriteFile(filepath.Join(root, filename), []byte(content), 0o600); err != nil {
+		t.Fatalf("write %s: %v", filename, err)
+	}
+	sidecar := generator.SidecarFilename(filename)
+	if err := os.WriteFile(filepath.Join(root, sidecar), []byte(generator.SidecarSource(filename)), 0o600); err != nil {
+		t.Fatalf("write %s: %v", sidecar, err)
+	}
 }
 
 // loadGdkitSnapshot discovers every GDScript file under root the way the gdkit
@@ -130,5 +140,22 @@ func TestGeneratedProjectPassesGdkitFormat(t *testing.T) {
 	// ones flagged as changed are conformance failures.
 	for _, result := range report.Changed() {
 		t.Errorf("%s: generated source is not in gdkit canonical format", result.Path)
+	}
+}
+
+// TestGeneratedProjectPassesGdkitUID runs gdkit's uid check over the generated
+// project and requires zero diagnostics: every generated script must have a
+// sidecar, holding a well-formed identifier no other script claims.
+//
+// This is the in-process equivalent of `gdkit uid check`.
+func TestGeneratedProjectPassesGdkitUID(t *testing.T) {
+	root := writeExampleCorpusProject(t)
+
+	report := gdkituid.Check(loadGdkitSnapshot(t, root))
+	for _, diagnostic := range report.Diagnostics {
+		t.Errorf("%s: %s (%s)", diagnostic.Path, diagnostic.Message, diagnostic.Rule)
+	}
+	if report.Scripts == 0 {
+		t.Error("uid check examined no scripts, so it attests to nothing")
 	}
 }

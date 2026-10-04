@@ -13,6 +13,7 @@ import (
 	"google.golang.org/protobuf/types/pluginpb"
 
 	"github.com/cafecito-games/gdproto/internal/gdprotopb"
+	"github.com/cafecito-games/gdproto/internal/generator"
 )
 
 func buildRequestFromDescriptorSet(t *testing.T, filesToGenerate []string, srcByName map[string]string) *pluginpb.CodeGeneratorRequest {
@@ -164,12 +165,20 @@ func TestRunWithExampleProto(t *testing.T) {
 		t.Fatalf("plugin reported error: %s", *response.Error)
 	}
 
+	// Every emitted script is accompanied by its .uid sidecar, so that a
+	// consumer's project has a stable identity for it without importing it in
+	// the Godot editor first.
 	wantFilenames := []string{
 		"ExampleGameState.pb.gd",
+		"ExampleGameState.pb.gd.uid",
 		"ExamplePlayer.pb.gd",
+		"ExamplePlayer.pb.gd.uid",
 		"ExamplePlayerPosition.pb.gd",
+		"ExamplePlayerPosition.pb.gd.uid",
 		"ExamplePlayerStatus.pb.gd",
+		"ExamplePlayerStatus.pb.gd.uid",
 		"proto_core_utils.gd",
+		"proto_core_utils.gd.uid",
 	}
 	gotNames := responseFilenames(response)
 	if !equalStringSlices(gotNames, wantFilenames) {
@@ -205,6 +214,16 @@ func TestRunWithExampleProto(t *testing.T) {
 				}
 			}
 			t.Fatalf("%s differs from golden in length: got %d lines, want %d lines", filename, len(gotLines), len(wantLines))
+		}
+	}
+
+	for _, filename := range wantFilenames {
+		if !strings.HasSuffix(filename, ".uid") {
+			continue
+		}
+		script := strings.TrimSuffix(filename, ".uid")
+		if got, want := contents[filename], generator.SidecarSource(script); got != want {
+			t.Errorf("%s: got %q, want %q", filename, got, want)
 		}
 	}
 }
@@ -251,8 +270,8 @@ message Uses { Outer.Inner inner = 1; }`,
 
 	response := runPluginRequest(t, request)
 	// Per-class output: NestedOuter.pb.gd, NestedOuterInner.pb.gd,
-	// NestedUses.pb.gd, plus proto_core_utils.gd.
-	if got, want := len(response.File), 4; got != want {
+	// NestedUses.pb.gd, plus proto_core_utils.gd, each with a .uid sidecar.
+	if got, want := len(response.File), 8; got != want {
 		t.Fatalf("expected %d generated files, got %d (%v)", want, got, responseFilenames(response))
 	}
 	contents := map[string]string{}
