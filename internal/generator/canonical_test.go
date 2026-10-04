@@ -39,7 +39,9 @@ func TestCanonicalizeIsIdempotent(t *testing.T) {
 }
 
 func TestCanonicalizeEndsWithExactlyOneNewline(t *testing.T) {
-	got, err := generator.Canonicalize("sample.gd", "extends RefCounted\n")
+	// Trailing blank lines are the interesting direction: the result must be
+	// one newline whether the input had none or several.
+	got, err := generator.Canonicalize("sample.gd", "extends RefCounted\n\n\n")
 	if err != nil {
 		t.Fatalf("canonicalize: %v", err)
 	}

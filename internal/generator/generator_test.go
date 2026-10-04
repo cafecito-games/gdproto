@@ -17,24 +17,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// wrappedCallOpen, wrappedCallArgument and wrappedCallClose match the line
-// continuations the canonical formatter introduces when a call does not fit
-// on one line.
-var (
-	wrappedCallOpen     = regexp.MustCompile(`\(\n\s*`)
-	wrappedCallArgument = regexp.MustCompile(`,\n\s*`)
-	wrappedCallClose    = regexp.MustCompile(`\n\s*\)`)
-)
-
-// collapseWrapping joins those continuations back into single logical lines so
-// that tests can assert on the statements the generator rendered without
-// encoding where the formatter chose to break them.
-func collapseWrapping(source string) string {
-	source = wrappedCallOpen.ReplaceAllString(source, "(")
-	source = wrappedCallArgument.ReplaceAllString(source, ", ")
-	return wrappedCallClose.ReplaceAllString(source, ")")
-}
-
 // mustSource renders gf to canonical GDScript, failing the test if the
 // generated source does not parse.
 func mustSource(t *testing.T, gf generator.GeneratedFile) string {
@@ -508,7 +490,7 @@ func TestGenerateFromBytesComplex(t *testing.T) {
 	if f == nil {
 		t.Fatalf("missing ExamplePlayer; got %v", classNames(files))
 	}
-	out := collapseWrapping(mustSource(t, *f))
+	out := f.Class.ToGDScript(0)
 	for _, want := range []string{
 		"# Field username",
 		"_username = ProtoCoreUtils.decode_string(data, offset, length)",
@@ -561,7 +543,7 @@ func TestGenerateFromTextFloatSpecialValuesCastIdentifierPosition(t *testing.T) 
 	if f == nil {
 		t.Fatalf("missing ExampleReading; got %v", classNames(files))
 	}
-	got := collapseWrapping(mustSource(t, *f))
+	got := f.Class.ToGDScript(0)
 	for _, want := range []string{
 		`var id_value: String = id_result["value"]`,
 		`var id_pos: int = id_result["pos"]`,
