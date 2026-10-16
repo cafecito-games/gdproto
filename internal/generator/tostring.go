@@ -80,6 +80,8 @@ func (g *generator) toStringFieldStatement(f *ast.Field) gdast.Statement {
 			Op:    ">",
 			Right: gdast.Lit(0),
 		}
+	case tracksScalarPresence(f):
+		condition = gdast.V(g.presenceVar(f))
 	case f.IsEnum:
 		condition = gdast.BinaryOp{
 			Left:  gdast.V(fieldVar),

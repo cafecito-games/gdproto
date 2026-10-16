@@ -103,8 +103,26 @@ func (g *generator) fieldAccessors(f *ast.Field) []gdast.Node {
 		ReturnType: gdType,
 		Body:       []gdast.Statement{gdast.Ret(gdast.V(fieldVar))},
 	}
+	if tracksScalarPresence(f) {
+		set.Body = append(set.Body, gdast.Assign(g.presenceVar(f), gdast.Lit(true)))
+		return []gdast.Node{set, get,
+			gdast.Function{Name: "has_" + f.Name, ReturnType: "bool", Body: []gdast.Statement{gdast.Ret(gdast.V(g.presenceVar(f)))}},
+			gdast.Function{Name: "clear_" + f.Name, ReturnType: "void", Body: []gdast.Statement{
+				gdast.Assign(fieldVar, gdast.RawExpression{Code: g.fieldDefault(f)}),
+				gdast.Assign(g.presenceVar(f), gdast.Lit(false)),
+			}},
+		}
+	}
 	return []gdast.Node{set, get}
 }
+
+// Message fields already represent absence as null; only optional scalars and
+// enums need separate presence storage. Real oneofs have their own tracking.
+func tracksScalarPresence(f *ast.Field) bool {
+	return f.Optional && !f.Repeated && f.OneofParent == "" && !isMessageType(f)
+}
+
+func (g *generator) presenceVar(f *ast.Field) string { return g.presenceNames[f] }
 
 // oneofFieldAccessors emits the setter, getter, and `has_<field>` for a field
 // that participates in a oneof group. The setter clears the previously-set

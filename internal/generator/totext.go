@@ -64,28 +64,34 @@ func (g *generator) toTextFieldBlock(f *ast.Field) string {
 		return g.toTextRepeatedField(f, fieldVar)
 	}
 
+	guard := func(implicit string) string {
+		if tracksScalarPresence(f) {
+			return g.presenceVar(f)
+		}
+		return implicit
+	}
 	switch {
 	case f.FieldType == "string":
-		return fmt.Sprintf("# Field %s\nif %s != \"\":\n\tresult += indent + \"%s: \\\"\" + ProtoCoreUtils.escape_string_text_format(%s) + \"\\\"\\n\"\n",
-			f.Name, fieldVar, f.Name, fieldVar)
+		return fmt.Sprintf("# Field %s\nif %s:\n\tresult += indent + \"%s: \\\"\" + ProtoCoreUtils.escape_string_text_format(%s) + \"\\\"\\n\"\n",
+			f.Name, guard(fieldVar+` != ""`), f.Name, fieldVar)
 	case f.FieldType == "bytes":
-		return fmt.Sprintf("# Field %s\nif %s.size() > 0:\n\tresult += indent + \"%s: \\\"\" + ProtoCoreUtils.escape_bytes_text_format(%s) + \"\\\"\\n\"\n",
-			f.Name, fieldVar, f.Name, fieldVar)
+		return fmt.Sprintf("# Field %s\nif %s:\n\tresult += indent + \"%s: \\\"\" + ProtoCoreUtils.escape_bytes_text_format(%s) + \"\\\"\\n\"\n",
+			f.Name, guard(fieldVar+".size() > 0"), f.Name, fieldVar)
 	case f.FieldType == "bool":
 		return fmt.Sprintf("# Field %s\nif %s:\n\tresult += indent + \"%s: \" + str(%s).to_lower() + \"\\n\"\n",
-			f.Name, fieldVar, f.Name, fieldVar)
+			f.Name, guard(fieldVar), f.Name, fieldVar)
 	case f.FieldType == "float" || f.FieldType == "double":
-		return toTextFloatField(f.Name, fieldVar)
+		return toTextFloatFieldGuard(f.Name, fieldVar, guard(fieldVar+" != 0.0"))
 	case g.isEnumField(f):
-		return fmt.Sprintf("# Field %s\nif %s != 0:\n\tresult += indent + \"%s: \" + _get_enum_name_%s(%s) + \"\\n\"\n",
-			f.Name, fieldVar, f.Name, f.Name, fieldVar)
+		return fmt.Sprintf("# Field %s\nif %s:\n\tresult += indent + \"%s: \" + _get_enum_name_%s(%s) + \"\\n\"\n",
+			f.Name, guard(fieldVar+" != 0"), f.Name, f.Name, fieldVar)
 	case isMessageType(f):
-		return fmt.Sprintf("# Field %s\nif %s != null:\n\tresult += indent + \"%s {\\n\"\n\tresult += %s.to_text(indent_level + 1)\n\tresult += indent + \"}\\n\"\n",
-			f.Name, fieldVar, f.Name, fieldVar)
+		return fmt.Sprintf("# Field %s\nif %s:\n\tresult += indent + \"%s {\\n\"\n\tresult += %s.to_text(indent_level + 1)\n\tresult += indent + \"}\\n\"\n",
+			f.Name, guard(fieldVar+" != null"), f.Name, fieldVar)
 	default:
 		// Numeric scalar (int32, int64, uint*, sint*, fixed*, sfixed*).
-		return fmt.Sprintf("# Field %s\nif %s != 0:\n\tresult += indent + \"%s: \" + str(%s) + \"\\n\"\n",
-			f.Name, fieldVar, f.Name, fieldVar)
+		return fmt.Sprintf("# Field %s\nif %s:\n\tresult += indent + \"%s: \" + str(%s) + \"\\n\"\n",
+			f.Name, guard(fieldVar+" != 0"), f.Name, fieldVar)
 	}
 }
 
@@ -183,15 +189,19 @@ func toTextMapEntryRender(varName, protoType string) string {
 // toTextFloatField renders the inf/nan-aware text encoding for a single float
 // or double field.
 func toTextFloatField(name, fieldVar string) string {
+	return toTextFloatFieldGuard(name, fieldVar, fieldVar+" != 0.0")
+}
+
+func toTextFloatFieldGuard(name, fieldVar, condition string) string {
 	return fmt.Sprintf(`# Field %s
-if %s != 0.0:
+if %s:
 	if is_inf(%s):
 		result += indent + "%s: " + ("inf" if %s > 0 else "-inf") + "\n"
 	elif is_nan(%s):
 		result += indent + "%s: nan\n"
 	else:
 		result += indent + "%s: " + str(%s) + "\n"
-`, name, fieldVar, fieldVar, name, fieldVar, fieldVar, name, name, fieldVar)
+`, name, condition, fieldVar, name, fieldVar, fieldVar, name, name, fieldVar)
 }
 
 // toTextFloatRepeatedItem renders the per-item body of a repeated float field's
