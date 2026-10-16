@@ -1240,3 +1240,18 @@ message Value { optional int32 pivot_row = 1; int32 ordinary = 2; }`, "optional.
 	}
 	assert.NotContains(t, source, "func has_ordinary")
 }
+
+func TestOptionalPresenceRejectsNativeMethodCollisions(t *testing.T) {
+	for _, name := range []string{"method", "signal", "user_signal", "meta", "connections"} {
+		t.Run(name, func(t *testing.T) {
+			field := &ast.Field{Name: name, Number: 1, FieldType: "string", Optional: true}
+			file := &ast.ProtoFile{Syntax: "proto3", Messages: []*ast.Message{{Name: "Value", Fields: []*ast.Field{field}}}}
+			_, err := generator.Generate(file, "native.proto", nil)
+			require.ErrorContains(t, err, "has_"+name)
+			require.ErrorContains(t, err, "inherited Godot method")
+			field.Optional = false
+			_, err = generator.Generate(file, "native.proto", nil)
+			require.NoError(t, err)
+		})
+	}
+}

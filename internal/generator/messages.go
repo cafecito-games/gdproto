@@ -2,6 +2,7 @@ package generator
 
 import (
 	"path/filepath"
+	"strconv"
 
 	"github.com/cafecito-games/gdproto/internal/ast"
 	"github.com/cafecito-games/gdproto/internal/gdast"
@@ -263,8 +264,8 @@ func (g *generator) allocatePresenceNames(m *ast.Message) {
 			continue
 		}
 		name := "_has_" + f.Name
-		for used[name] {
-			name += "_"
+		for suffix := 2; used[name]; suffix++ {
+			name = "_has_" + f.Name + "_" + strconv.Itoa(suffix)
 		}
 		used[name] = true
 		g.presenceNames[f] = name

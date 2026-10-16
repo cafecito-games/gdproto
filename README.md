@@ -245,6 +245,10 @@ value and removes its presence. Binary and text decoding retain presence;
 like other fields, decoding merges into the receiver, so omitted fields keep
 their existing state. Ordinary proto3 scalars continue to omit default values.
 
+Optional scalar fields named `method`, `signal`, `user_signal`, `meta`, or
+`connections` are rejected because their `has_*()` accessors would clash with
+inherited Godot methods. Rename those fields before generating bindings.
+
 ## Custom prefix
 
 By default the class prefix for generated files is derived from the input

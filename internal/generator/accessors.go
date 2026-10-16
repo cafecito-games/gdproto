@@ -1,6 +1,8 @@
 package generator
 
 import (
+	"fmt"
+
 	"github.com/cafecito-games/gdproto/internal/ast"
 	"github.com/cafecito-games/gdproto/internal/gdast"
 )
@@ -104,6 +106,12 @@ func (g *generator) fieldAccessors(f *ast.Field) []gdast.Node {
 		Body:       []gdast.Statement{gdast.Ret(gdast.V(fieldVar))},
 	}
 	if tracksScalarPresence(f) {
+		// RefCounted inherits these has_* methods from Object. GDScript cannot
+		// overload their signatures with the zero-argument presence accessor.
+		switch f.Name {
+		case "method", "signal", "user_signal", "meta", "connections":
+			g.recordError(fmt.Errorf("optional field %q in %s generates has_%s(), which conflicts with an inherited Godot method; rename the field", f.Name, g.sourceName, f.Name))
+		}
 		set.Body = append(set.Body, gdast.Assign(g.presenceVar(f), gdast.Lit(true)))
 		return []gdast.Node{set, get,
 			gdast.Function{Name: "has_" + f.Name, ReturnType: "bool", Body: []gdast.Statement{gdast.Ret(gdast.V(g.presenceVar(f)))}},

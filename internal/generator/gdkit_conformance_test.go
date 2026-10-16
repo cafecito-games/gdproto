@@ -31,6 +31,7 @@ type conformanceFixture struct {
 // lines, which is the only way a file-length limit is ever exercised.
 var conformanceFixtures = []conformanceFixture{
 	{name: "example", protoPath: "../../examples/example.proto"},
+	{name: "optional", protoPath: "../../tests/godot/fixtures/proto/optional.proto"},
 	{name: "collections", protoPath: "../../tests/godot/fixtures/proto/collections.proto"},
 }
 
