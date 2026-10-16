@@ -235,6 +235,20 @@ sidecar identifiers appeared in any scene, resource, or project file.
   still needs its own `gdkit format write` pass over the generated directory.
   gdproto cannot read a downstream project's configuration.
 
+## Optional scalar presence
+
+Proto3 `optional` scalar and enum fields provide `has_<field>()` and
+`clear_<field>()` alongside their setters and getters. Setting a field to its
+default value (such as `0`, `false`, or an empty string) marks it present and
+includes it in binary and text serialization. Clearing it restores its default
+value and removes its presence. Binary and text decoding retain presence;
+like other fields, decoding merges into the receiver, so omitted fields keep
+their existing state. Ordinary proto3 scalars continue to omit default values.
+
+Optional scalar fields named `method`, `signal`, `user_signal`, `meta`, or
+`connections` are rejected because their `has_*()` accessors would clash with
+inherited Godot methods. Rename those fields before generating bindings.
+
 ## Custom prefix
 
 By default the class prefix for generated files is derived from the input

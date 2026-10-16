@@ -64,6 +64,7 @@ func Generate(file *ast.ProtoFile, sourceName string, imports []FileEntry) ([]Ge
 		declarations:        newDeclarationIndex(entries),
 		fieldResolutions:    map[*ast.Field]typeResolution{},
 		mapValueResolutions: map[*ast.MapField]typeResolution{},
+		presenceNames:       map[*ast.Field]string{},
 	}
 	g.resolveFieldTypes()
 	if g.firstErr != nil {
@@ -73,10 +74,11 @@ func Generate(file *ast.ProtoFile, sourceName string, imports []FileEntry) ([]Ge
 }
 
 type generator struct {
-	file       *ast.ProtoFile
-	sourceName string
-	prefix     string
-	resolver   *NameResolver
+	presenceNames map[*ast.Field]string
+	file          *ast.ProtoFile
+	sourceName    string
+	prefix        string
+	resolver      *NameResolver
 	// declarations indexes every message and enum declared by the file being
 	// generated and by its imports, which is what resolveTypeReference walks.
 	declarations *declarationIndex

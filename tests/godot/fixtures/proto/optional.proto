@@ -2,11 +2,47 @@ syntax = "proto3";
 
 package fixture;
 
-// Proto3 explicit presence: an unset optional is distinguishable from
-// one set to its default value, and the wire form does not emit unset
-// fields.
+enum Choice { ZERO = 0; ONE = 1; }
+
 message OptionalScalars {
   optional int32 int_value = 1;
   optional string string_value = 2;
   optional bool bool_value = 3;
+  optional bytes bytes_value = 4;
+  optional double double_value = 5;
+  optional float float_value = 6;
+  optional int64 int64_value = 7;
+  optional uint32 uint32_value = 8;
+  optional uint64 uint64_value = 9;
+  optional sint32 sint32_value = 10;
+  optional sint64 sint64_value = 11;
+  optional fixed32 fixed32_value = 12;
+  optional fixed64 fixed64_value = 13;
+  optional sfixed32 sfixed32_value = 14;
+  optional sfixed64 sfixed64_value = 15;
+  optional Choice choice_value = 16;
+}
+
+message ImplicitScalars {
+  int32 int_value = 1;
+  string string_value = 2;
+  bool bool_value = 3;
+  bytes bytes_value = 4;
+  double double_value = 5;
+  float float_value = 6;
+  int64 int64_value = 7;
+  uint32 uint32_value = 8;
+  uint64 uint64_value = 9;
+  sint32 sint32_value = 10;
+  sint64 sint64_value = 11;
+  fixed32 fixed32_value = 12;
+  fixed64 fixed64_value = 13;
+  sfixed32 sfixed32_value = 14;
+  sfixed64 sfixed64_value = 15;
+  Choice choice_value = 16;
+}
+
+message PresenceNames {
+  optional int32 count = 1;
+  int32 has_count = 2;
 }

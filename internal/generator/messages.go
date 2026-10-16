@@ -2,6 +2,7 @@ package generator
 
 import (
 	"path/filepath"
+	"strconv"
 
 	"github.com/cafecito-games/gdproto/internal/ast"
 	"github.com/cafecito-games/gdproto/internal/gdast"
@@ -47,6 +48,7 @@ func (g *generator) generateMessageFiles(m *ast.Message, classChain, protoChain 
 // messages are emitted as sibling files by generateMessageFiles and are
 // intentionally NOT included here.
 func (g *generator) generateMessageClass(m *ast.Message, className string) *gdast.ClassDefinition {
+	g.allocatePresenceNames(m)
 	var statements []gdast.Node
 
 	for _, e := range m.NestedEnums {
@@ -132,6 +134,9 @@ func (g *generator) generateFieldDeclarations(m *ast.Message) []gdast.Node {
 
 	for _, f := range m.Fields {
 		out = append(out, g.fieldDeclaration(f))
+		if tracksScalarPresence(f) {
+			out = append(out, gdast.VarDeclaration{Name: g.presenceVar(f), TypeHint: "bool", InitialValue: gdast.Lit(false)})
+		}
 	}
 
 	for _, oneof := range m.Oneofs {
@@ -232,4 +237,37 @@ var scalarDefaultMap = map[string]string{
 	"bool":     "false",
 	"string":   `""`,
 	"bytes":    "PackedByteArray()",
+}
+
+// allocatePresenceNames keeps optional tracking separate from user fields such
+// as has_count, which already own the private variable _has_count.
+func (g *generator) allocatePresenceNames(m *ast.Message) {
+	used := map[string]bool{}
+	for _, f := range m.Fields {
+		used["_"+f.Name] = true
+	}
+	for _, f := range m.Maps {
+		used["_"+f.Name] = true
+	}
+	for _, e := range m.NestedEnums {
+		used[e.Name] = true
+	}
+	for _, o := range m.Oneofs {
+		used[oneofTrackingVar(o.Name)] = true
+		used[oneofEnumName(o.Name)] = true
+		for _, f := range o.Fields {
+			used["_"+f.Name] = true
+		}
+	}
+	for _, f := range m.Fields {
+		if !tracksScalarPresence(f) {
+			continue
+		}
+		name := "_has_" + f.Name
+		for suffix := 2; used[name]; suffix++ {
+			name = "_has_" + f.Name + "_" + strconv.Itoa(suffix)
+		}
+		used[name] = true
+		g.presenceNames[f] = name
+	}
 }

@@ -210,6 +210,9 @@ func (g *generator) fieldDeserialization(f *ast.Field) []gdast.Statement {
 		out = append(out, g.repeatedFieldDeserialization(f)...)
 	} else {
 		out = append(out, g.singleFieldDeserialization(f)...)
+		if tracksScalarPresence(f) {
+			out = append(out, gdast.Assign(g.presenceVar(f), gdast.Lit(true)))
+		}
 	}
 	return out
 }

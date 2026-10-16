@@ -133,6 +133,9 @@ func (g *generator) fromTextFieldCase(f *ast.Field, oneofGroup string) string {
 		// Integer-like scalars: int32, int64, uint*, sint*, fixed*.
 		b.WriteString(fromTextScalarBody(f, oneofGroup, false))
 	}
+	if tracksScalarPresence(f) {
+		b.WriteString("\t\t\t" + g.presenceVar(f) + " = true\n")
+	}
 	return b.String()
 }
 

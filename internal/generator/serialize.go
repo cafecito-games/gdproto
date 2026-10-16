@@ -143,6 +143,9 @@ func (g *generator) mapValueWireType(mf *ast.MapField) int {
 // proto3 zero value; enum-typed fields compare against 0 (the proto3 enum
 // zero value); message types compare against null.
 func (g *generator) fieldDefaultCondition(fieldVar string, f *ast.Field) gdast.Expression {
+	if tracksScalarPresence(f) {
+		return gdast.V(g.presenceVar(f))
+	}
 	if def, ok := scalarDefaultMap[f.FieldType]; ok {
 		return gdast.Ne(gdast.V(fieldVar), gdast.RawExpression{Code: def})
 	}
