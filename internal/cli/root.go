@@ -51,7 +51,6 @@ func newRootCommand(out, errOut io.Writer) *cobra.Command {
 				return fmt.Errorf("invalid log level: %w", err)
 			}
 			rootLogger = applog.New(cmd.ErrOrStderr(), level)
-			_ = rootLogger
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -62,7 +61,7 @@ func newRootCommand(out, errOut io.Writer) *cobra.Command {
 			if len(args) == 0 {
 				return cmd.Help()
 			}
-			return runCompile(cmd, args[0], outputPath, includePaths)
+			return runCompile(cmd, args[0], outputPath, includePaths, rootLogger)
 		},
 	}
 
@@ -91,21 +90,30 @@ func newRootCommand(out, errOut io.Writer) *cobra.Command {
 	return cmd
 }
 
-func runCompile(cmd *cobra.Command, inputPath, outputPath string, includePaths []string) error {
+func runCompile(cmd *cobra.Command, inputPath, outputPath string, includePaths []string, logger *slog.Logger) error {
+	lexerLog := applog.For(logger, "lexer")
+	parserLog := applog.For(logger, "parser")
+	importerLog := applog.For(logger, "importer")
+	validatorLog := applog.For(logger, "validator")
+	generatorLog := applog.For(logger, "generator")
+
 	data, err := os.ReadFile(inputPath) //nolint:gosec // user-supplied path; CLI tool reads files by design.
 	if err != nil {
 		return fmt.Errorf("read input: %w", err)
 	}
+	lexerLog.Debug("read input", "path", inputPath, "bytes", len(data))
 
 	tokens, err := lexer.Tokenize(string(data), inputPath)
 	if err != nil {
 		return err
 	}
+	lexerLog.Debug("tokenized", "tokens", len(tokens))
 
 	file, err := parser.Parse(tokens, inputPath)
 	if err != nil {
 		return err
 	}
+	parserLog.Debug("parsed", "messages", len(file.Messages), "enums", len(file.Enums))
 
 	fs := &importer.OSFS{
 		BaseDir:      filepath.Dir(inputPath),
@@ -115,6 +123,7 @@ func runCompile(cmd *cobra.Command, inputPath, outputPath string, includePaths [
 	if err != nil {
 		return err
 	}
+	importerLog.Debug("resolved imports", "count", len(importedFiles))
 
 	if errs := validator.Validate(file, inputPath); len(errs) != 0 {
 		for _, e := range errs {
@@ -122,6 +131,7 @@ func runCompile(cmd *cobra.Command, inputPath, outputPath string, includePaths [
 		}
 		return fmt.Errorf("validation failed")
 	}
+	validatorLog.Debug("validated")
 
 	imports := make([]generator.FileEntry, 0, len(importedFiles))
 	for _, imp := range importedFiles {
@@ -132,6 +142,7 @@ func runCompile(cmd *cobra.Command, inputPath, outputPath string, includePaths [
 	if err != nil {
 		return err
 	}
+	generatorLog.Debug("generated", "scripts", len(files))
 
 	outDir := outputPath
 	if outDir == "" {
@@ -150,18 +161,21 @@ func runCompile(cmd *cobra.Command, inputPath, outputPath string, includePaths [
 		if err != nil {
 			return err
 		}
+		generatorLog.Debug("writing", "file", gf.Filename)
 		count, err := writeWithSidecar(outDir, gf.Filename, source)
 		if err != nil {
 			return err
 		}
 		written += count
 	}
+	generatorLog.Debug("writing", "file", "proto_core_utils.gd")
 	count, err := writeWithSidecar(outDir, "proto_core_utils.gd", generator.GenerateProtoCoreUtilsRaw())
 	if err != nil {
 		return err
 	}
 	written += count
 
+	logger.Info("wrote files", "count", written, "dir", outDir)
 	_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "wrote %d files to %s/\n", written, outDir)
 	return nil
 }

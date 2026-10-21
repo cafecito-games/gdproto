@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -63,6 +64,64 @@ func TestRootValidLogLevel(t *testing.T) {
 	code := cli.Execute([]string{"--log-level", "debug", "--help"}, &out, &errOut)
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0; stderr=%q", code, errOut.String())
+	}
+}
+
+func TestRootDebugLogLevelEmitsJSONLogs(t *testing.T) {
+	tempDir := t.TempDir()
+	inputPath := filepath.Join("..", "..", "examples", "example.proto")
+
+	var out, errOut bytes.Buffer
+	code := cli.Execute([]string{"--log-level", "debug", "-o", tempDir, inputPath}, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr=%q", code, errOut.String())
+	}
+
+	var sawComponent, sawDebug, sawInfo bool
+	for _, line := range strings.Split(strings.TrimSpace(errOut.String()), "\n") {
+		if line == "" || strings.HasPrefix(line, "wrote ") {
+			continue
+		}
+		var record map[string]any
+		if err := json.Unmarshal([]byte(line), &record); err != nil {
+			t.Fatalf("non-JSON log line %q: %v", line, err)
+		}
+		if _, ok := record["component"]; ok {
+			sawComponent = true
+		}
+		switch record["level"] {
+		case "DEBUG":
+			sawDebug = true
+		case "INFO":
+			sawInfo = true
+		}
+	}
+	if !sawComponent {
+		t.Errorf("expected component attribute in logs; got:\n%s", errOut.String())
+	}
+	if !sawDebug {
+		t.Errorf("expected DEBUG logs at debug level; got:\n%s", errOut.String())
+	}
+	if !sawInfo {
+		t.Errorf("expected INFO summary at debug level; got:\n%s", errOut.String())
+	}
+}
+
+func TestRootDefaultLogLevelIsQuiet(t *testing.T) {
+	tempDir := t.TempDir()
+	inputPath := filepath.Join("..", "..", "examples", "example.proto")
+
+	var out, errOut bytes.Buffer
+	code := cli.Execute([]string{"-o", tempDir, inputPath}, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr=%q", code, errOut.String())
+	}
+	if strings.Contains(errOut.String(), `"level":"DEBUG"`) ||
+		strings.Contains(errOut.String(), `"level":"INFO"`) {
+		t.Errorf("default warn level should not emit DEBUG/INFO logs; got:\n%s", errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "wrote ") {
+		t.Errorf("expected progress line; got:\n%s", errOut.String())
 	}
 }
 
