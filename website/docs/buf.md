@@ -127,8 +127,8 @@ message Hero {
 ```
 
 Buf needs the `gdproto/options.proto` descriptor available inside the module
-to resolve the `(gdproto.class_prefix)` extension. Vendor it into the buf
-module path:
+to resolve the `(gdproto.class_prefix)` and `(gdproto.resource)` extensions.
+Vendor it into the buf module path:
 
 ```bash
 mkdir -p proto/gdproto

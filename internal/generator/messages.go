@@ -49,6 +49,8 @@ func (g *generator) generateMessageFiles(m *ast.Message, classChain, protoChain 
 // intentionally NOT included here.
 func (g *generator) generateMessageClass(m *ast.Message, className string) *gdast.ClassDefinition {
 	g.allocatePresenceNames(m)
+	resource := g.isResourceMessage(m)
+	accessorNames := g.allocateAccessorNames(m, resource)
 	var statements []gdast.Node
 
 	for _, e := range m.NestedEnums {
@@ -68,7 +70,7 @@ func (g *generator) generateMessageClass(m *ast.Message, className string) *gdas
 		}
 	}
 
-	if declarations := g.generateFieldDeclarations(m); len(declarations) > 0 {
+	if declarations := g.generateFieldDeclarations(m, resource); len(declarations) > 0 {
 		statements = append(statements, gdast.Comment{Text: "Fields"})
 		statements = append(statements, declarations...)
 	}
@@ -78,6 +80,7 @@ func (g *generator) generateMessageClass(m *ast.Message, className string) *gdas
 		for _, oneof := range m.Oneofs {
 			enumName := oneofEnumName(oneof.Name)
 			statements = append(statements, gdast.VarDeclaration{
+				Annotations:  storageAnnotations(resource),
 				Name:         oneofTrackingVar(oneof.Name),
 				TypeHint:     enumName,
 				InitialValue: gdast.RawExpression{Code: enumName + ".UNSET"},
@@ -85,7 +88,7 @@ func (g *generator) generateMessageClass(m *ast.Message, className string) *gdas
 		}
 	}
 
-	if accessors := g.generateAccessors(m); len(accessors) > 0 {
+	if accessors := g.generateAccessors(m, resource, accessorNames); len(accessors) > 0 {
 		statements = append(statements, gdast.Comment{Text: "Accessors"})
 		statements = append(statements, accessors...)
 	}
@@ -93,7 +96,8 @@ func (g *generator) generateMessageClass(m *ast.Message, className string) *gdas
 	if len(m.Oneofs) > 0 {
 		statements = append(statements, gdast.Comment{Text: "Oneof case getters"})
 		for _, oneof := range m.Oneofs {
-			statements = append(statements, generateOneofCaseGetter(oneof))
+			preferred := "get_" + oneof.Name + "_case"
+			statements = append(statements, generateOneofCaseGetter(oneof, accessorNames.get(preferred)))
 		}
 	}
 
@@ -111,9 +115,13 @@ func (g *generator) generateMessageClass(m *ast.Message, className string) *gdas
 		g.generateToString(m),
 	)
 
+	baseClass := "RefCounted"
+	if resource {
+		baseClass = "Resource"
+	}
 	return &gdast.ClassDefinition{
 		ClassNameDirective: className,
-		Extends:            "RefCounted",
+		Extends:            baseClass,
 		LeadingComment:     gdkitSuppressions,
 		HeaderComment:      headerCommentText(filepath.Base(g.sourceName)),
 		Statements:         statements,
@@ -129,19 +137,24 @@ func isEmptyMessage(m *ast.Message) bool {
 
 // generateFieldDeclarations emits the `var _name: Type = default` declarations
 // for every regular, oneof, and map field of the message.
-func (g *generator) generateFieldDeclarations(m *ast.Message) []gdast.Node {
+func (g *generator) generateFieldDeclarations(m *ast.Message, resource bool) []gdast.Node {
 	var out []gdast.Node
 
 	for _, f := range m.Fields {
-		out = append(out, g.fieldDeclaration(f))
+		out = append(out, g.fieldDeclaration(f, resource))
 		if tracksScalarPresence(f) {
-			out = append(out, gdast.VarDeclaration{Name: g.presenceVar(f), TypeHint: "bool", InitialValue: gdast.Lit(false)})
+			out = append(out, gdast.VarDeclaration{
+				Annotations:  storageAnnotations(resource),
+				Name:         g.presenceVar(f),
+				TypeHint:     "bool",
+				InitialValue: gdast.Lit(false),
+			})
 		}
 	}
 
 	for _, oneof := range m.Oneofs {
 		for _, f := range oneof.Fields {
-			out = append(out, g.fieldDeclaration(f))
+			out = append(out, g.fieldDeclaration(f, resource))
 		}
 	}
 
@@ -149,6 +162,7 @@ func (g *generator) generateFieldDeclarations(m *ast.Message) []gdast.Node {
 		keyType := gdscriptScalarType(mf.KeyType)
 		valueType := g.renderedMapValueType(mf)
 		out = append(out, gdast.VarDeclaration{
+			Annotations:  storageAnnotations(resource),
 			Name:         "_" + mf.Name,
 			TypeHint:     "Dictionary[" + keyType + ", " + valueType + "]",
 			InitialValue: gdast.Dictionary{},
@@ -160,10 +174,11 @@ func (g *generator) generateFieldDeclarations(m *ast.Message) []gdast.Node {
 
 // fieldDeclaration produces a single `var _name: Type = default` declaration
 // for a regular or oneof field. Repeated fields use Array[Type] = [].
-func (g *generator) fieldDeclaration(f *ast.Field) gdast.VarDeclaration {
+func (g *generator) fieldDeclaration(f *ast.Field, resource bool) gdast.VarDeclaration {
 	if f.Repeated {
 		gdType := g.renderedFieldType(f)
 		return gdast.VarDeclaration{
+			Annotations:  storageAnnotations(resource),
 			Name:         "_" + f.Name,
 			TypeHint:     "Array[" + gdType + "]",
 			InitialValue: gdast.Array{},
@@ -172,6 +187,7 @@ func (g *generator) fieldDeclaration(f *ast.Field) gdast.VarDeclaration {
 	gdType := g.renderedFieldType(f)
 	def := g.fieldDefault(f)
 	return gdast.VarDeclaration{
+		Annotations:  storageAnnotations(resource),
 		Name:         "_" + f.Name,
 		TypeHint:     gdType,
 		InitialValue: gdast.RawExpression{Code: def},

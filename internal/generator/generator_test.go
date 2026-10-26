@@ -1255,3 +1255,104 @@ func TestOptionalPresenceRejectsNativeMethodCollisions(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerateResourceMessageUsesStoragePropertiesAndManglesNativeAccessors(t *testing.T) {
+	const source = `syntax = "proto3";
+message Stored {
+  option (gdproto.resource) = true;
+  string name = 1;
+  string path = 2;
+  optional int32 level = 3;
+  repeated string tags = 4;
+  map<string, int32> attributes = 5;
+  string translation_domain = 8;
+  optional bool connections = 9;
+  oneof choice {
+    int32 count = 6;
+    string label = 7;
+  }
+}
+message Plain {
+  string name = 1;
+}
+message Outer {
+  message NestedStored {
+    option (gdproto.resource) = true;
+    int32 value = 1;
+  }
+}
+`
+
+	files := generateFromSource(t, source, "resource.proto")
+	stored := findFile(files, "ResourceStored")
+	require.NotNil(t, stored, "missing ResourceStored; got %v", classNames(files))
+	got := mustSource(t, *stored)
+	assert.Contains(t, got, "extends Resource")
+	for _, declaration := range []string{
+		`@export_storage var _name: String = ""`,
+		`@export_storage var _path: String = ""`,
+		"@export_storage var _level: int = 0",
+		"@export_storage var _has_level: bool = false",
+		"@export_storage var _tags: Array[String] = []",
+		"@export_storage var _attributes: Dictionary[String, int] = {}",
+		"@export_storage var _count: int = 0",
+		`@export_storage var _label: String = ""`,
+		"@export_storage var _oneof_choice: ChoiceOneOf = ChoiceOneOf.UNSET",
+	} {
+		assert.Contains(t, got, declaration)
+	}
+	for _, method := range []string{
+		"func set_name_pb(value: String) -> void:",
+		"func get_name_pb() -> String:",
+		"func set_path_pb(value: String) -> void:",
+		"func get_path_pb() -> String:",
+		"func set_translation_domain_pb(value: String) -> void:",
+		"func get_translation_domain_pb() -> String:",
+		"func has_connections_pb() -> bool:",
+	} {
+		assert.Contains(t, got, method)
+	}
+	assert.NotContains(t, got, "func set_name(value: String)")
+	assert.NotContains(t, got, "func get_name() -> String")
+
+	plain := findFile(files, "ResourcePlain")
+	require.NotNil(t, plain, "missing ResourcePlain; got %v", classNames(files))
+	plainSource := mustSource(t, *plain)
+	assert.Contains(t, plainSource, "extends RefCounted")
+	assert.NotContains(t, plainSource, "@export_storage")
+	assert.Contains(t, plainSource, "func set_name(value: String) -> void:")
+
+	nested := findFile(files, "ResourceOuterNestedStored")
+	require.NotNil(t, nested, "missing nested resource; got %v", classNames(files))
+	assert.Contains(t, mustSource(t, *nested), "extends Resource")
+}
+
+func TestGenerateResourceOptionMustBeBoolean(t *testing.T) {
+	const source = `syntax = "proto3";
+message Stored {
+  option (gdproto.resource) = "yes";
+}`
+	tokens, err := lexer.Tokenize(source, "resource.proto")
+	require.NoError(t, err)
+	file, err := parser.Parse(tokens, "resource.proto")
+	require.NoError(t, err)
+	_, err = generator.Generate(file, "resource.proto", nil)
+	require.ErrorContains(t, err, "option (gdproto.resource) must be a bool")
+}
+
+func TestGenerateResourceAccessorManglingReservesPreferredNames(t *testing.T) {
+	const source = `syntax = "proto3";
+message Stored {
+  option (gdproto.resource) = true;
+  string name = 1;
+  string name_pb = 2;
+}`
+	files := generateFromSource(t, source, "resource.proto")
+	stored := findFile(files, "ResourceStored")
+	require.NotNil(t, stored)
+	got := mustSource(t, *stored)
+	assert.Contains(t, got, "func set_name_pb2(value: String) -> void:")
+	assert.Contains(t, got, "func get_name_pb2() -> String:")
+	assert.Contains(t, got, "func set_name_pb(value: String) -> void:")
+	assert.Contains(t, got, "func get_name_pb() -> String:")
+}

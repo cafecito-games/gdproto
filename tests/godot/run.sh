@@ -46,6 +46,7 @@ protoc \
     --plugin=protoc-gen-gdscript="$PLUGIN" \
     --gdscript_out="$GENERATED_DIR" \
     -I "$PROTO_ROOT" \
+    -I "$REPO_ROOT/proto" \
     "${PROTO_FILES[@]}"
 
 # Imported files are not generated transitively (matching protoc-gen-go), so the
@@ -57,6 +58,7 @@ protoc \
     --plugin=protoc-gen-gdscript="$PLUGIN" \
     --gdscript_out="$GENERATED_DIR" \
     -I "$PROTO_ROOT" \
+    -I "$REPO_ROOT/proto" \
     google/protobuf/timestamp.proto
 
 if ! grep -q '^gdscript/warnings/treat_warnings_as_errors=true$' "$GODOT_PROJECT/project.godot"; then

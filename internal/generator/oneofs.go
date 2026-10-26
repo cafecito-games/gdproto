@@ -67,10 +67,10 @@ func generateOneofEnum(oneof *ast.Oneof) gdast.EnumDefinition {
 
 // generateOneofCaseGetter emits `func get_<group>_case() -> <Group>OneOf` that
 // exposes the current oneof tracking enum value to callers.
-func generateOneofCaseGetter(oneof *ast.Oneof) gdast.Function {
+func generateOneofCaseGetter(oneof *ast.Oneof, methodName string) gdast.Function {
 	enumName := oneofEnumName(oneof.Name)
 	return gdast.Function{
-		Name:       "get_" + oneof.Name + "_case",
+		Name:       methodName,
 		ReturnType: enumName,
 		Body: []gdast.Statement{
 			gdast.Ret(gdast.V(oneofTrackingVar(oneof.Name))),

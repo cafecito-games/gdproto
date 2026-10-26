@@ -74,6 +74,7 @@ plus a sibling `proto_core_utils.gd`.
 ## Compatibility
 
 Generated binary output is wire-compatible with standard protoc decoders for
-the supported proto3 feature set. Services, proto2 syntax, custom options,
-extensions, JSON mapping, and first-class well-known type behavior are outside
-the current scope.
+the supported proto3 feature set. Services, proto2 syntax, arbitrary custom
+option semantics, extensions, JSON mapping, and first-class well-known type
+behavior are outside the current scope. gdproto's own `class_prefix` and
+`resource` custom options are supported.

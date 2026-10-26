@@ -155,6 +155,87 @@ means a single project can mix files with explicit `class_prefix` options
 and files that rely on the default, and cross-file references resolve to
 the right class names in either direction.
 
+## Persistable Resource Messages
+
+Messages extend `RefCounted` by default. To make one message persistable through
+Godot's native `.tres` resource format, opt it in with the
+`(gdproto.resource)` message option:
+
+```protobuf
+syntax = "proto3";
+import "gdproto/options.proto";
+
+option (gdproto.class_prefix) = "Game";
+
+message ItemDefinition {
+  option (gdproto.resource) = true;
+
+  string name = 1;
+  optional int32 level = 2;
+}
+```
+
+The generated class extends `Resource`. Its field backing variables,
+optional-presence bits, and oneof case trackers use `@export_storage`, so they
+are saved without being displayed in the Inspector:
+
+```gdscript
+class_name GameItemDefinition
+
+extends Resource
+
+@export_storage var _name: String = ""
+@export_storage var _level: int = 0
+@export_storage var _has_level: bool = false
+```
+
+Use the ordinary Godot APIs to save and load it:
+
+```gdscript
+var item := GameItemDefinition.new()
+item.set_name_pb("Iron Sword")
+item.set_level(0)
+ResourceSaver.save(item, "res://items/iron_sword.tres")
+
+var loaded := load("res://items/iron_sword.tres") as GameItemDefinition
+```
+
+The explicit optional value `0` remains present after loading because the
+generated presence bit is stored independently. Default-valued oneof members
+work the same way through the stored oneof case tracker. Scalars, enums, bytes,
+arrays, dictionaries, Resource child messages, and ordinary generated
+`RefCounted` child messages are all persisted.
+
+Resource selection is per message, including nested messages, and does not
+cascade to referenced types. Top-level enum wrappers remain `RefCounted`.
+
+### Resource accessor collisions
+
+Some protobuf field accessors overlap Godot's native `Resource` API. A field
+named `name`, for example, would normally generate `get_name()` and
+`set_name()`, but those names belong to `Resource`. For Resource messages only,
+gdproto appends `_pb` to inherited-name collisions:
+
+```gdscript
+item.set_name_pb("Iron Sword")
+print(item.get_name_pb())
+```
+
+All non-colliding accessors keep their normal spelling. The allocator reserves
+those normal names first; if `_pb` is already occupied, it uses `_pb2`, `_pb3`,
+and so on.
+
+### Resource persistence limits
+
+- Storage properties are deliberately hidden from the Inspector. This feature
+  provides persistence, not an editor-authoring UI.
+- `.tres` compatibility follows generated property names and Godot types, not
+  protobuf field numbers. A protobuf field rename can be wire-compatible while
+  still requiring migration of existing `.tres` files.
+- `ResourceLoader` caches loaded resources by path. Pass an appropriate cache
+  mode when code specifically needs a distinct reload.
+- Generated setters do not automatically emit Resource's `changed` signal.
+
 ## gdkit Conformance
 
 For a schema that follows [protobuf's own style

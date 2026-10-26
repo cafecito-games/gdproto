@@ -74,8 +74,9 @@ plugin path to `protoc`.
 
 ## Optional: Vendoring `gdproto/options.proto`
 
-If your schemas use the `(gdproto.class_prefix)` file option, you need the
-extension descriptor on disk so that `protoc` and `buf` can resolve it.
+If your schemas use the `(gdproto.class_prefix)` file option or the
+`(gdproto.resource)` message option, you need the extension descriptor on disk
+so that `protoc` and `buf` can resolve it.
 Either binary can print the embedded descriptor:
 
 ```bash

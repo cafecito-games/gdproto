@@ -23,4 +23,10 @@ func TestExtensionDescriptorAvailable(t *testing.T) {
 	if got := E_ClassPrefix.TypeDescriptor().Number(); int32(got) != 51000 {
 		t.Fatalf("unexpected extension number: got %d want 51000", got)
 	}
+	if E_Resource == nil {
+		t.Fatal("E_Resource not generated")
+	}
+	if got := E_Resource.TypeDescriptor().Number(); int32(got) != 51001 {
+		t.Fatalf("unexpected resource extension number: got %d want 51001", got)
+	}
 }

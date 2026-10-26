@@ -10,19 +10,19 @@ import (
 // generateAccessors produces setter, getter, and oneof presence-check methods
 // for every field of a message. The bodies emitted here are minimal but
 // functional; later tasks may extend them with validation or change-tracking.
-func (g *generator) generateAccessors(m *ast.Message) []gdast.Node {
+func (g *generator) generateAccessors(m *ast.Message, resource bool, names accessorNames) []gdast.Node {
 	var groups [][]gdast.Node
 
 	for _, f := range m.Fields {
-		groups = append(groups, g.fieldAccessors(f))
+		groups = append(groups, g.fieldAccessors(f, resource, names))
 	}
 	for _, oneof := range m.Oneofs {
 		for _, f := range oneof.Fields {
-			groups = append(groups, g.oneofFieldAccessors(f, oneof))
+			groups = append(groups, g.oneofFieldAccessors(f, oneof, names))
 		}
 	}
 	for _, mf := range m.Maps {
-		groups = append(groups, g.mapAccessors(mf))
+		groups = append(groups, g.mapAccessors(mf, names))
 	}
 
 	var out []gdast.Node
@@ -33,7 +33,7 @@ func (g *generator) generateAccessors(m *ast.Message) []gdast.Node {
 }
 
 // fieldAccessors emits the accessor functions for a regular (non-oneof) field.
-func (g *generator) fieldAccessors(f *ast.Field) []gdast.Node {
+func (g *generator) fieldAccessors(f *ast.Field, resource bool, names accessorNames) []gdast.Node {
 	gdType := g.renderedFieldType(f)
 	fieldVar := "_" + f.Name
 
@@ -41,7 +41,7 @@ func (g *generator) fieldAccessors(f *ast.Field) []gdast.Node {
 		var add gdast.Function
 		if g.isMessageLikeType(f) {
 			add = gdast.Function{
-				Name:       "add_" + f.Name,
+				Name:       names.get("add_" + f.Name),
 				ReturnType: gdType,
 				Body: []gdast.Statement{
 					gdast.VarDeclaration{
@@ -58,7 +58,7 @@ func (g *generator) fieldAccessors(f *ast.Field) []gdast.Node {
 			}
 		} else {
 			add = gdast.Function{
-				Name:       "add_" + f.Name,
+				Name:       names.get("add_" + f.Name),
 				Parameters: []gdast.Parameter{{Name: "value", TypeHint: gdType}},
 				ReturnType: "void",
 				Body: []gdast.Statement{
@@ -70,7 +70,7 @@ func (g *generator) fieldAccessors(f *ast.Field) []gdast.Node {
 			}
 		}
 		get := gdast.Function{
-			Name:       "get_" + f.Name,
+			Name:       names.get("get_" + f.Name),
 			ReturnType: "Array[" + gdType + "]",
 			Body:       []gdast.Statement{gdast.Ret(gdast.V(fieldVar))},
 		}
@@ -79,7 +79,7 @@ func (g *generator) fieldAccessors(f *ast.Field) []gdast.Node {
 
 	if g.isMessageLikeType(f) {
 		newer := gdast.Function{
-			Name:       "new_" + f.Name,
+			Name:       names.get("new_" + f.Name),
 			ReturnType: gdType,
 			Body: []gdast.Statement{
 				gdast.Assign(fieldVar, gdast.Call(gdType+".new")),
@@ -87,7 +87,7 @@ func (g *generator) fieldAccessors(f *ast.Field) []gdast.Node {
 			},
 		}
 		get := gdast.Function{
-			Name:       "get_" + f.Name,
+			Name:       names.get("get_" + f.Name),
 			ReturnType: gdType,
 			Body:       []gdast.Statement{gdast.Ret(gdast.V(fieldVar))},
 		}
@@ -95,27 +95,29 @@ func (g *generator) fieldAccessors(f *ast.Field) []gdast.Node {
 	}
 
 	set := gdast.Function{
-		Name:       "set_" + f.Name,
+		Name:       names.get("set_" + f.Name),
 		Parameters: []gdast.Parameter{{Name: "value", TypeHint: gdType}},
 		ReturnType: "void",
 		Body:       []gdast.Statement{gdast.Assign(fieldVar, gdast.V("value"))},
 	}
 	get := gdast.Function{
-		Name:       "get_" + f.Name,
+		Name:       names.get("get_" + f.Name),
 		ReturnType: gdType,
 		Body:       []gdast.Statement{gdast.Ret(gdast.V(fieldVar))},
 	}
 	if tracksScalarPresence(f) {
 		// RefCounted inherits these has_* methods from Object. GDScript cannot
 		// overload their signatures with the zero-argument presence accessor.
-		switch f.Name {
-		case "method", "signal", "user_signal", "meta", "connections":
-			g.recordError(fmt.Errorf("optional field %q in %s generates has_%s(), which conflicts with an inherited Godot method; rename the field", f.Name, g.sourceName, f.Name))
+		if !resource {
+			switch f.Name {
+			case "method", "signal", "user_signal", "meta", "connections":
+				g.recordError(fmt.Errorf("optional field %q in %s generates has_%s(), which conflicts with an inherited Godot method; rename the field", f.Name, g.sourceName, f.Name))
+			}
 		}
 		set.Body = append(set.Body, gdast.Assign(g.presenceVar(f), gdast.Lit(true)))
 		return []gdast.Node{set, get,
-			gdast.Function{Name: "has_" + f.Name, ReturnType: "bool", Body: []gdast.Statement{gdast.Ret(gdast.V(g.presenceVar(f)))}},
-			gdast.Function{Name: "clear_" + f.Name, ReturnType: "void", Body: []gdast.Statement{
+			gdast.Function{Name: names.get("has_" + f.Name), ReturnType: "bool", Body: []gdast.Statement{gdast.Ret(gdast.V(g.presenceVar(f)))}},
+			gdast.Function{Name: names.get("clear_" + f.Name), ReturnType: "void", Body: []gdast.Statement{
 				gdast.Assign(fieldVar, gdast.RawExpression{Code: g.fieldDefault(f)}),
 				gdast.Assign(g.presenceVar(f), gdast.Lit(false)),
 			}},
@@ -136,7 +138,7 @@ func (g *generator) presenceVar(f *ast.Field) string { return g.presenceNames[f]
 // that participates in a oneof group. The setter clears the previously-set
 // oneof field's value before updating the tracking enum and assigning the new
 // value.
-func (g *generator) oneofFieldAccessors(f *ast.Field, oneof *ast.Oneof) []gdast.Node {
+func (g *generator) oneofFieldAccessors(f *ast.Field, oneof *ast.Oneof, names accessorNames) []gdast.Node {
 	gdType := g.renderedFieldType(f)
 	fieldVar := "_" + f.Name
 	trackingVar := oneofTrackingVar(oneof.Name)
@@ -163,18 +165,18 @@ func (g *generator) oneofFieldAccessors(f *ast.Field, oneof *ast.Oneof) []gdast.
 	}
 
 	set := gdast.Function{
-		Name:       "set_" + f.Name,
+		Name:       names.get("set_" + f.Name),
 		Parameters: []gdast.Parameter{{Name: "value", TypeHint: gdType}},
 		ReturnType: "void",
 		Body:       setBody,
 	}
 	get := gdast.Function{
-		Name:       "get_" + f.Name,
+		Name:       names.get("get_" + f.Name),
 		ReturnType: gdType,
 		Body:       []gdast.Statement{gdast.Ret(gdast.V(fieldVar))},
 	}
 	has := gdast.Function{
-		Name:       "has_" + f.Name,
+		Name:       names.get("has_" + f.Name),
 		ReturnType: "bool",
 		Body: []gdast.Statement{
 			gdast.Ret(gdast.Eq(gdast.V(trackingVar), gdast.RawExpression{Code: enumValue})),
@@ -186,13 +188,13 @@ func (g *generator) oneofFieldAccessors(f *ast.Field, oneof *ast.Oneof) []gdast.
 // mapAccessors emits the add/get functions for a map field. The add helper
 // inserts a single key/value pair; the getter returns the underlying
 // dictionary.
-func (g *generator) mapAccessors(mf *ast.MapField) []gdast.Node {
+func (g *generator) mapAccessors(mf *ast.MapField, names accessorNames) []gdast.Node {
 	keyType := gdscriptScalarType(mf.KeyType)
 	valueType := g.renderedMapValueType(mf)
 	fieldVar := "_" + mf.Name
 
 	add := gdast.Function{
-		Name: "add_" + mf.Name,
+		Name: names.get("add_" + mf.Name),
 		Parameters: []gdast.Parameter{
 			{Name: "key", TypeHint: keyType},
 			{Name: "value", TypeHint: valueType},
@@ -206,7 +208,7 @@ func (g *generator) mapAccessors(mf *ast.MapField) []gdast.Node {
 		},
 	}
 	get := gdast.Function{
-		Name:       "get_" + mf.Name,
+		Name:       names.get("get_" + mf.Name),
 		ReturnType: "Dictionary[" + keyType + ", " + valueType + "]",
 		Body:       []gdast.Statement{gdast.Ret(gdast.V(fieldVar))},
 	}
