@@ -30,7 +30,7 @@ The class prefix (`Example`) is derived from the input filename. Nested
 messages are flattened into sibling files using the same prefix; top-level
 enums get a thin wrapper class so the values stay globally addressable in
 Godot. See [Generated GDScript](./generated-code.md) for the addressing
-rules and the `(gdproto.class_prefix)` option that overrides the prefix.
+rules and gdproto's `(gdproto.class_prefix)` and `(gdproto.resource)` options.
 
 If `-o` is omitted, files are written into the current working directory.
 
@@ -47,7 +47,7 @@ If `-o` is omitted, files are written into the current working directory.
 ## Vendoring `gdproto/options.proto`
 
 The direct CLI tolerates a missing `import "gdproto/options.proto";` when
-parsing schemas that use `(gdproto.class_prefix)`, but `protoc` and `buf`
+parsing schemas that use gdproto's custom options, but `protoc` and `buf`
 reject unknown extensions. Vendor the descriptor to keep the same schema
 portable across all three paths:
 

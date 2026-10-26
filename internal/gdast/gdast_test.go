@@ -76,6 +76,18 @@ func TestRawExpression(t *testing.T) {
 	}
 }
 
+func TestVarDeclarationAnnotations(t *testing.T) {
+	declaration := VarDeclaration{
+		Annotations:  []string{"export_storage"},
+		Name:         "_name",
+		TypeHint:     "String",
+		InitialValue: Lit(""),
+	}
+	if got, want := declaration.ToGDScript(1), "\t@export_storage var _name: String = \"\""; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
 // Compile-time assertions that interfaces are satisfied.
 var (
 	_ Statement  = PassStatement{}

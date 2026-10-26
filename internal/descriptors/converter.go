@@ -173,6 +173,11 @@ func (c *converter) convertMessage(d *descriptorpb.DescriptorProto, sourceFile, 
 		Name:    d.GetName(),
 		Options: map[string]any{},
 	}
+	if messageOptions := d.GetOptions(); messageOptions != nil && proto.HasExtension(messageOptions, gdprotopb.E_Resource) {
+		if value, ok := proto.GetExtension(messageOptions, gdprotopb.E_Resource).(bool); ok {
+			msg.Options["(gdproto.resource)"] = value
+		}
+	}
 
 	// Index nested map-entry types so we can dispatch map fields.
 	mapEntries := map[string]*descriptorpb.DescriptorProto{}

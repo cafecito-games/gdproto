@@ -12,3 +12,9 @@ extend google.protobuf.FileOptions {
   // one .gd file per message/enum.
   optional string class_prefix = 51000;
 }
+
+extend google.protobuf.MessageOptions {
+  // resource generates this message as a Godot Resource and stores all of its
+  // protobuf state in native Godot resource properties.
+  optional bool resource = 51001;
+}

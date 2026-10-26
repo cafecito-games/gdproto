@@ -630,3 +630,26 @@ func TestConvertFileMissingClassPrefix(t *testing.T) {
 		t.Fatal("option key (gdproto.class_prefix) should be absent")
 	}
 }
+
+func TestConvertMessagePropagatesResourceOption(t *testing.T) {
+	options := &descriptorpb.MessageOptions{}
+	proto.SetExtension(options, gdprotopb.E_Resource, true)
+	fd := &descriptorpb.FileDescriptorProto{
+		Name:   strPtr("item.proto"),
+		Syntax: strPtr("proto3"),
+		MessageType: []*descriptorpb.DescriptorProto{
+			{Name: strPtr("Item"), Options: options},
+			{Name: strPtr("Plain")},
+		},
+	}
+	file, err := FromFileDescriptorProto(fd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := file.Messages[0].Options["(gdproto.resource)"]; got != true {
+		t.Fatalf("resource option = %v, want true", got)
+	}
+	if _, ok := file.Messages[1].Options["(gdproto.resource)"]; ok {
+		t.Fatal("unannotated message unexpectedly has the resource option")
+	}
+}

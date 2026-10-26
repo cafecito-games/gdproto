@@ -24,6 +24,7 @@ messages. It does not generate service clients or servers.
 | Proto3 optional | Explicit presence with the `optional` keyword is supported. |
 | Binary wire format | Generated binary output is compatible with standard protobuf decoders for supported features. |
 | Text format | Generated wrappers include gdproto text-format serialization and parsing for round trips and debugging. |
+| Persistable messages | A message with `(gdproto.resource) = true` extends `Resource` and stores its complete protobuf state in native `.tres` properties. See [Persistable Resource Messages](./generated-code.md#persistable-resource-messages). |
 
 ## Supported With Caveats
 
@@ -39,6 +40,6 @@ messages. It does not generate service clients or servers.
 | --- | --- |
 | proto2 syntax | Rejected by validation. |
 | Services and RPCs | Not generated. |
-| Custom options | Parsed as options where possible, but custom option semantics are not implemented. The one exception is the `(gdproto.class_prefix)` file option, which the generator reads to override the per-file class prefix — see [Generated GDScript](./generated-code.md#class-prefix). |
+| Custom options | Parsed as options where possible, but arbitrary custom option semantics are not implemented. gdproto implements `(gdproto.class_prefix)` and `(gdproto.resource)`; see [Generated GDScript](./generated-code.md). |
 | Extensions | Not implemented. |
 | Protobuf JSON mapping | Not generated. Use binary wire format or gdproto text format. |

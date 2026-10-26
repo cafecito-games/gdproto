@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package fixture;
+
+import "gdproto/options.proto";
+
+enum ResourceMode {
+  RESOURCE_MODE_UNSPECIFIED = 0;
+  RESOURCE_MODE_ACTIVE = 1;
+}
+
+message ResourceChild {
+  option (gdproto.resource) = true;
+
+  int32 value = 1;
+}
+
+message RefCountedChild {
+  int32 value = 1;
+}
+
+message StoredMessage {
+  option (gdproto.resource) = true;
+
+  string name = 1;
+  optional int32 level = 2;
+  bytes payload = 3;
+  ResourceMode mode = 4;
+  repeated string tags = 5;
+  map<string, int32> attributes = 6;
+  RefCountedChild ref_counted_child = 7;
+  ResourceChild resource_child = 8;
+
+  oneof choice {
+    int32 count = 9;
+    string label = 10;
+  }
+}

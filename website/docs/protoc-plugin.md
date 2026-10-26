@@ -102,8 +102,9 @@ message Hero {
 }
 ```
 
-`protoc` requires the descriptor for the `gdproto.class_prefix` extension to
-be available at parse time. Vendor it with one of:
+`protoc` requires the descriptor for the `gdproto.class_prefix` and
+`gdproto.resource` extensions to be available at parse time. Vendor it with
+one of:
 
 ```bash
 mkdir -p proto/gdproto
@@ -133,7 +134,7 @@ generation fails, check:
 
 - The schema uses `syntax = "proto3";`.
 - Import paths are reachable from the supplied `-I` roots.
-- If the schema uses `(gdproto.class_prefix)`, `gdproto/options.proto` is on
-  an `-I` root and imported from the schema.
+- If the schema uses a gdproto custom option, `gdproto/options.proto` is on an
+  `-I` root and imported from the schema.
 - The schema avoids unsupported features such as services, extensions, and
   proto2.

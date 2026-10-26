@@ -249,6 +249,56 @@ Optional scalar fields named `method`, `signal`, `user_signal`, `meta`, or
 `connections` are rejected because their `has_*()` accessors would clash with
 inherited Godot methods. Rename those fields before generating bindings.
 
+## Persistable Resource messages
+
+Individual messages can opt into Godot's native resource persistence with the
+`(gdproto.resource)` message option:
+
+```protobuf
+syntax = "proto3";
+import "gdproto/options.proto";
+
+option (gdproto.class_prefix) = "Game";
+
+message ItemDefinition {
+  option (gdproto.resource) = true;
+
+  string name = 1;
+  optional int32 level = 2;
+}
+```
+
+The generated class extends `Resource` instead of `RefCounted`, and every
+protobuf backing field, optional-presence bit, and oneof discriminator is an
+`@export_storage` property. The complete message can therefore round-trip
+through `ResourceSaver.save()` and `ResourceLoader.load()` as a `.tres` file.
+The stored properties stay hidden from the Inspector; editor-facing field
+controls are not generated.
+
+```gdscript
+var item := GameItemDefinition.new()
+item.set_name_pb("Iron Sword")
+item.set_level(0)
+ResourceSaver.save(item, "res://items/iron_sword.tres")
+
+var loaded := load("res://items/iron_sword.tres") as GameItemDefinition
+```
+
+`Resource` already defines `get_name()` and `set_name()`, so colliding generated
+accessors receive a deterministic `_pb` suffix. Other accessors retain their
+usual names. If that suffix is already occupied by another generated method,
+the generator uses `_pb2`, `_pb3`, and so on.
+
+Resource selection is per message and does not cascade to nested or referenced
+messages. A stored Resource message can still contain ordinary generated
+`RefCounted` messages; Godot embeds those script objects in the resource.
+
+`.tres` compatibility follows Godot property names and types, not protobuf
+field numbers. Renaming a field while retaining its protobuf number is wire
+compatible but does not migrate existing `.tres` properties. Also remember
+that `ResourceLoader` normally caches resources by path; use its cache modes
+when a distinct reload is required.
+
 ## Custom prefix
 
 By default the class prefix for generated files is derived from the input
@@ -277,8 +327,8 @@ With the prefix above, the generator emits `GameHero.pb.gd` (class
 
 The `import "gdproto/options.proto";` line is **required** when generating
 through `protoc` or `buf` — both tools reject unknown extensions and need
-the `.proto` descriptor for `gdproto.class_prefix` (field number `51000`)
-on disk. The direct `gdproto` CLI tolerates a missing import, but
+the `.proto` descriptors for `gdproto.class_prefix` (field number `51000`) and
+`gdproto.resource` (field number `51001`) on disk. The direct `gdproto` CLI tolerates a missing import, but
 importing it everywhere keeps a single schema portable across all three
 paths.
 
@@ -350,14 +400,15 @@ plugins:
 ```
 
 Then `buf generate` picks up `gdproto.options` from the module and the
-plugin can read the `class_prefix` extension.
+plugin can read gdproto's extensions.
 
 The integration tests under `tests/integration/` exercise all three of
 these paths end-to-end against `tests/integration/fixtures/options/`.
 
-> **Why field number `51000`?** Protobuf reserves the range `50000`-`99999`
-> for internal third-party extensions, which is what `gdproto.class_prefix`
-> uses. See <https://protobuf.dev/programming-guides/proto3/#customoptions>.
+> **Why field numbers `51000` and `51001`?** Protobuf reserves the range
+> `50000`-`99999` for internal third-party extensions, which is what gdproto's
+> options use. See
+> <https://protobuf.dev/programming-guides/proto3/#customoptions>.
 
 ## Development
 

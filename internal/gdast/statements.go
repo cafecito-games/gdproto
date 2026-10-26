@@ -136,6 +136,7 @@ func (ExpressionStatement) statement() {}
 // When TypeHint is set the assignment uses `=`; when only InitialValue is set
 // the declaration uses `:=` to request type inference.
 type VarDeclaration struct {
+	Annotations  []string
 	Name         string
 	TypeHint     string
 	InitialValue Expression
@@ -148,7 +149,11 @@ func (v VarDeclaration) ToGDScript(level int) string {
 	if v.IsConst {
 		keyword = "const"
 	}
-	result := indent(level) + keyword + " " + v.Name
+	result := indent(level)
+	for _, annotation := range v.Annotations {
+		result += "@" + annotation + " "
+	}
+	result += keyword + " " + v.Name
 	if v.TypeHint != "" {
 		result += ": " + v.TypeHint
 	}

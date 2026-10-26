@@ -585,6 +585,17 @@ func TestMessageOption(t *testing.T) {
 	}
 }
 
+func TestParseResourceMessageOption(t *testing.T) {
+	src := `syntax = "proto3"; message F { option (gdproto.resource) = true; }`
+	file, err := parseSource(t, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := file.Messages[0].Options["(gdproto.resource)"]; got != true {
+		t.Fatalf("resource option = %v, want true", got)
+	}
+}
+
 func TestCompleteExample(t *testing.T) {
 	src := `syntax = "proto3";
 
