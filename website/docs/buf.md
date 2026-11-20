@@ -59,6 +59,21 @@ buf generate
 Buf reads `buf.gen.yaml`, builds a CodeGeneratorRequest for your input module,
 and invokes the plugin.
 
+### Plugin Options
+
+Pass plugin options through Buf's `opt` list. To omit protobuf text-format methods (`to_text()`, `from_text()`, and their private enum text lookup helpers) while preserving binary wire APIs and `_to_string()`:
+
+```yaml
+version: v2
+plugins:
+  - local: protoc-gen-gdscript
+    out: godot/generated
+    opt:
+      - emit_text_format=false
+```
+
+`emit_text_format` defaults to `true` when omitted. Unknown keys, duplicate keys, or values other than `true` and `false` fail generation without writing files.
+
 ## Output Paths
 
 The plugin writes one `.pb.gd` file per top-level message or enum, plus the

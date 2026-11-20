@@ -49,6 +49,50 @@ func test_tres_round_trip_preserves_protobuf_state():
 	_remove_saved_resource()
 
 
+func test_tres_reload_case_transition_clears_stale_oneof_arm():
+	_remove_saved_resource()
+	# Populate stale multi-arm state via binary decode, save to .tres, reload,
+	# then verify switching oneof cases clears the stale arm.
+	var with_count := ResourceStoredMessage.new()
+	with_count.set_count(42)
+	var with_label := ResourceStoredMessage.new()
+	with_label.set_label("stale-label")
+
+	var combined := PackedByteArray()
+	combined.append_array(with_count.to_bytes())
+	combined.append_array(with_label.to_bytes())
+
+	var original := ResourceStoredMessage.new()
+	expect_equal(original.from_bytes(combined), ProtoCoreUtils.ProtobufError.NO_ERRORS)
+	expect_equal(original.get_choice_case(), ResourceStoredMessage.ChoiceOneOf.LABEL)
+	expect_equal(original.get_count(), 42)
+	expect_equal(original.get_label(), "stale-label")
+
+	expect_equal(ResourceSaver.save(original, SAVE_PATH), OK)
+	var loaded_resource := ResourceLoader.load(
+		SAVE_PATH,
+		"",
+		ResourceLoader.CACHE_MODE_IGNORE,
+	)
+	var loaded := loaded_resource as ResourceStoredMessage
+	expect_equal(loaded == null, false)
+	expect_equal(loaded.get_choice_case(), ResourceStoredMessage.ChoiceOneOf.LABEL)
+	expect_equal(loaded.get_count(), 42)
+	expect_equal(loaded.get_label(), "stale-label")
+
+	loaded.set_count(7)
+	expect_equal(loaded.get_choice_case(), ResourceStoredMessage.ChoiceOneOf.COUNT)
+	expect_equal(loaded.get_count(), 7)
+	expect_equal(loaded.get_label(), "")
+
+	var decoded := ResourceStoredMessage.new()
+	expect_equal(decoded.from_bytes(loaded.to_bytes()), ProtoCoreUtils.ProtobufError.NO_ERRORS)
+	expect_equal(decoded.get_choice_case(), ResourceStoredMessage.ChoiceOneOf.COUNT)
+	expect_equal(decoded.get_count(), 7)
+	expect_equal(decoded.get_label(), "")
+	_remove_saved_resource()
+
+
 func _remove_saved_resource():
 	var absolute_path := ProjectSettings.globalize_path(SAVE_PATH)
 	if FileAccess.file_exists(SAVE_PATH):

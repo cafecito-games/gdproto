@@ -109,6 +109,41 @@ Then run:
 buf generate
 ```
 
+## Disabling text-format generation
+
+By default (`emit_text_format=true`), every generated message includes `to_text()`, `from_text()`, and per-field enum text lookup helpers alongside binary wire serialization. Projects that only use protobuf binary wire encoding can disable text-format code generation to reduce generated script size and Godot parse/compile work:
+
+Direct CLI:
+
+```bash
+gdproto --emit_text_format=false examples/example.proto -o godot/generated/
+```
+
+`protoc` plugin:
+
+```bash
+protoc \
+  --plugin=protoc-gen-gdscript="$(which protoc-gen-gdscript)" \
+  --gdscript_out=godot/generated \
+  --gdscript_opt=emit_text_format=false \
+  -I proto \
+  proto/example.proto
+```
+
+Buf:
+
+```yaml
+# buf.gen.yaml
+version: v2
+plugins:
+  - local: protoc-gen-gdscript
+    out: godot/generated
+    opt:
+      - emit_text_format=false
+```
+
+When `emit_text_format=false`, generated messages omit `to_text()`, `from_text()`, and their private enum text lookup helpers (`_get_enum_name_*`, `_parse_enum_value_*`). Binary serialization (`to_bytes()`, `from_bytes()`), debug stringification (`_to_string()` / `str(message)`), accessors, optional presence, oneof helpers, Resource persistence, class names, filenames, and `.uid` sidecars remain unchanged. Only canonical `"true"` and `"false"` values are accepted; unknown options, duplicate keys, or invalid values fail without writing output.
+
 ## gdkit conformance
 
 For a schema that follows [protobuf's own style

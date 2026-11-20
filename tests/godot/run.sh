@@ -69,6 +69,8 @@ fi
 project_backup="$(mktemp)"
 cp "$GODOT_PROJECT/project.godot" "$project_backup"
 vest_log=""
+no_text_project=""
+no_text_vest_log=""
 cleanup() {
     if [[ -f "$project_backup" ]]; then
         cp "$project_backup" "$GODOT_PROJECT/project.godot"
@@ -76,6 +78,12 @@ cleanup() {
     fi
     if [[ -n "${vest_log:-}" ]]; then
         rm -f "$vest_log"
+    fi
+    if [[ -n "${no_text_vest_log:-}" ]]; then
+        rm -f "$no_text_vest_log"
+    fi
+    if [[ -n "${no_text_project:-}" && -d "$no_text_project" ]]; then
+        rm -rf "$no_text_project"
     fi
 }
 trap cleanup EXIT
@@ -151,6 +159,61 @@ done < <(find "$GODOT_PROJECT/tests" -mindepth 1 -maxdepth 1 -type d | sort)
 
 if [[ "$suite_missing" -ne 0 ]]; then
     echo "error: $suite_missing expected Vest suite(s) did not run" >&2
+    exit 1
+fi
+
+# Second pass: compile every fixture under emit_text_format=false with strict
+# Godot warnings enabled, verify no text-format methods are emitted, and run
+# the disabled-profile runtime round-trip and str(message) Vest suite.
+no_text_project="$(mktemp -d)"
+cp "$project_backup" "$no_text_project/project.godot"
+cp -R "$GODOT_PROJECT/addons" "$no_text_project/addons"
+mkdir -p "$no_text_project/generated" "$no_text_project/tests/no_text"
+cp "$HERE/fixtures/no_text_tests/test_no_text_format.gd" "$no_text_project/tests/no_text/test_no_text_format.gd"
+
+protoc \
+    --plugin=protoc-gen-gdscript="$PLUGIN" \
+    --gdscript_out="$no_text_project/generated" \
+    --gdscript_opt=emit_text_format=false \
+    -I "$PROTO_ROOT" \
+    -I "$REPO_ROOT/proto" \
+    "${PROTO_FILES[@]}"
+
+protoc \
+    --plugin=protoc-gen-gdscript="$PLUGIN" \
+    --gdscript_out="$no_text_project/generated" \
+    --gdscript_opt=emit_text_format=false \
+    -I "$PROTO_ROOT" \
+    -I "$REPO_ROOT/proto" \
+    google/protobuf/timestamp.proto
+
+if grep -rnE 'func (to_text|from_text)\(|\.(to_text|from_text)\(' "$no_text_project/generated"/*.pb.gd; then
+    echo "error: emit_text_format=false generated text-format methods or calls" >&2
+    exit 1
+fi
+
+"$GODOT" --headless --path "$no_text_project" --import
+
+awk '
+    /^\[debug\]$/ { skip = 1; next }
+    /^\[/ { skip = 0 }
+    skip != 1 { print }
+' "$project_backup" > "$no_text_project/project.godot"
+rm -rf "$no_text_project/.godot"
+"$GODOT" --headless --path "$no_text_project" --import
+
+no_text_vest_log="$(mktemp)"
+"$GODOT" --headless --path "$no_text_project" \
+    -s addons/vest/cli/vest-cli.gd \
+    --vest-glob 'res://tests/**/test_*.gd' \
+    --vest-report-format tap 2>&1 | tee "$no_text_vest_log"
+
+if grep -E '^not ok ' "$no_text_vest_log" >/dev/null; then
+    echo "error: at least one disabled-profile Vest assertion failed" >&2
+    exit 1
+fi
+if ! grep -Fx 'ok 1 - res://tests/no_text/test_no_text_format.gd' "$no_text_vest_log" >/dev/null; then
+    echo "error: disabled-profile Vest suite res://tests/no_text/test_no_text_format.gd did not run" >&2
     exit 1
 fi
 

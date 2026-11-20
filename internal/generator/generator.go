@@ -45,6 +45,17 @@ func (gf GeneratedFile) Source() (string, error) {
 // (gdproto.class_prefix) — or filename-derived prefix — instead of falling
 // back to the importer's filename. Pass nil for single-file inputs.
 func Generate(file *ast.ProtoFile, sourceName string, imports []FileEntry) ([]GeneratedFile, error) {
+	return GenerateWithOptions(file, sourceName, imports, DefaultOptions())
+}
+
+// GenerateWithOptions behaves like Generate, applying the supplied generation
+// Options to every rendered message in the file.
+func GenerateWithOptions(
+	file *ast.ProtoFile,
+	sourceName string,
+	imports []FileEntry,
+	options Options,
+) ([]GeneratedFile, error) {
 	prefix, err := ResolvePrefix(file, sourceName)
 	if err != nil {
 		return nil, err
@@ -60,6 +71,7 @@ func Generate(file *ast.ProtoFile, sourceName string, imports []FileEntry) ([]Ge
 		file:                file,
 		sourceName:          sourceName,
 		prefix:              prefix,
+		options:             options,
 		resolver:            resolver,
 		declarations:        newDeclarationIndex(entries),
 		fieldResolutions:    map[*ast.Field]typeResolution{},
@@ -78,6 +90,7 @@ type generator struct {
 	file          *ast.ProtoFile
 	sourceName    string
 	prefix        string
+	options       Options
 	resolver      *NameResolver
 	// declarations indexes every message and enum declared by the file being
 	// generated and by its imports, which is what resolveTypeReference walks.

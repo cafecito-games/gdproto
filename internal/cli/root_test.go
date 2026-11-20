@@ -293,3 +293,121 @@ func TestCLINoArgsShowsHelp(t *testing.T) {
 		t.Errorf("help did not include 'gdproto'")
 	}
 }
+
+func TestCLIEmitTextFormatDisabledAndEnabled(t *testing.T) {
+	inputPath := filepath.Join("..", "..", "examples", "example.proto")
+
+	defaultDir := t.TempDir()
+	enabledDir := t.TempDir()
+	bareDir := t.TempDir()
+	disabledDir := t.TempDir()
+
+	for _, runCase := range []struct {
+		dir  string
+		args []string
+	}{
+		{dir: defaultDir, args: []string{"-o", defaultDir, inputPath}},
+		{dir: enabledDir, args: []string{"--emit_text_format=true", "-o", enabledDir, inputPath}},
+		{dir: bareDir, args: []string{"--emit_text_format", "-o", bareDir, inputPath}},
+		{dir: disabledDir, args: []string{"--emit_text_format=false", "-o", disabledDir, inputPath}},
+	} {
+		var out, errOut bytes.Buffer
+		if code := cli.Execute(runCase.args, &out, &errOut); code != 0 {
+			t.Fatalf("args %v exited %d: stderr=%s", runCase.args, code, errOut.String())
+		}
+	}
+
+	entries, err := os.ReadDir(defaultDir)
+	if err != nil {
+		t.Fatalf("read defaultDir: %v", err)
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		defaultBytes, err := os.ReadFile(filepath.Join(defaultDir, name))
+		if err != nil {
+			t.Fatalf("read default %s: %v", name, err)
+		}
+		enabledBytes, err := os.ReadFile(filepath.Join(enabledDir, name))
+		if err != nil {
+			t.Fatalf("read enabled %s: %v", name, err)
+		}
+		bareBytes, err := os.ReadFile(filepath.Join(bareDir, name))
+		if err != nil {
+			t.Fatalf("read bare %s: %v", name, err)
+		}
+		disabledBytes, err := os.ReadFile(filepath.Join(disabledDir, name))
+		if err != nil {
+			t.Fatalf("read disabled %s: %v", name, err)
+		}
+
+		if !bytes.Equal(defaultBytes, enabledBytes) {
+			t.Errorf("%s differs between default and --emit_text_format=true", name)
+		}
+		if !bytes.Equal(defaultBytes, bareBytes) {
+			t.Errorf("%s differs between default and bare --emit_text_format", name)
+		}
+		if strings.HasSuffix(name, ".uid") {
+			if !bytes.Equal(defaultBytes, disabledBytes) {
+				t.Errorf("sidecar %s changed with --emit_text_format=false", name)
+			}
+			continue
+		}
+		if name == "proto_core_utils.gd" || name == "ExamplePlayerStatus.pb.gd" {
+			continue
+		}
+		disabledText := string(disabledBytes)
+		for _, forbidden := range []string{"func to_text(", "func from_text(", ".to_text(", ".from_text(", "_get_enum_name_", "_parse_enum_value_"} {
+			if strings.Contains(disabledText, forbidden) {
+				t.Errorf("disabled %s unexpectedly contains %q", name, forbidden)
+			}
+		}
+		for _, required := range []string{"func to_bytes(", "func from_bytes(", "func _to_string("} {
+			if !strings.Contains(disabledText, required) {
+				t.Errorf("disabled %s missing %q", name, required)
+			}
+		}
+	}
+}
+
+func TestCLIEmitTextFormatRejectsInvalidValuesWithoutWritingOutput(t *testing.T) {
+	inputPath := filepath.Join("..", "..", "examples", "example.proto")
+
+	invalidArgs := [][]string{
+		{"--emit_text_format=maybe"},
+		{"--emit_text_format=0"},
+		{"--emit_text_format=1"},
+		{"--emit_text_format=TRUE"},
+		{"--emit_text_format=true", "--emit_text_format=false"},
+		{"--emit_text_format=false", "--emit_text_format=false"},
+		{"--emit_text_format", "false"},
+	}
+
+	for _, flags := range invalidArgs {
+		t.Run(strings.Join(flags, " "), func(t *testing.T) {
+			outDir := t.TempDir()
+			sentinelPath := filepath.Join(outDir, "sentinel.txt")
+			if err := os.WriteFile(sentinelPath, []byte("keep"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			args := append([]string{}, flags...)
+			args = append(args, "-o", outDir, inputPath)
+			var out, errOut bytes.Buffer
+			if code := cli.Execute(args, &out, &errOut); code == 0 {
+				t.Fatalf("expected non-zero exit for %v, got 0", args)
+			}
+
+			entries, err := os.ReadDir(outDir)
+			if err != nil {
+				t.Fatalf("read outDir: %v", err)
+			}
+			if len(entries) != 1 || entries[0].Name() != "sentinel.txt" {
+				t.Errorf("output directory modified on error: got %d entries", len(entries))
+			}
+			data, err := os.ReadFile(sentinelPath)
+			if err != nil || string(data) != "keep" {
+				t.Errorf("sentinel altered: err=%v data=%q", err, string(data))
+			}
+		})
+	}
+}

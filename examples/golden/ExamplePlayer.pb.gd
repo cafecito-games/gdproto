@@ -78,10 +78,16 @@ func get_position() -> ExamplePlayerPosition:
 	return _position
 
 
+func _select_contact(next_case: ContactOneOf) -> void:
+	if _oneof_contact == next_case:
+		return
+	_email = ""
+	_discord = ""
+	_oneof_contact = next_case
+
+
 func set_email(value: String) -> void:
-	if _oneof_contact != ContactOneOf.EMAIL:
-		_discord = ""
-		_oneof_contact = ContactOneOf.EMAIL
+	_select_contact(ContactOneOf.EMAIL)
 	_email = value
 
 
@@ -94,9 +100,7 @@ func has_email() -> bool:
 
 
 func set_discord(value: String) -> void:
-	if _oneof_contact != ContactOneOf.DISCORD:
-		_email = ""
-		_oneof_contact = ContactOneOf.DISCORD
+	_select_contact(ContactOneOf.DISCORD)
 	_discord = value
 
 

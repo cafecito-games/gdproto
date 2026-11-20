@@ -127,6 +127,27 @@ protoc \
 See [Generated GDScript](./generated-code.md#class-prefix) for the full
 explanation of how the prefix affects class names.
 
+## Plugin Options
+
+`protoc-gen-gdscript` accepts comma-separated `key=value` options through `--gdscript_opt`:
+
+| Option | Default | Values | Effect |
+| --- | --- | --- | --- |
+| `emit_text_format` | `true` | `true`, `false` | When `false`, omits `to_text()`, `from_text()`, and their private enum text lookup helpers from every generated message while keeping `to_bytes()`, `from_bytes()`, `_to_string()`, accessors, and `.uid` sidecars unchanged. |
+
+Example disabling text-format generation:
+
+```bash
+protoc \
+  --plugin=protoc-gen-gdscript="$(which protoc-gen-gdscript)" \
+  --gdscript_out=godot/generated \
+  --gdscript_opt=emit_text_format=false \
+  -I proto \
+  proto/example.proto
+```
+
+Unknown option names, duplicate options, and non-canonical boolean values fail generation with a plugin error and emit no files.
+
 ## Errors
 
 Plugin validation errors are reported through protoc's plugin response. If

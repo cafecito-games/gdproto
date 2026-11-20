@@ -71,6 +71,13 @@ func run(in io.Reader, out io.Writer) error {
 	features := uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
 	response.SupportedFeatures = &features
 
+	options, err := generator.ParsePluginParameters(request.GetParameter())
+	if err != nil {
+		message := err.Error()
+		response.Error = &message
+		return writeResponse(out, response)
+	}
+
 	files, err := descriptors.FromCodeGeneratorRequest(request)
 	if err != nil {
 		message := err.Error()
@@ -84,6 +91,7 @@ func run(in io.Reader, out io.Writer) error {
 	}
 
 	emittedFrom := map[string]string{}
+	var emittedFiles []*pluginpb.CodeGeneratorResponse_File
 
 	for _, name := range request.GetFileToGenerate() {
 		index, ok := fileIndex[name]
@@ -116,7 +124,7 @@ func run(in io.Reader, out io.Writer) error {
 			})
 		}
 
-		generated, err := generator.Generate(file, name, imports)
+		generated, err := generator.GenerateWithOptions(file, name, imports, options)
 		if err != nil {
 			message := fmt.Sprintf("generate %s: %v", name, err)
 			response.Error = &message
@@ -139,16 +147,17 @@ func run(in io.Reader, out io.Writer) error {
 				return writeResponse(out, response)
 			}
 			emittedFrom[gf.Filename] = name
-			response.File = append(response.File, fileEntries(gf.Filename, source)...)
+			emittedFiles = append(emittedFiles, fileEntries(gf.Filename, source)...)
 		}
 	}
 
-	if len(response.File) > 0 {
-		response.File = append(
-			response.File,
+	if len(emittedFiles) > 0 {
+		emittedFiles = append(
+			emittedFiles,
 			fileEntries("proto_core_utils.gd", generator.GenerateProtoCoreUtilsRaw())...,
 		)
 	}
+	response.File = emittedFiles
 
 	return writeResponse(out, response)
 }

@@ -558,10 +558,16 @@ if err != ProtoCoreUtils.ProtobufError.NO_ERRORS:
 The text format is designed for gdproto round trips and debug visibility. Use
 binary wire format for compatibility with other protobuf runtimes.
 
+If your project only uses binary wire serialization, you can omit `to_text()`,
+`from_text()`, and their private enum text helpers by passing
+`emit_text_format=false` to `protoc-gen-gdscript` (or `--emit_text_format=false`
+to `gdproto`).
+
 ## Debug Output
 
 ```gdscript
 print(msg)
 ```
 
-Generated messages implement `_to_string()` using the text format.
+Generated messages implement `_to_string()` independently of `to_text()`, so
+`str(msg)` and `print(msg)` remain available even when `emit_text_format=false`.

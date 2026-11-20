@@ -157,3 +157,103 @@ func storageAnnotations(resource bool) []string {
 	}
 	return []string{"export_storage"}
 }
+
+// reservedMessageMembers lists generated serialization methods and Godot
+// Object/Resource virtual methods that private oneof helpers must never reuse.
+var reservedMessageMembers = []string{
+	"to_bytes",
+	"from_bytes",
+	"to_text",
+	"from_text",
+	"_to_string",
+	"_init",
+	"_notification",
+	"_get",
+	"_set",
+	"_get_property_list",
+	"_property_can_revert",
+	"_property_get_revert",
+	"_validate_property",
+	"_setup_local_to_scene",
+}
+
+// allocateOneofHelperNames assigns each oneof group a deterministic private
+// transition helper name that does not collide with any declaration in the
+// generated class (fields, backing vars, presence vars, tracking vars, enums,
+// public accessors, enum text helpers, serialization methods, or native
+// Resource methods).
+func (g *generator) allocateOneofHelperNames(
+	message *ast.Message,
+	resource bool,
+	accessors accessorNames,
+) map[*ast.Oneof]string {
+	if len(message.Oneofs) == 0 {
+		return nil
+	}
+
+	used := map[string]bool{}
+	for _, member := range reservedMessageMembers {
+		used[member] = true
+	}
+	if resource {
+		for nativeMethod := range resourceNativeMethods {
+			used[nativeMethod] = true
+		}
+	}
+	for _, nestedEnum := range message.NestedEnums {
+		used[nestedEnum.Name] = true
+	}
+	for _, field := range message.Fields {
+		used["_"+field.Name] = true
+		if tracksScalarPresence(field) {
+			used[g.presenceVar(field)] = true
+		}
+	}
+	for _, mapField := range message.Maps {
+		used["_"+mapField.Name] = true
+	}
+	for _, oneof := range message.Oneofs {
+		used[oneofEnumName(oneof.Name)] = true
+		used[oneofTrackingVar(oneof.Name)] = true
+		for _, field := range oneof.Fields {
+			used["_"+field.Name] = true
+		}
+	}
+	for _, preferred := range g.preferredAccessorNames(message) {
+		used[accessors.get(preferred)] = true
+	}
+	for _, field := range g.collectEnumFields(message) {
+		used["_get_enum_name_"+field.Name] = true
+		used["_parse_enum_value_"+field.Name] = true
+	}
+
+	preferredHelpers := make(map[string]bool, len(message.Oneofs))
+	for _, oneof := range message.Oneofs {
+		if oneof.Name == "" {
+			g.recordError(fmt.Errorf("message %q contains a oneof group with an empty name", message.Name))
+			continue
+		}
+		preferredHelpers[oneofTransitionHelperPreferredName(oneof.Name)] = true
+	}
+
+	allocated := make(map[string]bool, len(message.Oneofs))
+	result := make(map[*ast.Oneof]string, len(message.Oneofs))
+	for _, oneof := range message.Oneofs {
+		if oneof.Name == "" {
+			continue
+		}
+		preferred := oneofTransitionHelperPreferredName(oneof.Name)
+		candidate := preferred
+		if used[candidate] || allocated[candidate] {
+			for suffix := 2; ; suffix++ {
+				candidate = preferred + "_" + strconv.Itoa(suffix)
+				if !used[candidate] && !allocated[candidate] && !preferredHelpers[candidate] {
+					break
+				}
+			}
+		}
+		allocated[candidate] = true
+		result[oneof] = candidate
+	}
+	return result
+}

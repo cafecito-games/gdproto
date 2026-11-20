@@ -40,6 +40,7 @@ If `-o` is omitted, files are written into the current working directory.
 | --- | --- | --- |
 | `-o, --output` | Current directory | Output **directory** for generated `.pb.gd` files and `proto_core_utils.gd`. Must not end in `.gd` and must not point at an existing file. |
 | `-I, --proto_path` | | Directory searched for imported `.proto` files. Repeatable; matches `protoc`'s convention. Each path is checked in order before falling back to the input file's directory. |
+| `--emit_text_format` | `true` | Emit protobuf text-format `to_text()` and `from_text()` methods (`true` or `false`). Pass `--emit_text_format=false` to omit text-format methods while keeping `to_bytes()`, `from_bytes()`, and `_to_string()`. |
 | `--print-options-proto` | | Prints the embedded `gdproto/options.proto` descriptor to stdout and exits. Useful for vendoring without cloning the repo. |
 | `--log-level` | `warn` | One of `debug`, `info`, `warn`, or `error`. Logs are JSON on stderr. |
 | `--version` | | Prints the binary version. |
