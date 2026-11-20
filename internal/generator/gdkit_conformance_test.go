@@ -33,6 +33,17 @@ var conformanceFixtures = []conformanceFixture{
 	{name: "example", protoPath: "../../examples/example.proto"},
 	{name: "optional", protoPath: "../../tests/godot/fixtures/proto/optional.proto"},
 	{name: "collections", protoPath: "../../tests/godot/fixtures/proto/collections.proto"},
+	{name: "oneof", protoPath: "../../tests/godot/fixtures/proto/oneof.proto"},
+}
+
+type conformanceProfile struct {
+	name    string
+	options generator.Options
+}
+
+var conformanceProfiles = []conformanceProfile{
+	{name: "default", options: generator.DefaultOptions()},
+	{name: "no_text_format", options: generator.Options{EmitTextFormat: false}},
 }
 
 // writeCorpusProject compiles a fixture's schema into a throwaway Godot
@@ -40,6 +51,10 @@ var conformanceFixtures = []conformanceFixture{
 // plus the proto_core_utils.gd runtime that gdproto ships alongside them, which
 // is what a consumer's project actually contains.
 func writeCorpusProject(t *testing.T, fixture conformanceFixture) string {
+	return writeCorpusProjectWithOptions(t, fixture, generator.DefaultOptions())
+}
+
+func writeCorpusProjectWithOptions(t *testing.T, fixture conformanceFixture, options generator.Options) string {
 	t.Helper()
 
 	source, err := os.ReadFile(fixture.protoPath)
@@ -55,7 +70,7 @@ func writeCorpusProject(t *testing.T, fixture conformanceFixture) string {
 	if err != nil {
 		t.Fatalf("parse %s: %v", sourceName, err)
 	}
-	files, err := generator.Generate(file, sourceName, nil)
+	files, err := generator.GenerateWithOptions(file, sourceName, nil, options)
 	if err != nil {
 		t.Fatalf("generate %s: %v", sourceName, err)
 	}
@@ -114,23 +129,25 @@ func loadGdkitSnapshot(t *testing.T, root string) *project.Snapshot {
 // gdkit's max-line-length. Suppressing that rule in generated output would hide
 // genuine formatting regressions, so the gate attests to the fixtures instead.
 func TestGeneratedProjectPassesGdkitLint(t *testing.T) {
-	for _, fixture := range conformanceFixtures {
-		t.Run(fixture.name, func(t *testing.T) {
-			root := writeCorpusProject(t, fixture)
+	for _, profile := range conformanceProfiles {
+		for _, fixture := range conformanceFixtures {
+			t.Run(profile.name+"/"+fixture.name, func(t *testing.T) {
+				root := writeCorpusProjectWithOptions(t, fixture, profile.options)
 
-			linter, err := lint.New(lint.DefaultConfig())
-			if err != nil {
-				t.Fatalf("new linter: %v", err)
-			}
-			snapshot := loadGdkitSnapshot(t, root)
-			for _, diagnostic := range linter.Lint(snapshot).Diagnostics {
-				t.Errorf("%s: %s:%d:%d: %s (%s)", fixture.name, diagnostic.Path,
-					diagnostic.Line, diagnostic.Column, diagnostic.Message, diagnostic.Rule)
-			}
-			if len(snapshot.Scripts) == 0 {
-				t.Errorf("%s: lint examined no scripts, so it attests to nothing", fixture.name)
-			}
-		})
+				linter, err := lint.New(lint.DefaultConfig())
+				if err != nil {
+					t.Fatalf("new linter: %v", err)
+				}
+				snapshot := loadGdkitSnapshot(t, root)
+				for _, diagnostic := range linter.Lint(snapshot).Diagnostics {
+					t.Errorf("%s/%s: %s:%d:%d: %s (%s)", profile.name, fixture.name, diagnostic.Path,
+						diagnostic.Line, diagnostic.Column, diagnostic.Message, diagnostic.Rule)
+				}
+				if len(snapshot.Scripts) == 0 {
+					t.Errorf("%s/%s: lint examined no scripts, so it attests to nothing", profile.name, fixture.name)
+				}
+			})
+		}
 	}
 }
 
@@ -148,31 +165,33 @@ func TestGeneratedProjectPassesGdkitLint(t *testing.T) {
 // Like the lint gate, this covers the conformance fixtures rather than every
 // schema; see TestGeneratedProjectPassesGdkitLint for why.
 func TestGeneratedProjectPassesGdkitFormat(t *testing.T) {
-	for _, fixture := range conformanceFixtures {
-		t.Run(fixture.name, func(t *testing.T) {
-			root := writeCorpusProject(t, fixture)
+	for _, profile := range conformanceProfiles {
+		for _, fixture := range conformanceFixtures {
+			t.Run(profile.name+"/"+fixture.name, func(t *testing.T) {
+				root := writeCorpusProjectWithOptions(t, fixture, profile.options)
 
-			formatter, err := gdkitformat.New(gdkitformat.DefaultConfig())
-			if err != nil {
-				t.Fatalf("new formatter: %v", err)
-			}
-			report := formatter.Format(loadGdkitSnapshot(t, root))
+				formatter, err := gdkitformat.New(gdkitformat.DefaultConfig())
+				if err != nil {
+					t.Fatalf("new formatter: %v", err)
+				}
+				report := formatter.Format(loadGdkitSnapshot(t, root))
 
-			for _, diagnostic := range report.Diagnostics {
-				t.Errorf("%s: %s:%d:%d: %s (%s)", fixture.name, diagnostic.Path,
-					diagnostic.Line, diagnostic.Column, diagnostic.Message, diagnostic.Rule)
-			}
-			// Report.Results carries an entry for every discovered file, so only
-			// the ones flagged as changed are conformance failures.
-			for _, result := range report.Changed() {
-				t.Errorf("%s: %s: generated source is not in gdkit canonical format",
-					fixture.name, result.Path)
-			}
-			if len(report.Results) == 0 {
-				t.Errorf("%s: format check examined no scripts, so it attests to nothing",
-					fixture.name)
-			}
-		})
+				for _, diagnostic := range report.Diagnostics {
+					t.Errorf("%s/%s: %s:%d:%d: %s (%s)", profile.name, fixture.name, diagnostic.Path,
+						diagnostic.Line, diagnostic.Column, diagnostic.Message, diagnostic.Rule)
+				}
+				// Report.Results carries an entry for every discovered file, so only
+				// the ones flagged as changed are conformance failures.
+				for _, result := range report.Changed() {
+					t.Errorf("%s/%s: %s: generated source is not in gdkit canonical format",
+						profile.name, fixture.name, result.Path)
+				}
+				if len(report.Results) == 0 {
+					t.Errorf("%s/%s: format check examined no scripts, so it attests to nothing",
+						profile.name, fixture.name)
+				}
+			})
+		}
 	}
 }
 
@@ -183,20 +202,22 @@ func TestGeneratedProjectPassesGdkitFormat(t *testing.T) {
 //
 // This is the in-process equivalent of `gdkit uid check`.
 func TestGeneratedProjectPassesGdkitUID(t *testing.T) {
-	for _, fixture := range conformanceFixtures {
-		t.Run(fixture.name, func(t *testing.T) {
-			root := writeCorpusProject(t, fixture)
+	for _, profile := range conformanceProfiles {
+		for _, fixture := range conformanceFixtures {
+			t.Run(profile.name+"/"+fixture.name, func(t *testing.T) {
+				root := writeCorpusProjectWithOptions(t, fixture, profile.options)
 
-			report := gdkituid.Check(loadGdkitSnapshot(t, root))
-			for _, diagnostic := range report.Diagnostics {
-				t.Errorf("%s: %s: %s (%s)", fixture.name, diagnostic.Path,
-					diagnostic.Message, diagnostic.Rule)
-			}
-			if report.Scripts == 0 {
-				t.Errorf("%s: uid check examined no scripts, so it attests to nothing",
-					fixture.name)
-			}
-		})
+				report := gdkituid.Check(loadGdkitSnapshot(t, root))
+				for _, diagnostic := range report.Diagnostics {
+					t.Errorf("%s/%s: %s: %s (%s)", profile.name, fixture.name, diagnostic.Path,
+						diagnostic.Message, diagnostic.Rule)
+				}
+				if report.Scripts == 0 {
+					t.Errorf("%s/%s: uid check examined no scripts, so it attests to nothing",
+						profile.name, fixture.name)
+				}
+			})
+		}
 	}
 }
 

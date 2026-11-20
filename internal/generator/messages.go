@@ -51,6 +51,7 @@ func (g *generator) generateMessageClass(m *ast.Message, className string) *gdas
 	g.allocatePresenceNames(m)
 	resource := g.isResourceMessage(m)
 	accessorNames := g.allocateAccessorNames(m, resource)
+	oneofHelpers := g.allocateOneofHelperNames(m, resource, accessorNames)
 	var statements []gdast.Node
 
 	for _, e := range m.NestedEnums {
@@ -88,7 +89,7 @@ func (g *generator) generateMessageClass(m *ast.Message, className string) *gdas
 		}
 	}
 
-	if accessors := g.generateAccessors(m, resource, accessorNames); len(accessors) > 0 {
+	if accessors := g.generateAccessors(m, resource, accessorNames, oneofHelpers); len(accessors) > 0 {
 		statements = append(statements, gdast.Comment{Text: "Accessors"})
 		statements = append(statements, accessors...)
 	}
@@ -101,19 +102,26 @@ func (g *generator) generateMessageClass(m *ast.Message, className string) *gdas
 		}
 	}
 
-	if helpers := g.generateEnumNameAndParserHelpers(m); len(helpers) > 0 {
-		statements = append(statements, gdast.Comment{Text: "Enum name lookup helpers"})
-		statements = append(statements, helpers...)
+	if g.options.EmitTextFormat {
+		if helpers := g.generateEnumNameAndParserHelpers(m); len(helpers) > 0 {
+			statements = append(statements, gdast.Comment{Text: "Enum name lookup helpers"})
+			statements = append(statements, helpers...)
+		}
 	}
 
-	statements = append(statements,
+	serialization := []gdast.Node{
 		gdast.Comment{Text: "Serialization"},
 		g.generateToBytes(m),
 		g.generateFromBytes(m),
-		g.generateToText(m),
-		g.generateFromText(m),
-		g.generateToString(m),
-	)
+	}
+	if g.options.EmitTextFormat {
+		serialization = append(serialization,
+			g.generateToText(m),
+			g.generateFromText(m),
+		)
+	}
+	serialization = append(serialization, g.generateToString(m))
+	statements = append(statements, serialization...)
 
 	baseClass := "RefCounted"
 	if resource {

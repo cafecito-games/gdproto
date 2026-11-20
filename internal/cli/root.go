@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -36,6 +37,7 @@ func newRootCommand(out, errOut io.Writer) *cobra.Command {
 	var includePaths []string
 	var printOptionsProto bool
 	var rootLogger *slog.Logger
+	options := generator.DefaultOptions()
 
 	cmd := &cobra.Command{
 		Use:           "gdproto [flags] INPUT",
@@ -61,7 +63,7 @@ func newRootCommand(out, errOut io.Writer) *cobra.Command {
 			if len(args) == 0 {
 				return cmd.Help()
 			}
-			return runCompile(cmd, args[0], outputPath, includePaths, rootLogger)
+			return runCompile(cmd, args[0], outputPath, includePaths, options, rootLogger)
 		},
 	}
 
@@ -86,11 +88,65 @@ func newRootCommand(out, errOut io.Writer) *cobra.Command {
 		&includePaths, "proto_path", "I", nil,
 		"directories to search for imported .proto files (repeatable, like protoc)",
 	)
+	emitTextFlag := cmd.Flags().VarPF(
+		&strictBoolFlag{
+			name:  generator.OptionEmitTextFormat,
+			value: &options.EmitTextFormat,
+		},
+		generator.OptionEmitTextFormat, "",
+		"emit protobuf text-format to_text() and from_text() methods (true|false)",
+	)
+	emitTextFlag.NoOptDefVal = "true"
 
 	return cmd
 }
 
-func runCompile(cmd *cobra.Command, inputPath, outputPath string, includePaths []string, logger *slog.Logger) error {
+type strictBoolFlag struct {
+	name  string
+	value *bool
+	seen  bool
+}
+
+// String implements pflag.Value.
+func (flag *strictBoolFlag) String() string {
+	if flag.value == nil {
+		return "false"
+	}
+	return strconv.FormatBool(*flag.value)
+}
+
+// Set implements pflag.Value, accepting only canonical boolean spellings and
+// rejecting duplicate occurrences.
+func (flag *strictBoolFlag) Set(raw string) error {
+	parsed, err := generator.ParseBoolOption(flag.name, raw)
+	if err != nil {
+		return err
+	}
+	if flag.seen {
+		return fmt.Errorf("duplicate flag --%s", flag.name)
+	}
+	*flag.value = parsed
+	flag.seen = true
+	return nil
+}
+
+// Type implements pflag.Value.
+func (flag *strictBoolFlag) Type() string {
+	return "bool"
+}
+
+type renderedOutputFile struct {
+	filename string
+	source   string
+}
+
+func runCompile(
+	cmd *cobra.Command,
+	inputPath, outputPath string,
+	includePaths []string,
+	options generator.Options,
+	logger *slog.Logger,
+) error {
 	lexerLog := applog.For(logger, "lexer")
 	parserLog := applog.For(logger, "parser")
 	importerLog := applog.For(logger, "importer")
@@ -138,11 +194,23 @@ func runCompile(cmd *cobra.Command, inputPath, outputPath string, includePaths [
 		imports = append(imports, generator.FileEntry{File: imp.File, Filename: imp.Filename})
 	}
 
-	files, err := generator.Generate(file, sourceNameForCLI(inputPath), imports)
+	files, err := generator.GenerateWithOptions(file, sourceNameForCLI(inputPath), imports, options)
 	if err != nil {
 		return err
 	}
 	generatorLog.Debug("generated", "scripts", len(files))
+
+	rendered := make([]renderedOutputFile, 0, len(files))
+	for _, generatedFile := range files {
+		source, err := generatedFile.Source()
+		if err != nil {
+			return err
+		}
+		rendered = append(rendered, renderedOutputFile{
+			filename: generatedFile.Filename,
+			source:   source,
+		})
+	}
 
 	outDir := outputPath
 	if outDir == "" {
@@ -156,13 +224,9 @@ func runCompile(cmd *cobra.Command, inputPath, outputPath string, includePaths [
 	}
 
 	written := 0
-	for _, gf := range files {
-		source, err := gf.Source()
-		if err != nil {
-			return err
-		}
-		generatorLog.Debug("writing", "file", gf.Filename)
-		count, err := writeWithSidecar(outDir, gf.Filename, source)
+	for _, outputFile := range rendered {
+		generatorLog.Debug("writing", "file", outputFile.filename)
+		count, err := writeWithSidecar(outDir, outputFile.filename, outputFile.source)
 		if err != nil {
 			return err
 		}

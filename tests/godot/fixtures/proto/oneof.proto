@@ -18,5 +18,27 @@ message OneofHost {
     string text = 2;
     OneofPayload payload = 3;
     Outcome outcome = 4;
+    bool flag = 5;
+    float ratio = 6;
+    bytes raw = 7;
+  }
+}
+
+message DualOneofHost {
+  oneof primary {
+    int32 first_number = 1;
+    string first_text = 2;
+  }
+  oneof secondary {
+    bool second_flag = 3;
+    float second_ratio = 4;
+  }
+}
+
+message CollideOneofHost {
+  string select_choice = 1;
+  oneof choice {
+    int32 number = 2;
+    string text = 3;
   }
 }

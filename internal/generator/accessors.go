@@ -10,15 +10,22 @@ import (
 // generateAccessors produces setter, getter, and oneof presence-check methods
 // for every field of a message. The bodies emitted here are minimal but
 // functional; later tasks may extend them with validation or change-tracking.
-func (g *generator) generateAccessors(m *ast.Message, resource bool, names accessorNames) []gdast.Node {
+func (g *generator) generateAccessors(
+	m *ast.Message,
+	resource bool,
+	names accessorNames,
+	oneofHelpers map[*ast.Oneof]string,
+) []gdast.Node {
 	var groups [][]gdast.Node
 
 	for _, f := range m.Fields {
 		groups = append(groups, g.fieldAccessors(f, resource, names))
 	}
 	for _, oneof := range m.Oneofs {
+		helperName := oneofHelpers[oneof]
+		groups = append(groups, []gdast.Node{g.generateOneofTransitionHelper(m.Name, oneof, helperName)})
 		for _, f := range oneof.Fields {
-			groups = append(groups, g.oneofFieldAccessors(f, oneof, names))
+			groups = append(groups, g.oneofFieldAccessors(f, oneof, names, helperName))
 		}
 	}
 	for _, mf := range m.Maps {
@@ -135,31 +142,23 @@ func tracksScalarPresence(f *ast.Field) bool {
 func (g *generator) presenceVar(f *ast.Field) string { return g.presenceNames[f] }
 
 // oneofFieldAccessors emits the setter, getter, and `has_<field>` for a field
-// that participates in a oneof group. The setter clears the previously-set
-// oneof field's value before updating the tracking enum and assigning the new
-// value.
-func (g *generator) oneofFieldAccessors(f *ast.Field, oneof *ast.Oneof, names accessorNames) []gdast.Node {
+// that participates in a oneof group. The setter delegates case transitions
+// and arm resets to the group's shared transition helper before assigning the
+// new value.
+func (g *generator) oneofFieldAccessors(
+	f *ast.Field,
+	oneof *ast.Oneof,
+	names accessorNames,
+	transitionHelper string,
+) []gdast.Node {
 	gdType := g.renderedFieldType(f)
 	fieldVar := "_" + f.Name
 	trackingVar := oneofTrackingVar(oneof.Name)
 	enumValue := oneofEnumQualified(oneof.Name, f.Name)
 
-	var clearBody []gdast.Statement
-	for _, sibling := range oneof.Fields {
-		if sibling.Name == f.Name {
-			continue
-		}
-		clearBody = append(clearBody, gdast.Assign(
-			"_"+sibling.Name,
-			gdast.RawExpression{Code: g.fieldDefault(sibling)},
-		))
-	}
-	clearBody = append(clearBody, gdast.Assign(trackingVar, gdast.RawExpression{Code: enumValue}))
-
 	setBody := []gdast.Statement{
-		gdast.IfStatement{
-			Condition: gdast.Ne(gdast.V(trackingVar), gdast.RawExpression{Code: enumValue}),
-			Body:      clearBody,
+		gdast.ExpressionStatement{
+			Expression: gdast.Call(transitionHelper, gdast.RawExpression{Code: enumValue}),
 		},
 		gdast.Assign(fieldVar, gdast.V("value")),
 	}

@@ -409,6 +409,206 @@ func TestPrintOptionsProtoMatchesEmbed(t *testing.T) {
 	}
 }
 
+func samplePluginDescriptorRequest(parameter *string) *pluginpb.CodeGeneratorRequest {
+	syntax := "proto3"
+	filename := "sample.proto"
+	enumName := "State"
+	enumZero := "STATE_UNSPECIFIED"
+	enumOne := "STATE_ACTIVE"
+	messageName := "Packet"
+	nestedName := "Inner"
+	textFieldName := "label"
+	enumFieldName := "state"
+	nestedFieldName := "inner"
+	innerValueName := "value"
+	oneofName := "choice"
+	oneofIntName := "number"
+	oneofStrName := "note"
+	oneofIndex := int32(0)
+
+	return &pluginpb.CodeGeneratorRequest{
+		FileToGenerate: []string{filename},
+		Parameter:      parameter,
+		ProtoFile: []*descriptorpb.FileDescriptorProto{{
+			Name:   &filename,
+			Syntax: &syntax,
+			EnumType: []*descriptorpb.EnumDescriptorProto{{
+				Name: &enumName,
+				Value: []*descriptorpb.EnumValueDescriptorProto{
+					{Name: &enumZero, Number: proto.Int32(0)},
+					{Name: &enumOne, Number: proto.Int32(1)},
+				},
+			}},
+			MessageType: []*descriptorpb.DescriptorProto{{
+				Name: &messageName,
+				Field: []*descriptorpb.FieldDescriptorProto{
+					{
+						Name:   &textFieldName,
+						Number: proto.Int32(1),
+						Label:  descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
+						Type:   descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
+					},
+					{
+						Name:     &enumFieldName,
+						Number:   proto.Int32(2),
+						Label:    descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
+						Type:     descriptorpb.FieldDescriptorProto_TYPE_ENUM.Enum(),
+						TypeName: proto.String(".State"),
+					},
+					{
+						Name:     &nestedFieldName,
+						Number:   proto.Int32(3),
+						Label:    descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
+						Type:     descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
+						TypeName: proto.String(".Packet.Inner"),
+					},
+					{
+						Name:       &oneofIntName,
+						Number:     proto.Int32(4),
+						Label:      descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
+						Type:       descriptorpb.FieldDescriptorProto_TYPE_INT32.Enum(),
+						OneofIndex: &oneofIndex,
+					},
+					{
+						Name:       &oneofStrName,
+						Number:     proto.Int32(5),
+						Label:      descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
+						Type:       descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
+						OneofIndex: &oneofIndex,
+					},
+				},
+				OneofDecl: []*descriptorpb.OneofDescriptorProto{{Name: &oneofName}},
+				NestedType: []*descriptorpb.DescriptorProto{{
+					Name: &nestedName,
+					Field: []*descriptorpb.FieldDescriptorProto{{
+						Name:   &innerValueName,
+						Number: proto.Int32(1),
+						Label:  descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
+						Type:   descriptorpb.FieldDescriptorProto_TYPE_INT32.Enum(),
+					}},
+				}},
+			}},
+		}},
+	}
+}
+
+func TestRunParameterEmitTextFormat(t *testing.T) {
+	defaultResponse := runPluginRequest(t, samplePluginDescriptorRequest(nil))
+	enabledResponse := runPluginRequest(t, samplePluginDescriptorRequest(proto.String("emit_text_format=true")))
+	disabledResponse := runPluginRequest(t, samplePluginDescriptorRequest(proto.String("emit_text_format=false")))
+
+	if !equalStringSlices(responseFilenames(defaultResponse), responseFilenames(enabledResponse)) {
+		t.Fatalf("enabled filenames mismatch: got %v, want %v", responseFilenames(enabledResponse), responseFilenames(defaultResponse))
+	}
+	if !equalStringSlices(responseFilenames(defaultResponse), responseFilenames(disabledResponse)) {
+		t.Fatalf("disabled filenames mismatch: got %v, want %v", responseFilenames(disabledResponse), responseFilenames(defaultResponse))
+	}
+
+	defaultByName := map[string]string{}
+	for _, f := range defaultResponse.File {
+		defaultByName[f.GetName()] = f.GetContent()
+	}
+	enabledByName := map[string]string{}
+	for _, f := range enabledResponse.File {
+		enabledByName[f.GetName()] = f.GetContent()
+	}
+	disabledByName := map[string]string{}
+	for _, f := range disabledResponse.File {
+		disabledByName[f.GetName()] = f.GetContent()
+	}
+
+	for name, defaultContent := range defaultByName {
+		if enabledByName[name] != defaultContent {
+			t.Errorf("%s differs between omitted parameter and emit_text_format=true", name)
+		}
+		if strings.HasSuffix(name, ".uid") {
+			if disabledByName[name] != defaultContent {
+				t.Errorf("sidecar %s changed when emit_text_format=false", name)
+			}
+			continue
+		}
+		if name == "proto_core_utils.gd" || name == "SampleState.pb.gd" {
+			continue
+		}
+		disabledContent := disabledByName[name]
+		if !strings.Contains(defaultContent, "func to_text(") || !strings.Contains(defaultContent, "func from_text(") {
+			t.Errorf("default %s should contain to_text and from_text", name)
+		}
+		for _, forbidden := range []string{"func to_text(", "func from_text(", ".to_text(", ".from_text(", "_get_enum_name_", "_parse_enum_value_"} {
+			if strings.Contains(disabledContent, forbidden) {
+				t.Errorf("disabled %s unexpectedly contains %q", name, forbidden)
+			}
+		}
+		for _, required := range []string{"func to_bytes(", "func from_bytes(", "func _to_string("} {
+			if !strings.Contains(disabledContent, required) {
+				t.Errorf("disabled %s missing required method %q", name, required)
+			}
+		}
+	}
+}
+
+func TestRunRejectsInvalidPluginParametersWithoutEmittingFiles(t *testing.T) {
+	cases := []struct {
+		name      string
+		parameter string
+		wantError string
+	}{
+		{name: "unknown key", parameter: "bogus=true", wantError: "unknown plugin parameter"},
+		{name: "invalid bool", parameter: "emit_text_format=yes", wantError: `expected "true" or "false"`},
+		{name: "numeric bool", parameter: "emit_text_format=0", wantError: `expected "true" or "false"`},
+		{name: "bare key", parameter: "emit_text_format", wantError: "expected key=value"},
+		{name: "duplicate conflicting", parameter: "emit_text_format=true,emit_text_format=false", wantError: "duplicate plugin parameter"},
+		{name: "empty entry", parameter: "emit_text_format=false,", wantError: "empty parameter entry"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			response := runPluginRequestRaw(t, samplePluginDescriptorRequest(proto.String(testCase.parameter)))
+			if response.Error == nil {
+				t.Fatalf("expected response.Error for parameter %q, got files %v", testCase.parameter, responseFilenames(response))
+			}
+			if !strings.Contains(*response.Error, testCase.wantError) {
+				t.Errorf("response.Error = %q, want substring %q", *response.Error, testCase.wantError)
+			}
+			if len(response.File) != 0 {
+				t.Errorf("expected no emitted files on parameter error, got %v", responseFilenames(response))
+			}
+		})
+	}
+}
+
+func TestRunEmitsNoPartialFilesOnMidRequestError(t *testing.T) {
+	goodSyntax := "proto3"
+	goodName := "good.proto"
+	goodMessage := "Ok"
+	badSyntax := "proto2"
+	badName := "bad.proto"
+
+	request := &pluginpb.CodeGeneratorRequest{
+		FileToGenerate: []string{goodName, badName},
+		ProtoFile: []*descriptorpb.FileDescriptorProto{
+			{
+				Name:   &goodName,
+				Syntax: &goodSyntax,
+				MessageType: []*descriptorpb.DescriptorProto{{
+					Name: &goodMessage,
+				}},
+			},
+			{
+				Name:   &badName,
+				Syntax: &badSyntax,
+			},
+		},
+	}
+
+	response := runPluginRequestRaw(t, request)
+	if response.Error == nil {
+		t.Fatal("expected response.Error when second file fails validation")
+	}
+	if len(response.File) != 0 {
+		t.Errorf("expected zero partial files on failure, got %v", responseFilenames(response))
+	}
+}
+
 func equalStringSlices(a, b []string) bool {
 	if len(a) != len(b) {
 		return false

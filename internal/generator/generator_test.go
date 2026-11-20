@@ -281,7 +281,8 @@ func TestGenerateAccessorBodies(t *testing.T) {
 		"func add_inventory(value: String) -> void:\n\t_inventory.append(value)",
 		"func add_stats(key: String, value: int) -> void:\n\t_stats[key] = value",
 		"func get_stats() -> Dictionary[String, int]:\n\treturn _stats",
-		"func set_email(value: String) -> void:\n\tif _oneof_contact != ContactOneOf.EMAIL:\n\t\t_oneof_contact = ContactOneOf.EMAIL\n\t_email = value",
+		"func _select_contact(next_case: ContactOneOf) -> void:\n\tif _oneof_contact == next_case:\n\t\treturn\n\t_email = \"\"\n\t_oneof_contact = next_case",
+		"func set_email(value: String) -> void:\n\t_select_contact(ContactOneOf.EMAIL)\n\t_email = value",
 		"func has_email() -> bool:\n\treturn _oneof_contact == ContactOneOf.EMAIL",
 	} {
 		if !strings.Contains(out, want) {
